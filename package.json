@@ -1,0 +1,41 @@
+{
+  "name": "opencode-novel-plugin",
+  "version": "1.0.0",
+  "description": "OpenCode plugin for AI-assisted novel writing with structured workflow",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    },
+    "./server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.4.0"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "novel",
+    "writing",
+    "ai",
+    "creative-writing"
+  ],
+  "license": "AGPL-3.0-or-later"
+}
