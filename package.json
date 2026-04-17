@@ -2,6 +2,10 @@
   "name": "opencode-novel-plugin",
   "version": "0.0.0",
   "description": "OpenCode plugin for AI-assisted novel writing with structured workflow",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wmzy/opencode-novel-plugin"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
