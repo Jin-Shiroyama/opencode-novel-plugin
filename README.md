@@ -52,41 +52,75 @@ tags:
 
 ---
 
-## 项目结构
+## 快速入门
+
+### 1. 配置模型
+
+插件使用 OpenCode 的默认模型。如需指定，在项目 `opencode.json` 中覆盖：
+
+```json
+{
+  "model": "anthropic/claude-sonnet-4",
+  "plugin": ["file:///path/to/opencode-noval"]
+}
+```
+
+> [!TIP]
+> 策划阶段（0.3）建议用 Sonnet 4，写稿阶段（0.7）可用更便宜的模型。编辑阶段（0.1）建议用 Sonnet 4 或 Opus 以保证审稿质量。
+
+### 2. 启动创作
+
+在 OpenCode 中，对 **novel-planner** agent 说：
+
+```
+/novel init
+```
+
+然后回答几个简单问题（书名、类型、篇幅），插件会自动创建项目结构。
+
+### 3. 选择 Agent
+
+| 场景 | 用哪个 Agent | 怎么调用 |
+|------|------------|---------|
+| **规划阶段**（概念/世界观/角色/大纲/场景） | `novel-planner` | 主 agent 选择器，或 `/novel` |
+| **写章节正文** | `novel-writer` | `/write-chapter <章节号>` |
+| **审稿修订** | `novel-editor` | `/novel-review <章节号或all>` |
+| **查看进度** | — | `/novel-status` |
+| **继续某个阶段** | `novel-planner` | `/novel concept` / `/novel world` 等 |
+
+> [!NOTE]
+> 三个 agent 都是 `mode: primary`，出现在主 agent 选择器中。Planner 引导规划，Writer 专注写作，Editor 负责审稿。
+
+### 4. 完整工作流
+
+```
+novel-planner（策划） → novel-writer（写作） → novel-editor（审稿）
+```
+
+**规划阶段**（6 步）：
+`/novel init` → `/novel concept` → `/novel world` → `/novel characters` → `/novel outline` → `/novel scenes`
+
+**写作阶段**（循环）：
+`/write-chapter 1` → `/write-chapter 2` → ... → `/novel-review all`
+
+武侠小说会自动创建额外的 `wuxia/` 目录（门派/功法/兵器）。开启现实映射时，Planner 会主动搜索新闻/历史素材。
+
+---
+
+## 项目结构（供了解，详细工具文档见下文）
 
 ```
 opencode-novel-plugin/
-├── package.json              # 插件包配置
-├── tsconfig.json             # TypeScript 编译配置
-├── .gitignore
-├── src/
-│   ├── index.ts              # 主入口，注册 7 个工具 + 3 个 Agent
-│   ├── utils.ts              # 路径/文件/解析/状态工具函数
-│   ├── prompts.ts            # 15 个 RTCO 提示词模板（含武侠专属+现实映射）
-│   ├── templates.ts          # 11 个文档模板
-│   ├── agents/
-│   │   ├── novel-planner.ts  # novel-planner 策划师 Agent（温度 0.3）
-│   │   ├── novel-writer.ts   # novel-writer 作者 Agent（温度 0.7）
-│   │   └── novel-editor.ts   # novel-editor 编辑 Agent（温度 0.1）
-│   └── tools/
-│       ├── init.ts           # novel_init 初始化工具
-│       ├── status.ts         # novel_status 状态报告工具
-│       ├── save.ts           # novel_save / novel_save_chapter 保存工具
-│       ├── context.ts        # novel_context 写作上下文构建工具
-│       ├── guide.ts          # novel_guide 工作流指南工具
-│       └── track.ts          # novel_update 状态追踪更新工具
-├── commands/                  # 斜杠命令（通过 config hook 注册）
-│   ├── novel.md          # /novel — 主工作流命令
-│   ├── write-chapter.md  # /write-chapter — 写章命令
-│   ├── novel-status.md   # /novel-status — 状态查看命令
-│   └── novel-review.md   # /novel-review — 审稿命令
-├── skills/                    # 创作技能（通过 config hook 注册 skills.paths）
-│   ├── novel-workflow/   # 完整 6 阶段工作流 Skill
-│   ├── novel-writing/    # 章节写作 Skill（反AI规则+感官指南）
-│   ├── novel-editor/     # 审稿修订 Skill（一致性+六稿修改法）
-│   ├── novel-wuxia/      # 武侠专项 Skill（功法/门派/战斗/桥段库）
-│   └── novel-reality/    # 现实映射 Skill（批判现实主义/陌生化/原型提取）
-└── dist/                     # 编译输出
+├── src/                        # TypeScript 源码
+│   ├── index.ts                # 插件入口（7 工具 + 3 Agent + config hook）
+│   ├── utils.ts                # 工具函数
+│   ├── prompts.ts              # 15 个 RTCO 提示词模板
+│   ├── templates.ts             # 11 个文档模板
+│   ├── agents/                  # 3 个 Agent 工厂
+│   └── tools/                   # 7 个工具实现
+├── commands/                    # 4 个斜杠命令（/novel 等）
+├── skills/                      # 5 个创作 Skill
+└── dist/                       # 编译输出
 ```
 
 ---
