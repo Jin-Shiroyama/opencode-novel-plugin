@@ -892,7 +892,7 @@ AI 会使用 `concept` 提示词模板协助创作，完成后用 `novel_save` �
 
 ```typescript
 export default {
-  id: "opencode-novel-plugin",
+  id: "opencode-novel",
   server: NovelPlugin,
 }
 
