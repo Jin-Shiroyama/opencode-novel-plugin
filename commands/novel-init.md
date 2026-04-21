@@ -92,8 +92,8 @@ novel_init({
 👁️ 视角：{视角}
 
 下一步建议：
-• /novel concept  — 设计故事核心（主角/目标/冲突）
-• /novel world   — 构建世界观和力量体系
+• /novel-concept  — 设计故事核心（主角/目标/冲突）
+• /novel-world   — 构建世界观和力量体系
 • /novel-status  — 查看当前项目状态
 ```
 

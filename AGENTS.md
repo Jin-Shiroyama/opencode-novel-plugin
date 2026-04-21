@@ -25,7 +25,13 @@ opencode-noval/
 │       ├── guide.ts          # novel_guide — 工作流指南
 │       └── track.ts          # novel_update — 状态追踪更新
 ├── commands/                # 斜杠命令
-│   ├── novel.md          # /novel — 主工作流命令
+│   ├── novel.md          # /novel — 智能入口（自动检测阶段）
+│   ├── novel-init.md     # /novel-init — 初始化项目
+│   ├── novel-concept.md  # /novel-concept — 故事概念设计
+│   ├── novel-world.md    # /novel-world — 世界观构建
+│   ├── novel-characters.md # /novel-characters — 角色设计
+│   ├── novel-outline.md  # /novel-outline — 大纲编写
+│   ├── novel-scenes.md   # /novel-scenes — 场景设计
 │   ├── write-chapter.md  # /write-chapter — 写章命令
 │   ├── novel-status.md   # /novel-status — 状态查看命令
 │   └── novel-review.md   # /novel-review — 审稿命令
@@ -101,7 +107,13 @@ documentType 支持的类型: concept, world-building, characters, character-sta
 
 | 命令 | 用途 | 参数 |
 |------|------|------|
-| `/novel` | 启动/继续工作流 | init/concept/world/characters/outline/scenes/status |
+| `/novel` | 自动检测当前阶段并引导下一步 | 无 |
+| `/novel-init` | 初始化新小说项目 | [书名] |
+| `/novel-concept` | 设计故事核心概念 | 无 |
+| `/novel-world` | 构建世界观设定 | 无 |
+| `/novel-characters` | 设计角色群 | 无 |
+| `/novel-outline` | 编写故事大纲 | 无 |
+| `/novel-scenes` | 场景设计 | 无 |
 | `/write-chapter` | 写一章正文 | 章节编号 |
 | `/novel-status` | 查看进度 | 无 |
 | `/novel-review` | 审稿 | 章节编号/all, --focus |

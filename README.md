@@ -11,7 +11,7 @@ tags:
 
 # OpenCode 小说创作插件（opencode-novel-plugin）
 
-一个为 OpenCode 设计的 AI 辅助小说创作插件，提供 3 个专用 Agent、7 个工具、5 个 Skill（含武侠专项+现实映射）、4 个命令，以及从故事概念到成稿的完整工作流支持。**对武侠小说创作有专门优化，并支持现实映射功能**。
+一个为 OpenCode 设计的 AI 辅助小说创作插件，提供 3 个专用 Agent、7 个工具、5 个 Skill（含武侠专项+现实映射）、9 个命令，以及从故事概念到成稿的完整工作流支持。**对武侠小说创作有专门优化，并支持现实映射功能**。
 
 > [!info] 参考项目与致谢
 > 本插件融合了三个优秀开源项目的设计精华：
@@ -73,7 +73,7 @@ tags:
 在 OpenCode 中，对 **novel-planner** agent 说：
 
 ```
-/novel init
+/novel-init
 ```
 
 然后回答几个简单问题（书名、类型、篇幅），插件会自动创建项目结构。
@@ -86,7 +86,7 @@ tags:
 | **写章节正文** | `novel-writer` | `/write-chapter <章节号>` |
 | **审稿修订** | `novel-editor` | `/novel-review <章节号或all>` |
 | **查看进度** | — | `/novel-status` |
-| **继续某个阶段** | `novel-planner` | `/novel concept` / `/novel world` 等 |
+| **继续某个阶段** | `novel-planner` | `/novel-concept` / `/novel-world` 等 |
 
 > [!NOTE]
 > 三个 agent 都是 `mode: primary`，出现在主 agent 选择器中。Planner 引导规划，Writer 专注写作，Editor 负责审稿。
@@ -98,7 +98,7 @@ novel-planner（策划） → novel-writer（写作） → novel-editor（审稿
 ```
 
 **规划阶段**（6 步）：
-`/novel init` → `/novel concept` → `/novel world` → `/novel characters` → `/novel outline` → `/novel scenes`
+`/novel-init` → `/novel-concept` → `/novel-world` → `/novel-characters` → `/novel-outline` → `/novel-scenes`
 
 **写作阶段**（循环）：
 `/write-chapter 1` → `/write-chapter 2` → ... → `/novel-review all`
@@ -118,7 +118,7 @@ opencode-novel-plugin/
 │   ├── templates.ts             # 11 个文档模板
 │   ├── agents/                  # 3 个 Agent 工厂
 │   └── tools/                   # 7 个工具实现
-├── commands/                    # 4 个斜杠命令（/novel 等）
+├── commands/                    # 9 个斜杠命令（/novel-init 等）
 ├── skills/                      # 5 个创作 Skill
 └── dist/                       # 编译输出
 ```
@@ -484,7 +484,13 @@ Skill 存放在插件根目录的 `skills/` 目录下，通过 `config.skills.pa
 
 | 命令 | 用途 | 参数 |
 |------|------|------|
-| `/novel` | 启动/继续小说创作工作流 | `init`/`concept`/`world`/`characters`/`outline`/`scenes`/`status` |
+| `/novel` | 查看当前项目状态，引导下一步 | 无 |
+| `/novel-init` | 初始化新小说项目 | `[书名]` |
+| `/novel-concept` | 设计故事核心概念 | 无 |
+| `/novel-world` | 构建世界观设定 | 无 |
+| `/novel-characters` | 设计角色群 | 无 |
+| `/novel-outline` | 编写故事大纲 | 无 |
+| `/novel-scenes` | 场景设计 | 无 |
 | `/write-chapter` | 写一章完整的小说正文 | `<章节编号>` |
 | `/novel-status` | 查看当前项目状态和进度 | 无 |
 | `/novel-review` | 审稿修订 | `<章节编号|all>` `--focus=consistency|style|pace|full` |
@@ -492,8 +498,8 @@ Skill 存放在插件根目录的 `skills/` 目录下，通过 `config.skills.pa
 命令存放在插件根目录的 `commands/` 目录下，通过 `config.command` 注册，使用 YAML frontmatter + `<command-instruction>` 格式。
 
 > [!tip] 快速开始
-> 1. `/novel init` — 初始化新小说项目
-> 2. 按提示逐步完成概念→世界观→角色→大纲→场景
+> 1. `/novel-init` — 初始化新小说项目
+> 2. `/novel-concept` → `/novel-world` → `/novel-characters` → `/novel-outline` → `/novel-scenes` — 逐步完成规划
 > 3. `/write-chapter 1` — 开始写第一章
 > 4. `/novel-review 1` — 审稿第一章
 
@@ -973,7 +979,7 @@ export default {
 - 15 个 RTCO 提示词模板（含武侠专属 2 个 + 现实映射 2 个）
 - 11 个文档模板（含武侠专属 3 个 + 现实映射 1 个）
 - 5 个 Skill（工作流/写作/审稿/武侠/现实映射）
-- 4 个命令（novel/write-chapter/novel-status/novel-review）
+- 9 个命令（novel/novel-init/novel-concept/novel-world/novel-characters/novel-outline/novel-scenes/write-chapter/novel-status/novel-review）
 - 武侠类型专属优化（功法体系/门派势力/兵器谱/战斗技法）
 - 现实映射功能（批判现实主义/陌生化技法/人物原型提取/法律合规）
 - 策划师 Agent 支持网络搜索（websearch/webfetch）
