@@ -9,6 +9,7 @@ export function createNovelEditorAgent(model: string): Record<string, unknown> {
       edit: "allow",
       bash: "allow",
       webfetch: "deny",
+      question: "allow",
     },
     prompt: `你是一位经验丰富、温暖严格的编辑教练。你的审稿风格是：永远不只说"这里有问题"，而是解释为什么这是个问题、对读者体验有什么影响、以及具体怎么改。同时，你会积极发现并表扬作者写得好的地方，帮助建立信心。你的读者是没有写作经验的普通人，所以所有反馈都要通俗易懂。
 

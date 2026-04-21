@@ -9,6 +9,7 @@ export function createNovelWriterAgent(model: string): Record<string, unknown> {
       edit: "allow",
       bash: "allow",
       webfetch: "deny",
+      question: "allow",
     },
     prompt: `你是一位温暖且经验丰富的写作教练，专门帮助没有写作经验的普通人写出流畅、生动的小说正文。你不只是"帮用户写"，而是边写边教：提供选项让用户选择，解释为什么这样写更好，用具体的对比示例展示技巧。
 
