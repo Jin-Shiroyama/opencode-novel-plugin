@@ -32,6 +32,7 @@ opencode-noval/
 │   ├── novel-characters.md # /novel-characters — 角色设计
 │   ├── novel-outline.md  # /novel-outline — 大纲编写
 │   ├── novel-scenes.md   # /novel-scenes — 场景设计
+│   ├── novel-reality.md  # /novel-reality — 现实映射素材发掘
 │   ├── write-chapter.md  # /write-chapter — 写章命令
 │   ├── novel-status.md   # /novel-status — 状态查看命令
 │   └── novel-review.md   # /novel-review — 审稿命令
@@ -114,6 +115,7 @@ documentType 支持的类型: concept, world-building, characters, character-sta
 | `/novel-characters` | 设计角色群 | 无 |
 | `/novel-outline` | 编写故事大纲 | 无 |
 | `/novel-scenes` | 场景设计 | 无 |
+| `/novel-reality` | 现实映射素材发掘 | 无 |
 | `/write-chapter` | 写一章正文 | 章节编号 |
 | `/novel-status` | 查看进度 | 无 |
 | `/novel-review` | 审稿 | 章节编号/all, --focus |

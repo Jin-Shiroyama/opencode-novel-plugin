@@ -385,6 +385,47 @@ Question({
 })
 \`\`\`
 
+#### 现实映射阶段
+
+\`\`\`typescript
+Question({
+  questions: [
+    {
+      question: "你想从哪里找现实素材？",
+      header: "素材来源",
+      options: [
+        { label: "社会热点", description: "搜索最近的新闻事件，提取核心冲突" },
+        { label: "历史事件", description: "以史为鉴，映射当代社会" },
+        { label: "身边人物", description: "从真实人物中提取角色原型" },
+        { label: "我已有素材", description: "我已经有想融入的现实素材" }
+      ]
+    },
+    {
+      question: "你想用哪种现实主义手法？",
+      header: "创作手法",
+      options: [
+        { label: "典型现实主义", description: "塑造典型人物，通过个人命运反映时代" },
+        { label: "抽离现实主义", description: "用符号化和寓言表达，如卡夫卡《变形记》" },
+        { label: "游戏现实主义", description: "写具体的人在具体处境下的具体选择" },
+        { label: "不确定", description: "让我根据素材推荐" }
+      ]
+    },
+    {
+      question: "你最想在故事中探讨什么？",
+      header: "社会议题",
+      options: [
+        { label: "公平与正义", description: "弱者如何面对不公" },
+        { label: "权力与腐败", description: "权力如何异化人性" },
+        { label: "自由与束缚", description: "个人如何对抗体制" },
+        { label: "传统与变革", description: "旧秩序是否值得维护" },
+        { label: "真相与谎言", description: "人们为何选择相信" },
+        { label: "我来描述", description: "输入自定义议题" }
+      ]
+    }
+  ]
+})
+\`\`\`
+
 ### 3. 用户回答模糊时主动追问和补充
 
 当用户给的信息很笼统（比如"主角是大学生"），主动用 Question 工具帮他补充细节：

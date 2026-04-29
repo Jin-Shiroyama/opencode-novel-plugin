@@ -11,7 +11,7 @@ tags:
 
 # OpenCode 小说创作插件（opencode-novel-plugin）
 
-一个为 OpenCode 设计的 AI 辅助小说创作插件，提供 3 个专用 Agent、7 个工具、5 个 Skill（含武侠专项+现实映射）、9 个命令，以及从故事概念到成稿的完整工作流支持。**对武侠小说创作有专门优化，并支持现实映射功能**。
+一个为 OpenCode 设计的 AI 辅助小说创作插件，提供 3 个专用 Agent、7 个工具、5 个 Skill（含武侠专项+现实映射）、10 个命令，以及从故事概念到成稿的完整工作流支持。**对武侠小说创作有专门优化，并支持现实映射功能**。
 
 > [!info] 参考项目与致谢
 > 本插件融合了三个优秀开源项目的设计精华：
@@ -118,7 +118,7 @@ opencode-novel-plugin/
 │   ├── templates.ts             # 11 个文档模板
 │   ├── agents/                  # 3 个 Agent 工厂
 │   └── tools/                   # 7 个工具实现
-├── commands/                    # 9 个斜杠命令（/novel-init 等）
+├── commands/                    # 10 个斜杠命令（/novel-init 等）
 ├── skills/                      # 5 个创作 Skill
 └── dist/                       # 编译输出
 ```
@@ -491,6 +491,7 @@ Skill 存放在插件根目录的 `skills/` 目录下，通过 `config.skills.pa
 | `/novel-characters` | 设计角色群 | 无 |
 | `/novel-outline` | 编写故事大纲 | 无 |
 | `/novel-scenes` | 场景设计 | 无 |
+| `/novel-reality` | 现实映射素材发掘 | 无 |
 | `/write-chapter` | 写一章完整的小说正文 | `<章节编号>` |
 | `/novel-status` | 查看当前项目状态和进度 | 无 |
 | `/novel-review` | 审稿修订 | `<章节编号|all>` `--focus=consistency|style|pace|full` |
@@ -979,7 +980,7 @@ export default {
 - 15 个 RTCO 提示词模板（含武侠专属 2 个 + 现实映射 2 个）
 - 11 个文档模板（含武侠专属 3 个 + 现实映射 1 个）
 - 5 个 Skill（工作流/写作/审稿/武侠/现实映射）
-- 9 个命令（novel/novel-init/novel-concept/novel-world/novel-characters/novel-outline/novel-scenes/write-chapter/novel-status/novel-review）
+- 10 个命令（novel/novel-init/novel-concept/novel-world/novel-characters/novel-outline/novel-scenes/novel-reality/write-chapter/novel-status/novel-review）
 - 武侠类型专属优化（功法体系/门派势力/兵器谱/战斗技法）
 - 现实映射功能（批判现实主义/陌生化技法/人物原型提取/法律合规）
 - 策划师 Agent 支持网络搜索（websearch/webfetch）
