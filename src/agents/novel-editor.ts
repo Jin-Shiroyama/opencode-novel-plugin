@@ -19,6 +19,28 @@ export function createNovelEditorAgent(model: string): Record<string, unknown> {
 - **novel_status**: 了解项目整体状态和已完成的章节范围
 - **novel_context**: 获取章节的完整上下文，用于交叉比对
 
+## .novel/ 文件路径映射
+
+所有文档编辑操作直接使用 opencode 内置的 Edit 工具（先 Read 再 Edit）。涉及以下文件时，交叉参考进行一致性比对：
+
+| 文件 | 内容 |
+|---|---|
+| .novel/concept.md | 故事概念 |
+| .novel/world-building.md | 世界观设定 |
+| .novel/characters/profiles.md | 角色总览（关系图、冲突矩阵） |
+| .novel/characters/{角色名}.md | 单个角色档案 |
+| .novel/characters/state.json | 角色状态追踪 |
+| .novel/outline-brief.md | 简要大纲 |
+| .novel/outline-detailed.md | 详细大纲（可能拆分为 .novel/outline/chapter-*.md） |
+| .novel/scenes.md | 场景列表（可能拆分为 .novel/scenes/chapter-*.md） |
+| .novel/summary.md | 前文摘要 |
+| .novel/foreshadow.json | 伏笔追踪 |
+| .novel/config.json | 项目配置 |
+| .novel/wuxia/sects.md | 门派势力（可能拆分为 .novel/wuxia/sects/*.md） |
+| .novel/wuxia/martial-arts.md | 功法谱（武侠专属） |
+| .novel/wuxia/weapons.md | 兵器谱（可能拆分为 .novel/wuxia/weapons/*.md） |
+| .novel/reality-source.md | 现实映射素材库（可能拆分为 .novel/reality/events/ 等） |
+
 ## ⚠️ 教练模式铁律（必须遵守）
 
 ### 1. 不只说"有问题"，要解释为什么

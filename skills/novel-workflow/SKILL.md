@@ -26,7 +26,7 @@ description: "完整小说创作工作流：从概念到成稿的6阶段系统�
 
 **目标**: 将模糊创意转化为清晰的故事核心
 
-**工具调用**: `novel_init`（首次）或 `novel_save`（已有项目）
+**工具调用**: `novel_init`（首次）
 
 **必要产出**:
 1. 一句话概括（25字以内：类型 + 主角 + 核心冲突 + 代价）
@@ -42,7 +42,7 @@ description: "完整小说创作工作流：从概念到成稿的6阶段系统�
 - [ ] 道德前提是否能贯穿全文？
 - [ ] 用户是否确认满意？
 
-**保存**: `novel_save(documentType: "concept", content: ...)`
+**保存**: 使用 opencode 内置 Edit 工具编辑 `.novel/concept.md`
 
 ### 示范：完成的「故事概念」（以《星落长安》为例）
 
@@ -107,7 +107,7 @@ description: "完整小说创作工作流：从概念到成稿的6阶段系统�
 - [ ] 力量体系是否有限制（防止角色过于强大）？
 - [ ] 用户是否确认满意？
 
-**保存**: `novel_save(documentType: "world-building", content: ...)`
+**保存**: 使用 opencode 内置 Edit 工具编辑 `.novel/world-building.md`
 
 ### 示范：完成的「世界观设定」（以《星落长安》为例）
 
@@ -180,7 +180,9 @@ description: "完整小说创作工作流：从概念到成稿的6阶段系统�
 - [ ] 每个角色的语言习惯是否可区分？
 - [ ] 用户是否确认满意？
 
-**保存**: `novel_save(documentType: "characters", content: ...)`
+**保存**: 使用 opencode 内置 Edit 工具编辑角色档案文件
+- 角色总览：`.novel/characters/profiles.md`
+- 每个角色独立文件：`.novel/characters/{角色名}.md`（含驱动力三角、人物弧线）
 
 ### 示范：完成的「角色设计」（以《星落长安》为例）
 
@@ -243,7 +245,7 @@ description: "完整小说创作工作流：从概念到成稿的6阶段系统�
 - 两次两难抉择的精确位置
 - 伏笔规划表
 
-**保存**: `novel_save(documentType: "outline-brief", content: ...)`
+**保存**: 使用 opencode 内置 Edit 工具编辑 `.novel/outline-brief.md`
 
 ### 步骤 B: 详细大纲
 - 逐章核心情节（200-300字/章）
@@ -260,7 +262,7 @@ description: "完整小说创作工作流：从概念到成稿的6阶段系统�
 - [ ] 冲突是否持续升级？
 - [ ] 用户是否确认满意？
 
-**保存**: `novel_save(documentType: "outline-detailed", content: ...)`
+**保存**: 使用 opencode 内置 Edit 工具编辑 `.novel/outline-detailed.md`
 
 ### 示范：完成的「简要大纲」（以《星落长安》为例）
 
@@ -337,7 +339,7 @@ description: "完整小说创作工作流：从概念到成稿的6阶段系统�
 - [ ] _Prompt 是否足够具体可执行？
 - [ ] 总场景数和字数是否合理？
 
-**保存**: `novel_save(documentType: "scenes", content: ...)`
+**保存**: 使用 opencode 内置 Edit 工具编辑 `.novel/scenes.md`
 
 ### 示范：完成的「场景设计」（以《星落长安》第1章为例）
 

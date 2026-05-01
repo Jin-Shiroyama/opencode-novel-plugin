@@ -5,7 +5,7 @@ import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { novelInitExecute } from "./tools/init.js"
 import { novelStatusExecute } from "./tools/status.js"
-import { novelSaveExecute, novelSaveChapterExecute } from "./tools/save.js"
+import { novelSaveChapterExecute } from "./tools/save.js"
 import { novelContextExecute } from "./tools/context.js"
 import { novelGuideExecute } from "./tools/guide.js"
 import { novelUpdateExecute } from "./tools/track.js"
@@ -78,25 +78,6 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
         },
         async execute(args, context) {
           return novelStatusExecute(args as any, context as ToolContext)
-        },
-      }),
-
-      "novel_save": tool({
-        description: `保存小说项目的各类文档（概念、世界观、角色、大纲、场景等）。支持 Markdown 和 JSON 格式。
-使用场景：完成某个阶段的文档创作后保存，如保存世界观设定、角色档案等。`,
-        args: {
-          documentType: z.enum([
-            "concept", "world-building", "characters", "character-state",
-            "outline-brief", "outline-detailed", "scenes", "summary", "foreshadow",
-            "reality-source", "sect", "martial-art", "weapon",
-          ]).describe("文档类型"),
-          content: z.string().describe("文档内容（Markdown文本或JSON字符串）"),
-          chapterNumber: z.number().optional().describe("保存章节时指定章节编号"),
-          chapterTitle: z.string().optional().describe("章节标题"),
-          updateTracking: z.boolean().optional().describe("是否同时更新追踪文件"),
-        },
-        async execute(args, context) {
-          return novelSaveExecute(args as any, context as ToolContext)
         },
       }),
 

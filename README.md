@@ -112,7 +112,7 @@ novel-planner（策划） → novel-writer（写作） → novel-editor（审稿
 ```
 opencode-novel-plugin/
 ├── src/                        # TypeScript 源码
-│   ├── index.ts                # 插件入口（7 工具 + 3 Agent + config hook）
+│   ├── index.ts                # 插件入口（6 工具 + 3 Agent + config hook）
 │   ├── utils.ts                # 工具函数
 │   ├── prompts.ts              # 15 个 RTCO 提示词模板
 │   ├── templates.ts             # 11 个文档模板
@@ -211,39 +211,6 @@ graph LR
 
 > [!example] 对 AI 说
 > "看看我的小说项目进度"
-
----
-
-### `novel_save` — 保存文档
-
-保存小说项目的各类文档。
-
-**参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `documentType` | enum | ✅ | 文档类型（见下表） |
-| `content` | string | ✅ | 文档内容（Markdown 或 JSON） |
-| `chapterNumber` | number | ❌ | 保存章节时指定编号 |
-| `chapterTitle` | string | ❌ | 章节标题 |
-
-**支持的文档类型：**
-
-| documentType | 格式 | 说明 |
-|-------------|------|------|
-| `concept` | Markdown | 故事概念 |
-| `world-building` | Markdown | 世界观设定 |
-| `characters` | Markdown | 角色档案 |
-| `character-state` | JSON | 角色状态数据 |
-| `outline-brief` | Markdown | 简要大纲 |
-| `outline-detailed` | Markdown | 详细大纲 |
-| `scenes` | Markdown | 场景列表 |
-| `summary` | Markdown | 前文摘要 |
-| `foreshadow` | JSON | 伏笔追踪数据 |
-| `sect` | Markdown | 门派势力（武侠专属） |
-| `martial-art` | Markdown | 功法谱（武侠专属） |
-| `weapon` | Markdown | 兵器谱（武侠专属） |
-| `reality-source` | Markdown | 现实映射素材库（所有类型通用） |
 
 ---
 
@@ -403,7 +370,7 @@ pending → planted → resolved
 |------|------|
 | 模式 | `subagent` |
 | 温度 | `0.3`（偏理性，保证规划一致性） |
-| 工具 | `novel_init`、`novel_save`、`novel_status`、`novel_guide`、`websearch`、`webfetch` |
+| 工具 | `novel_init`、`novel_status`、`novel_guide`、`websearch`、`webfetch`。文档编辑使用 opencode 内置 Edit 工具。
 
 **核心能力：**
 
@@ -557,9 +524,9 @@ Skill 存放在插件根目录的 `skills/` 目录下，通过 `config.skills.pa
 
 | 文件 | 用途 | 保存命令 |
 |------|------|---------|
-| `wuxia/sects.md` | 门派势力（正派/邪派/中立/隐世） | `novel_save(documentType: "sect", ...)` |
-| `wuxia/martial-arts.md` | 功法谱（内功/外功/轻功/特殊） | `novel_save(documentType: "martial-art", ...)` |
-| `wuxia/weapons.md` | 兵器谱（剑/刀/枪/鞭/暗器） | `novel_save(documentType: "weapon", ...)` |
+| `wuxia/sects.md` | 门派势力（正派/邪派/中立/隐世） | Edit 工具编辑 `.novel/wuxia/sects.md` |
+| `wuxia/martial-arts.md` | 功法谱（内功/外功/轻功/特殊） | Edit 工具编辑 `.novel/wuxia/martial-arts.md` |
+| `wuxia/weapons.md` | 兵器谱（剑/刀/枪/鞭/暗器） | Edit 工具编辑 `.novel/wuxia/weapons.md` |
 
 ### 写作上下文自动整合
 
@@ -621,7 +588,7 @@ Skill 存放在插件根目录的 `skills/` 目录下，通过 `config.skills.pa
 
 ### 现实映射素材库
 
-所有类型小说均可使用现实映射功能。通过 `novel_save(documentType: "reality-source", ...)` 保存素材到 `.novel/reality-source.md`。
+所有类型小说均可使用现实映射功能。素材保存到 `.novel/reality-source.md`。
 
 素材库包含：
 
@@ -695,21 +662,23 @@ Skill 存放在插件根目录的 `skills/` 目录下，通过 `config.skills.pa
 > [!example] 对 AI 说
 > "帮我完善故事概念文档。这是一个关于普通大学生意外获得时间回溯能力的故事..."
 
-AI 会使用 `concept` 提示词模板协助创作，完成后用 `novel_save` 保存到 `concept.md`。
+AI 会使用 `concept` 提示词模板协助创作，完成后用 Edit 工具保存到 `.novel/concept.md`。
 
 ### 第三步：构建世界观
 
 > [!example] 对 AI 说
 > "基于我的故事概念，帮我构建世界观设定。这个世界中觉醒者是隐藏在社会中的..."
 
-完成后用 `novel_save` 保存到 `world-building.md`。
+完成后用 Edit 工具保存到 `.novel/world-building.md`。
 
 ### 第四步：设计角色
 
 > [!example] 对 AI 说
 > "帮我设计主要角色。主角是一个内向但坚韧的计算机系大三学生..."
 
-完成后用 `novel_save` 保存到 `characters` 文档。
+完成后用 Edit 工具保存到 `.novel/characters/profiles.md`（总览）和 `.novel/characters/{角色名}.md`。
+
+实际上，让我找到 README 中的工具表格
 
 ### 第五步：创建大纲
 
@@ -723,7 +692,7 @@ AI 会使用 `concept` 提示词模板协助创作，完成后用 `novel_save` �
 > [!example] 对 AI 说
 > "帮我将大纲分解为场景列表，设计每个场景的写作指导..."
 
-完成后用 `novel_save` 保存到 `scenes.md`。
+完成后用 Edit 工具保存到 `.novel/scenes.md`。
 
 ### 第七步：开始写作（循环）
 
@@ -908,7 +877,6 @@ export default {
   tool: {
     novel_init: tool({ ... }),
     novel_status: tool({ ... }),
-    novel_save: tool({ ... }),
     novel_save_chapter: tool({ ... }),
     novel_context: tool({ ... }),
     novel_guide: tool({ ... }),
@@ -950,11 +918,11 @@ export default {
 
 ### Q: 如何在中途修改世界观设定？
 
-直接修改 `.novel/world-building.md` 文件，或通过 `novel_save` 覆盖保存。
+直接修改 `.novel/world-building.md` 文件。
 
 ### Q: 如何跳过某些阶段？
 
-按顺序推进是推荐的，但如果已有成熟的设定，可以用 `novel_save` 直接保存对应文档，系统会自动检测已存在的文档并更新阶段。
+按顺序推进是推荐的，但如果已有成熟的设定，可以用 Edit 工具直接编辑对应文档，系统会自动检测已存在的文档并更新阶段。
 
 ### Q: 角色太多，状态追踪文件变得很大怎么办？
 

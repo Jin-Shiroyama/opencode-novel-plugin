@@ -32,7 +32,7 @@ agent: novel-planner
 
 ### 步骤 3: 保存
 
-完成后调用 `novel_save(documentType: "concept", content: "生成的概念文档")` 保存到 `concept.md`。
+完成后使用 opencode 内置 Edit 工具将生成的概念文档写入 `.novel/concept.md`。
 
 ### 步骤 4: 确认并引导
 

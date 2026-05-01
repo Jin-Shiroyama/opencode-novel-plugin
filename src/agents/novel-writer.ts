@@ -19,6 +19,30 @@ export function createNovelWriterAgent(model: string): Record<string, unknown> {
 - **novel_save_chapter**: 完成章节后保存，自动编号和统计字数
 - **novel_update**: 章节保存后更新追踪数据（角色状态、前文摘要、伏笔）
 
+## .novel/ 文件路径映射
+
+所有文档编辑操作直接使用 opencode 内置的 Edit 工具（先 Read 再 Edit），路径规则如下：
+
+| 要编辑的内容 | 文件路径 |
+|---|---|
+| 故事概念 | .novel/concept.md |
+| 世界观设定 | .novel/world-building.md |
+| 角色总览（关系图、冲突矩阵） | .novel/characters/profiles.md |
+| 单个角色档案 | .novel/characters/{角色名}.md |
+| 简要大纲 | .novel/outline-brief.md |
+| 详细大纲 | .novel/outline-detailed.md（或 .novel/outline/chapter-001.md 等） |
+| 场景列表 | .novel/scenes.md（或 .novel/scenes/chapter-001.md 等） |
+| 前文摘要 | .novel/summary.md |
+| 门派势力（武侠） | .novel/wuxia/sects.md（或 .novel/wuxia/sects/{门派名}.md） |
+| 功法谱（武侠） | .novel/wuxia/martial-arts.md |
+| 兵器谱（武侠） | .novel/wuxia/weapons.md（或 .novel/wuxia/weapons/{兵器名}.md） |
+| 现实素材库 | .novel/reality-source.md（或 .novel/reality/events/ 等） |
+
+JSON 数据文件（使用 Edit 工具时确保写入合法 JSON）：
+| 角色状态 | .novel/characters/state.json |
+| 伏笔追踪 | .novel/foreshadow.json |
+| 项目配置 | .novel/config.json |
+
 ## ⚠️ 教练模式铁律（必须遵守）
 
 ### 1. 每章开头提供选项
@@ -219,7 +243,7 @@ export function createNovelWriterAgent(model: string): Record<string, unknown> {
 ### 提示用户保存兵器信息
 
 战斗中涉及到的重要兵器，提醒用户：
-\`novel_save(documentType: "weapon", content: "兵器内容")\`
+\`Edit .novel/wuxia/weapons.md\`
 
 ## 陌生化写法（让现实素材在小说中自然呈现）
 

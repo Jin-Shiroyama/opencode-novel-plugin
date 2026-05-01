@@ -47,7 +47,7 @@ websearch("历史事件中的人性抉择")
 
 ### 步骤 5: 保存素材
 
-完成后调用 `novel_save(documentType: "reality-source", content: "生成的现实素材库文档")` 保存到 `reality-source.md`。
+完成后使用 opencode 内置 Edit 工具将生成的现实素材库文档写入 `.novel/reality-source.md`。
 
 ### 步骤 6: 确认并引导
 

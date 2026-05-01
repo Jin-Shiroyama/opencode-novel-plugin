@@ -39,7 +39,9 @@ agent: novel-planner
 
 ### 步骤 4: 保存
 
-完成后调用 `novel_save(documentType: "characters", content: "生成的角色档案文档")` 保存到 `characters/profiles.md`。
+完成后使用 opencode 内置 Edit 工具将生成的角色档案写入：
+- 角色总览写至 `.novel/characters/profiles.md`
+- 每个角色独立文件写至 `.novel/characters/{角色名}.md`（含驱动力三角、人物弧线）
 
 ### 步骤 5: 确认并引导
 

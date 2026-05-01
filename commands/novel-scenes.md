@@ -47,7 +47,7 @@ agent: novel-planner
 
 ### 步骤 5: 保存
 
-完成后调用 `novel_save(documentType: "scenes", content: "生成的场景列表")` 保存到 `scenes.md`。
+完成后使用 opencode 内置 Edit 工具将生成的场景列表写入 `.novel/scenes.md`。
 
 ### 步骤 6: 确认并引导
 

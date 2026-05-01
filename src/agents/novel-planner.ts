@@ -17,9 +17,40 @@ export function createNovelPlannerAgent(model: string): Record<string, unknown> 
 ## 核心工具
 
 - **novel_init**: 初始化新的小说项目，创建项目结构和配置文件
-- **novel_save**: 保存各类规划文档（概念、世界观、角色、大纲、场景等）
 - **novel_status**: 查看当前项目进度和各阶段完成情况
 - **novel_guide**: 获取工作流指南，了解每个阶段的详细要求
+
+## .novel/ 文件路径映射
+
+所有文档编辑操作直接使用 opencode 内置的 Edit 工具（先 Read 再 Edit），路径规则如下：
+
+| 要编辑的内容 | 文件路径 |
+|---|---|
+| 故事概念 | .novel/concept.md |
+| 世界观设定 | .novel/world-building.md |
+| 角色总览（关系图、冲突矩阵） | .novel/characters/profiles.md |
+| 单个角色档案 | .novel/characters/{角色名}.md |
+| 简要大纲 | .novel/outline-brief.md |
+| 详细大纲 | .novel/outline-detailed.md（或拆分为 .novel/outline/chapter-001.md 等） |
+| 场景列表 | .novel/scenes.md（或拆分为 .novel/scenes/chapter-001.md 等） |
+| 前文摘要 | .novel/summary.md |
+| 门派势力（武侠） | .novel/wuxia/sects.md（或拆分为 .novel/wuxia/sects/{门派名}.md） |
+| 功法谱（武侠） | .novel/wuxia/martial-arts.md |
+| 兵器谱（武侠） | .novel/wuxia/weapons.md（或拆分为 .novel/wuxia/weapons/{兵器名}.md） |
+| 现实素材库 | .novel/reality-source.md（或拆分为 .novel/reality/events/、.novel/reality/archetypes/ 等） |
+
+JSON 数据文件（使用 Edit 工具时确保写入合法 JSON）：
+| 角色状态 | .novel/characters/state.json |
+| 伏笔追踪 | .novel/foreshadow.json |
+| 项目配置 | .novel/config.json |
+
+**多文件拆分约定**：内容较多时可自行拆分为子目录下的多个文件，约定如下：
+- 角色档案：.novel/characters/{角色名}.md
+- 详细大纲：.novel/outline/chapter-001.md、chapter-002.md...（按章拆分）
+- 场景列表：.novel/scenes/chapter-001.md、chapter-002.md...（按章拆分）
+- 武侠门派：.novel/wuxia/sects/{门派名}.md（每个门派独立文件）
+- 武侠兵器：.novel/wuxia/weapons/{兵器名}.md（每件兵器独立文件）
+- 现实素材：.novel/reality/events/（事件）、.novel/reality/archetypes/（原型）、.novel/reality/mappings/（映射）
 
 ## ⚠️ 教练模式铁律（必须遵守）
 
@@ -493,7 +524,7 @@ Question({
 ## 输出规范
 
 - 所有回复使用中文
-- 每个阶段输出结构化文档，使用 novel_save 保存
+- 每个阶段输出结构化文档，使用 Edit 工具保存到对应 .novel/ 文件
 - 角色档案包含：基本信息、外貌、性格、背景故事、驱动力三角（附白话解释）、语言风格
 - 大纲包含：三幕结构标记（附白话解释）、关键转折点、情感曲线标注
 - 场景列表包含：场景ID、章节归属、类型（主动/被动，附白话解释）、核心冲突、写作提示
@@ -529,7 +560,7 @@ Question({
 3. 确定江湖规矩（恩怨必报、师徒如父子等）
 4. 规划势力版图
 
-**提示用户保存门派信息**：\`novel_save(documentType: "sect", content: "门派内容")\`
+**提示用户保存门派信息**：\`Edit .novel/wuxia/sects.md\`
 
 ### 世界观阶段增加「功法体系」
 
@@ -550,7 +581,7 @@ Question({
 3. 功法克制关系
 4. 主角功法成长路线
 
-**提示用户保存功法信息**：\`novel_save(documentType: "martial-art", content: "功法内容")\`
+**提示用户保存功法信息**：\`Edit .novel/wuxia/martial-arts.md\`
 
 ### 角色阶段增加「武侠角色原型」
 
@@ -657,7 +688,7 @@ websearch("2026年中国社会热点事件")
 ### 提示用户保存现实素材
 
 > 📝 把你找到的现实素材和映射关系保存下来：
-> \`novel_save(documentType: "reality-source", content: "素材内容")\`
+> \`Edit .novel/reality-source.md\`
 
 ### 陌生化检查
 

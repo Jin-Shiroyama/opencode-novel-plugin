@@ -34,10 +34,7 @@ agent: novel-planner
 2. **触发事件** — 打破常态的关键事件类型
 3. **中点转折** — 故事方向逆转的关键时刻
 
-收到回答后，基于用户选择用 `Question` 继续追问高潮和结局的方向。简要大纲完整后保存：
-```
-novel_save(documentType: "outline-brief", content: "简要大纲")
-```
+收到回答后，基于用户选择用 `Question` 继续追问高潮和结局的方向。简要大纲完成后使用 opencode 内置 Edit 工具写入 `.novel/outline-brief.md`。
 
 ### 步骤 4: 用户确认简要大纲
 
@@ -53,10 +50,7 @@ novel_save(documentType: "outline-brief", content: "简要大纲")
 4. 情感走向
 5. 预计字数
 
-保存为 `outline-detailed.md`：
-```
-novel_save(documentType: "outline-detailed", content: "详细大纲")
-```
+完成后使用 opencode 内置 Edit 工具写入 `.novel/outline-detailed.md`。
 
 ### 步骤 6: 确认并引导
 
