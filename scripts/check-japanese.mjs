@@ -53,6 +53,7 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative, extname, sep } from "node:path"
+import { pathToFileURL } from "node:url"
 
 /** 調べる対象（ディレクトリは再帰的にたどる） */
 export const DEFAULT_TARGETS = [
@@ -98,7 +99,9 @@ export const ALLOW = [
 
 /**
  * 日本語では使われない簡体字。
- * JIS X 0213 収録字をすべて除いてあるため、日本語の文を誤判定しない。
+ * JIS X 0213 収録字をすべて除いてあるため、この一覧（第一段）が JIS X 0213 の
+ * 収録字を誤検知することはない。第二段・第三段の一覧は目で選んだものなので、
+ * 同じ保証はない（単独の漢字を入れないなどの約束で防いでいる）。
  */
 export const SIMPLIFIED = new Set([...(
     "专业东丝丢两严丧临为丽举义乐习乡书买亚产亲亿仅仑仓们众优伙伟传伤侧侨俩债值倾偷偿储兑兰兴兽军净减凑凤击则刚创删别剑剧" +
@@ -271,9 +274,25 @@ export function selfTest() {
 // 実行（モジュールとして読み込んだときは走らせない）
 // ============================================================
 
-const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href
+/**
+ * このファイルが直接実行されているかを判定する。
+ *
+ * `new URL("file://" + path)` では、パスに # や ? が含まれるときに
+ * それ以降がフラグメントやクエリとして切り落とされ、import.meta.url と
+ * 一致しなくなる。その場合 CLI の処理が走らず、何も出力せずに終了コード 0 を
+ * 返してしまう（検査したつもりで素通りする）。
+ * pathToFileURL はこれらを百分率符号化するため、正しく一致する。
+ */
+export function isMainModule(argv1, moduleUrl) {
+  if (!argv1) return false
+  try {
+    return pathToFileURL(argv1).href === moduleUrl
+  } catch {
+    return false
+  }
+}
 
-if (isMain) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   const args = process.argv.slice(2)
   if (args.includes("--self-test")) process.exit(selfTest())
 

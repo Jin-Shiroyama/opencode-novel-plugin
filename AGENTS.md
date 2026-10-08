@@ -177,7 +177,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs）
+pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、109件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 ```
 
