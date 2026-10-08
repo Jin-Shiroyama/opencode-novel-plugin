@@ -1,4 +1,4 @@
-import { safeReadFile, safeReadJson, safeWriteJson, getDocPath, getChaptersDir, safeWriteFile, getConfigPath } from "../utils.js"
+import { safeReadFile, safeReadJson, safeWriteJson, getDocPath, safeWriteFile, getConfigPath } from "../utils.js"
 import type { ForeshadowEntry, CharacterState } from "../utils.js"
 import type { ToolContext } from "../index.js"
 
@@ -24,7 +24,7 @@ export async function novelUpdateExecute(
     case "prompt":
       return getUpdatePrompt(dir, args.content, args.chapterNumber)
     default:
-      return `❌ 未知更新类型: ${args.action}`
+      return `❌ 対応していない更新種別です: ${args.action}`
   }
 }
 
@@ -36,15 +36,23 @@ async function updateCharacterState(dir: string, content: string): Promise<strin
   try {
     updates = JSON.parse(content)
   } catch {
-    return `❌ 内容必须是有效的 JSON 格式: { "updates": [{ "name": "角色名", "changes": {...} }] }`
+    return `❌ content は JSON で渡してください: { "updates": [{ "name": "人物名", "changes": {...} }] }`
+  }
+
+  if (!Array.isArray(updates?.updates)) {
+    return `❌ JSON の形が違います。最上位に "updates" 配列が必要です。`
   }
 
   const characters = current?.characters ?? []
+  let added = 0
+  let changed = 0
 
   for (const update of updates.updates) {
     const existing = characters.find((c) => c.name === update.name)
     if (existing) {
+      changed++
       if (update.changes.status) existing.status = update.changes.status
+      if (update.changes.physicalState) existing.physicalState = update.changes.physicalState
       if (update.changes.mentalState) existing.mentalState = update.changes.mentalState
       if (update.changes.items) {
         if (update.changes.items.added) existing.items = [...(existing.items ?? []), ...update.changes.items.added]
@@ -60,7 +68,9 @@ async function updateCharacterState(dir: string, content: string): Promise<strin
       if (update.changes.events) {
         existing.events = [...(existing.events ?? []), ...update.changes.events]
       }
+      if (update.changes.lastUpdatedChapter) existing.lastUpdatedChapter = update.changes.lastUpdatedChapter
     } else {
+      added++
       characters.push({
         name: update.name,
         status: update.changes.status ?? "active",
@@ -71,19 +81,19 @@ async function updateCharacterState(dir: string, content: string): Promise<strin
         abilities: update.changes.abilities?.added ?? [],
         relationships: update.changes.relationships ?? {},
         events: update.changes.events ?? [],
-        lastUpdatedChapter: undefined,
+        lastUpdatedChapter: update.changes.lastUpdatedChapter,
       })
     }
   }
 
   await safeWriteJson(filePath, { characters })
-  return `✅ 角色状态已更新 (${updates.updates.length}个角色)`
+  return `✅ 登場人物の状態を更新しました（新規 ${added}人 / 更新 ${changed}人 / 合計 ${characters.length}人）`
 }
 
 async function updateSummary(dir: string, content: string): Promise<string> {
   const filePath = getDocPath(dir, "summary")
   await safeWriteFile(filePath, content)
-  return `✅ 前文摘要已更新`
+  return `✅ これまでのあらすじを更新しました`
 }
 
 async function updateForeshadow(dir: string, content: string): Promise<string> {
@@ -94,19 +104,32 @@ async function updateForeshadow(dir: string, content: string): Promise<string> {
   try {
     operations = JSON.parse(content)
   } catch {
-    return `❌ 内容必须是有效的 JSON 格式`
+    return `❌ content は JSON で渡してください: { "items": [...] }`
+  }
+
+  if (!Array.isArray(operations?.items)) {
+    return `❌ JSON の形が違います。最上位に "items" 配列が必要です。`
   }
 
   const items = current?.items ?? []
+  // 既存判定は書き換える前に済ませる（書き換え後に数えると新規分も更新に混ざる）
+  let added = 0
+  let changed = 0
 
   for (const item of operations.items) {
-    if (item.status === "resolved" || item.status === "planted" || item.status === "abandoned") {
-      const existing = items.find((f) => f.id === item.id)
-      if (existing) {
-        existing.status = item.status
-        if (item.resolvedChapter) existing.resolvedChapter = item.resolvedChapter
-      }
+    const existing = item.id ? items.find((f) => f.id === item.id) : undefined
+    if (existing) {
+      changed++
+      if (item.status) existing.status = item.status
+      if (item.title) existing.title = item.title
+      if (item.content) existing.content = item.content
+      if (item.category) existing.category = item.category
+      if (item.plantChapter) existing.plantChapter = item.plantChapter
+      if (item.targetChapter) existing.targetChapter = item.targetChapter
+      if (item.resolvedChapter) existing.resolvedChapter = item.resolvedChapter
+      if (item.notes) existing.notes = item.notes
     } else {
+      added++
       const newId = item.id || `F${items.length + 1}`
       items.push({ ...item, id: newId, status: item.status ?? "pending" })
     }
@@ -114,22 +137,24 @@ async function updateForeshadow(dir: string, content: string): Promise<string> {
 
   await safeWriteJson(filePath, { items })
 
-  const added = operations.items.filter((i) => !items.find((e) => e.id === i.id && e.status !== "pending"))
-  const updated = operations.items.filter((i) => items.find((e) => e.id === i.id && e.status !== "pending"))
+  const planted = items.filter((f) => f.status === "planted").length
+  const resolved = items.filter((f) => f.status === "resolved").length
 
-  return `✅ 伏笔追踪已更新\n   新增: ${added.length} | 更新: ${updated.length} | 总计: ${items.length}`
+  return `✅ 伏線の記録を更新しました
+   新規 ${added} / 更新 ${changed} / 合計 ${items.length}
+   内訳: 張り済み ${planted} / 回収済み ${resolved}`
 }
 
 async function getUpdatePrompt(dir: string, promptType: string, chapterNumber?: number): Promise<string> {
-  const { getPromptTemplate } = await import("../prompts.js")
+  const { getPromptTemplate, listPromptTemplates } = await import("../prompts.js")
   const template = getPromptTemplate(promptType)
   if (!template) {
-    return `❌ 未找到提示词模板: ${promptType}\n可用模板: character-state-update, summary-update, consistency-check`
+    return `❌ そのプロンプトは見つかりません: ${promptType}
+使えるもの: ${listPromptTemplates().join(", ")}`
   }
 
   const config = await safeReadJson<any>(getConfigPath(dir))
   const characters = await safeReadFile(getDocPath(dir, "characters"))
-  const summary = await safeReadFile(getDocPath(dir, "summary"))
 
   let filled = template
   if (config) {
@@ -140,8 +165,12 @@ async function getUpdatePrompt(dir: string, promptType: string, chapterNumber?: 
     filled = filled.replace(/\{chapterNumber\}/g, String(chapterNumber))
   }
   if (characters) {
-    filled = filled.replace(/\{charactersToTrack\}/g, "所有出场角色")
+    filled = filled.replace(/\{charactersToTrack\}/g, "この章に出てきた全員")
   }
 
-  return `📝 提示词模板「${promptType}」:\n\n${filled}\n\n💡 请将上述提示词结合章节内容使用，获取更新数据后通过 novel_update 工具保存。`
+  return `📝 プロンプト「${promptType}」:
+
+${filled}
+
+💡 このプロンプトと章の本文を合わせて使い、得られた結果を novel_update で保存してください。`
 }

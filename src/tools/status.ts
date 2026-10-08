@@ -4,13 +4,34 @@ import {
   getNovelDir, getDocPath, getChaptersDir, getConfigPath,
   safeReadFile, safeReadJson, listMarkdownFiles,
   parseScenes, countWords, progressBar,
-  determinePhase,
+  determinePhase, usesMartialArtsSetting, isDocFilled,
 } from "../utils.js"
-import type { NovelConfig, ForeshadowEntry } from "../utils.js"
+import type { NovelConfig, ForeshadowEntry, DocType, Phase } from "../utils.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
   detailed?: boolean
+}
+
+const PHASE_LABELS: Record<Phase, string> = {
+  concept: "📝 コンセプト",
+  "world-building": "🌍 世界観づくり",
+  characters: "👤 人物づくり",
+  outline: "📋 プロット",
+  scenes: "🎬 シーン設計",
+  writing: "✍️ 本文執筆",
+  completed: "✅ 完結",
+}
+
+/** 進行段階ごとの次の一手 */
+const PHASE_HINTS: Record<Phase, string> = {
+  concept: "`/novel-concept` でコンセプトを固めましょう。",
+  "world-building": "`/novel-world` で世界観を組み立てましょう。",
+  characters: "`/novel-characters` で登場人物を設計しましょう。",
+  outline: "`/novel-outline` でプロットを作りましょう。",
+  scenes: "`/novel-scenes` で各章をシーンに割りましょう。",
+  writing: "`/write-chapter <章番号>` で本文を書き進めましょう。",
+  completed: "全章そろいました。`/novel-review all` で通し読みの推敲へ。",
 }
 
 export async function novelStatusExecute(
@@ -21,51 +42,54 @@ export async function novelStatusExecute(
   const novelDir = getNovelDir(dir)
 
   if (!existsSync(novelDir)) {
-    return `❌ 未找到小说项目。请先使用 novel_init 初始化项目。`
+    return `❌ 作品データが見つかりません。先に novel_init でプロジェクトを作ってください。`
   }
 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
-  const phase = determinePhase(dir)
+  const phase = determinePhase(dir, config)
   const detailed = args.detailed ?? false
 
-  let report = `📊 小说项目状态\n${"=".repeat(40)}\n\n`
+  let report = `📊 作品の進行状況\n${"=".repeat(40)}\n\n`
 
   if (config) {
-    report += `📖 书名: ${config.title}\n`
-    report += `🏷️  类型: ${config.genre}\n`
-    report += `🎯 目标字数: ${config.targetWords?.toLocaleString() ?? "未设定"}字\n`
-    report += `📋 预计章节: ${config.chapterCount ?? "未设定"}章\n`
-    report += `📅 创建时间: ${new Date(config.createdAt).toLocaleDateString("zh-CN")}\n\n`
+    report += `📖 タイトル: ${config.title}\n`
+    report += `🏷️  ジャンル: ${config.genre}\n`
+    report += `🎯 目標文字数: ${config.targetWords?.toLocaleString("ja-JP") ?? "未設定"}文字\n`
+    report += `📋 予定章数: ${config.chapterCount ? `全${config.chapterCount}章` : "未設定"}\n`
+    report += `👁️  視点: ${config.narrativePerspective ?? "未設定"}\n`
+    if (usesMartialArtsSetting(config)) {
+      report += `🗡️  流派・武芸設定: 使用中\n`
+    }
+    report += `📅 開始日: ${new Date(config.createdAt).toLocaleDateString("ja-JP")}\n\n`
   }
 
-  const phaseLabels: Record<string, string> = {
-    concept: "📝 故事概念",
-    "world-building": "🌍 世界观构建",
-    characters: "👤 角色设计",
-    outline: "📋 大纲编写",
-    scenes: "🎬 场景设计",
-    writing: "✍️ 正文创作",
-    completed: "✅ 已完成",
-  }
+  report += `📍 現在の段階: ${PHASE_LABELS[phase] ?? phase}\n\n`
 
-  report += `📍 当前阶段: ${phaseLabels[phase] ?? phase}\n\n`
-
-  const phases = [
-    { key: "concept", label: "故事概念", file: "concept.md" },
-    { key: "world-building", label: "世界观", file: "world-building.md" },
-    { key: "characters", label: "角色档案", file: "characters/profiles.md" },
-    { key: "outline-brief", label: "简要大纲", file: "outline-brief.md" },
-    { key: "outline-detailed", label: "详细大纲", file: "outline-detailed.md" },
-    { key: "scenes", label: "场景列表", file: "scenes.md" },
+  // 各工程の文書がそろっているか。
+  // getDocPath に DocType を渡す（以前はファイル名を渡していたため
+  // concept.md.md のような存在しないパスを見ていて常に未完了表示だった）
+  //
+  // novel_init が雛形として先に作る3文書は、ファイルの有無では判定できない。
+  // determinePhase と同じ基準（角括弧プレースホルダが残っていないか）で見る。
+  const stages: Array<{ docType: DocType; label: string; byContent?: boolean }> = [
+    { docType: "concept", label: "作品コンセプト", byContent: true },
+    { docType: "world-building", label: "世界観", byContent: true },
+    { docType: "characters", label: "登場人物", byContent: true },
+    { docType: "outline-brief", label: "プロット概要" },
+    { docType: "outline-detailed", label: "章別プロット" },
+    { docType: "scenes", label: "シーン一覧" },
   ]
 
-  report += `📋 阶段进度:\n`
-  for (const p of phases) {
-    const path = p.file.includes("/") ? join(novelDir, p.file) : getDocPath(dir, p.file as any)
-    const exists = existsSync(path)
-    const icon = exists ? "✅" : "⬜"
-    report += `  ${icon} ${p.label}\n`
+  report += `📋 工程の進み具合:\n`
+  for (const stage of stages) {
+    const path = getDocPath(dir, stage.docType)
+    const done = stage.byContent ? isDocFilled(path) : existsSync(path)
+    let mark = done ? "✅" : "⬜"
+    // 雛形はあるが未記入の状態を区別して示す
+    if (!done && stage.byContent && existsSync(path)) mark = "📝"
+    report += `  ${mark} ${stage.label}\n`
   }
+  report += `  （✅ 記入済み / 📝 雛形あり・未記入 / ⬜ 未作成）\n`
 
   const scenesContent = await safeReadFile(getDocPath(dir, "scenes"))
   if (scenesContent) {
@@ -74,10 +98,10 @@ export async function novelStatusExecute(
     const inProgress = scenes.filter((s) => s.status === "in-progress").length
     const total = scenes.length
 
-    report += `\n🎬 场景进度:\n`
+    report += `\n🎬 シーンの進捗:\n`
     report += `  ${progressBar(completed, total)}\n`
     if (inProgress > 0) {
-      report += `  🔄 进行中: ${inProgress}个场景\n`
+      report += `  🔄 執筆中: ${inProgress}シーン\n`
     }
   }
 
@@ -86,23 +110,26 @@ export async function novelStatusExecute(
     const chapters = await listMarkdownFiles(chaptersDir)
     if (chapters.length > 0) {
       let totalWords = 0
-      report += `\n✍️ 已写章节 (${chapters.length}章):\n`
+      report += `\n✍️ 執筆済み: ${chapters.length}章\n`
       for (const ch of chapters) {
         const content = await safeReadFile(join(chaptersDir, ch))
-        if (content && detailed) {
-          const words = countWords(content)
-          totalWords += words
-          report += `  📄 ${ch}: ${words.toLocaleString()}字\n`
-        } else if (content) {
-          totalWords += countWords(content)
+        if (!content) continue
+        const words = countWords(content)
+        totalWords += words
+        if (detailed) {
+          report += `  📄 ${ch}: ${words.toLocaleString("ja-JP")}文字\n`
         }
       }
-      report += `\n📊 总字数: ${totalWords.toLocaleString()}字`
+      report += `\n📊 累計: ${totalWords.toLocaleString("ja-JP")}文字`
       if (config?.targetWords) {
         const percent = Math.round((totalWords / config.targetWords) * 100)
-        report += ` / ${config.targetWords.toLocaleString()}字 (${percent}%)`
+        report += ` / ${config.targetWords.toLocaleString("ja-JP")}文字 (${percent}%)`
       }
       report += "\n"
+      if (config?.chapterCount) {
+        const perChapter = Math.round(totalWords / chapters.length)
+        report += `📐 1章平均: ${perChapter.toLocaleString("ja-JP")}文字\n`
+      }
     }
   }
 
@@ -111,8 +138,13 @@ export async function novelStatusExecute(
     const planted = foreshadow.items.filter((f) => f.status === "planted").length
     const resolved = foreshadow.items.filter((f) => f.status === "resolved").length
     const pending = foreshadow.items.filter((f) => f.status === "pending").length
-    report += `\n🎯 伏笔追踪: ${planted} 已埋设 | ${resolved} 已回收 | ${pending} 待处理\n`
+    const abandoned = foreshadow.items.filter((f) => f.status === "abandoned").length
+    report += `\n🎯 伏線: 張り済み ${planted} / 回収済み ${resolved} / 未着手 ${pending}`
+    if (abandoned > 0) report += ` / 取り下げ ${abandoned}`
+    report += `\n`
   }
+
+  report += `\n💡 次の一手: ${PHASE_HINTS[phase] ?? ""}\n`
 
   return report
 }

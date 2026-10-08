@@ -1,7 +1,28 @@
-import { safeWriteFile, safeWriteJson, getNovelDir, getDocPath, getChaptersDir, existsSync, getConfigPath } from "../utils.js"
-import { fillTemplateVars, CONFIG_TEMPLATE, CONCEPT_TEMPLATE, WORLD_BUILDING_TEMPLATE, CHARACTER_PROFILES_TEMPLATE, SUMMARY_TEMPLATE, FORESHADOW_TEMPLATE, CHARACTER_STATE_TEMPLATE, WUXIA_SECTS_TEMPLATE, WUXIA_MARTIAL_ARTS_TEMPLATE, WUXIA_WEAPONS_TEMPLATE, REALITY_SOURCE_TEMPLATE } from "../templates.js"
+import {
+  safeWriteFile,
+  safeWriteJson,
+  getNovelDir,
+  getDocPath,
+  existsSync,
+  getConfigPath,
+  isMartialArtsGenre,
+} from "../utils.js"
+import {
+  fillTemplateVars,
+  CONFIG_TEMPLATE,
+  CONCEPT_TEMPLATE,
+  WORLD_BUILDING_TEMPLATE,
+  CHARACTER_PROFILES_TEMPLATE,
+  SUMMARY_TEMPLATE,
+  FORESHADOW_TEMPLATE,
+  CHARACTER_STATE_TEMPLATE,
+  WUXIA_SECTS_TEMPLATE,
+  WUXIA_MARTIAL_ARTS_TEMPLATE,
+  WUXIA_WEAPONS_TEMPLATE,
+  REALITY_SOURCE_TEMPLATE,
+} from "../templates.js"
+import { DEFAULTS } from "../constants.js"
 import type { ToolContext } from "../index.js"
-import { join } from "node:path"
 
 interface InitArgs {
   title: string
@@ -10,6 +31,7 @@ interface InitArgs {
   chapterCount?: number
   theme?: string
   narrativePerspective?: string
+  martialArtsSetting?: boolean
 }
 
 export async function novelInitExecute(
@@ -20,19 +42,31 @@ export async function novelInitExecute(
   const novelDir = getNovelDir(dir)
 
   if (existsSync(novelDir)) {
-    return `❌ 小说项目已存在于此目录: ${novelDir}\n如需重新初始化，请先删除 .novel 目录。`
+    return `❌ このディレクトリにはすでに作品データがあります: ${novelDir}
+作り直す場合は .novel ディレクトリを削除してください。`
   }
 
   const title = args.title
   const genre = args.genre
-  const targetWords = args.targetWords ?? 200000
-  const chapterCount = args.chapterCount ?? 50
+  const targetWords = args.targetWords ?? DEFAULTS.targetWords
+  const chapterCount = args.chapterCount ?? DEFAULTS.chapterCount
   const theme = args.theme ?? ""
-  const perspective = args.narrativePerspective ?? "第三人称有限"
+  const perspective = args.narrativePerspective ?? DEFAULTS.narrativePerspective
+
+  // 明示指定があればそれに従い、なければジャンルから推定する。
+  // 「武士」「武装」などに誤爆しないよう isMartialArtsGenre を使う。
+  const useMartialArts = args.martialArtsSetting ?? isMartialArtsGenre(genre)
 
   const vars = { title, genre, targetWords, chapterCount, theme, narrativePerspective: perspective }
 
-  const config = { ...CONFIG_TEMPLATE, ...vars, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), currentPhase: "concept" }
+  const config = {
+    ...CONFIG_TEMPLATE,
+    ...vars,
+    martialArtsSetting: useMartialArts,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    currentPhase: "concept",
+  }
   await safeWriteJson(getConfigPath(dir), config)
 
   await safeWriteFile(getDocPath(dir, "concept"), fillTemplateVars(CONCEPT_TEMPLATE, vars))
@@ -42,48 +76,51 @@ export async function novelInitExecute(
   await safeWriteJson(getDocPath(dir, "foreshadow"), FORESHADOW_TEMPLATE)
   await safeWriteJson(getDocPath(dir, "character-state"), CHARACTER_STATE_TEMPLATE)
 
-  // 现实映射素材文件（所有类型通用）
+  // 取材メモはジャンルを問わず作る
   await safeWriteFile(getDocPath(dir, "reality-source"), fillTemplateVars(REALITY_SOURCE_TEMPLATE, vars))
 
-  // 武侠类型专属文件
-  if (genre.includes("武") || genre.includes("功夫") || genre === "武侠") {
+  // 流派・武芸設定（内部識別子 wuxia）
+  if (useMartialArts) {
     await safeWriteFile(getDocPath(dir, "sect"), fillTemplateVars(WUXIA_SECTS_TEMPLATE, vars))
     await safeWriteFile(getDocPath(dir, "martial-art"), fillTemplateVars(WUXIA_MARTIAL_ARTS_TEMPLATE, vars))
     await safeWriteFile(getDocPath(dir, "weapon"), fillTemplateVars(WUXIA_WEAPONS_TEMPLATE, vars))
   }
 
-  const wuxiaNote = (genre.includes("武") || genre.includes("功夫") || genre === "武侠")
-    ? `\n  🗡️ 武侠专属文件:
+  const martialNote = useMartialArts
+    ? `
+  🗡️ 流派・武芸設定:
   wuxia/
-  ├── sects.md          (门派势力)
-  ├── martial-arts.md   (功法谱)
-  └── weapons.md        (兵器谱)`
+  ├── sects.md          (流派・勢力)
+  ├── martial-arts.md   (剣術・技)
+  └── weapons.md        (刀剣)`
     : ""
 
-  return `✅ 小说项目「${title}」初始化成功！
+  const perChapter = Math.round(targetWords / chapterCount)
 
-📁 项目结构已创建:
+  return `✅ 作品『${title}』の準備ができました。
+
+📁 作成したファイル:
   .novel/
-  ├── config.json          (项目配置)
-  ├── concept.md           (故事概念 - 请先填写)
-  ├── world-building.md    (世界观设定)
-  ├── characters/          (角色档案)
+  ├── config.json          (作品設定)
+  ├── concept.md           (作品コンセプト ← まずここから)
+  ├── world-building.md    (世界観)
+  ├── characters/          (登場人物)
   │   ├── profiles.md
   │   └── state.json
-  ├── summary.md           (前文摘要)
-  ├── foreshadow.json      (伏笔追踪)
-  ├── reality-source.md      (现实映射素材库)
-   └── chapters/            (章节目录，写作时自动创建)${wuxiaNote}
+  ├── summary.md           (これまでのあらすじ)
+  ├── foreshadow.json      (伏線の管理)
+  ├── reality-source.md    (取材メモ)
+  └── chapters/            (本文。執筆時に自動で作られます)${martialNote}
 
-📋 基本信息:
-  类型: ${genre}
-  目标字数: ${targetWords}字
-  预计章节: ${chapterCount}章
-  叙事视角: ${perspective}
+📋 作品の基本情報:
+  ジャンル: ${genre}
+  目標文字数: ${targetWords.toLocaleString("ja-JP")}文字
+  予定章数: 全${chapterCount}章（1章あたり約${perChapter.toLocaleString("ja-JP")}文字）
+  視点: ${perspective}
 
-📝 下一步:
-  1. 请用户描述小说创意（故事梗概、主角、核心冲突）
-  2. 使用 CONCEPT_PROMPT 提示词协助完善故事概念
-  3. 填写 .novel/concept.md
-  4. 确认后进入世界观构建阶段`
+📝 次にやること:
+  1. 書きたい話の種を聞かせてください（あらすじ、主人公、中心にある対立）
+  2. concept プロンプトを使ってコンセプトを固めます
+  3. .novel/concept.md に書き込みます
+  4. 固まったら世界観づくりへ進みます`
 }

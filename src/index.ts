@@ -55,15 +55,16 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
   return {
     tool: {
       "novel_init": tool({
-        description: `初始化一个新的小说创作项目。创建 .novel 目录和所有必要的模板文件（故事概念、世界观、角色档案等）。
-使用场景：用户想要开始一部新小说的创作时。`,
+        description: `日本語の長編小説プロジェクトを新規に作る。.novel ディレクトリと、コンセプト・世界観・登場人物などの雛形ファイルを一式用意する。
+使う場面: これから新しい作品を書きはじめるとき。`,
         args: {
-          title: z.string().describe("小说标题"),
-          genre: z.string().describe("类型（如：玄幻、都市、科幻、悬疑等）"),
-          targetWords: z.number().optional().describe("目标总字数，默认200000"),
-          chapterCount: z.number().optional().describe("预计章节数，默认50"),
-          theme: z.string().optional().describe("核心主题（如：成长、复仇、救赎等）"),
-          narrativePerspective: z.string().optional().describe("叙事视角，默认第三人称有限"),
+          title: z.string().describe("作品タイトル"),
+          genre: z.string().describe("ジャンル（例: 現代ドラマ、ミステリ、異世界ファンタジー、時代小説、SF、ホラー、恋愛、青春、ライト文芸）"),
+          targetWords: z.number().optional().describe("目標総文字数。既定 120000（文庫1冊相当）"),
+          chapterCount: z.number().optional().describe("予定章数。既定 40"),
+          theme: z.string().optional().describe("作品テーマ（例: 成長、復讐、赦し、喪失と再生）"),
+          narrativePerspective: z.string().optional().describe("視点。既定「三人称一元視点」"),
+          martialArtsSetting: z.boolean().optional().describe("流派・刀剣・剣術の設定ファイルを作るかどうか。省略時はジャンルから判断する（剣豪・剣客・武侠・チャンバラ・時代活劇・剣戟を含む場合のみ有効）"),
         },
         async execute(args, context) {
           return novelInitExecute(args as any, context as ToolContext)
@@ -71,10 +72,10 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_status": tool({
-        description: `获取当前小说项目的状态报告。包括：当前工作流阶段、各文档完成情况、场景/章节进度、字数统计、伏笔追踪状态。
-使用场景：用户想了解小说项目的整体进度，或在开始写作前检查当前状态。`,
+        description: `いまの作品の進行状況をまとめて返す。現在の工程、各資料の有無、シーンと章の進捗、文字数、伏線の状態を含む。
+使う場面: 全体の進み具合を確かめたいとき、執筆を再開する前の状況確認。`,
         args: {
-          detailed: z.boolean().optional().describe("是否显示详细信息"),
+          detailed: z.boolean().optional().describe("章ごとの文字数まで出すかどうか"),
         },
         async execute(args, context) {
           return novelStatusExecute(args as any, context as ToolContext)
@@ -82,13 +83,13 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_save_chapter": tool({
-        description: `保存一个完成的章节到 chapters 目录，自动编号和统计字数。
-使用场景：完成一章的写作后保存，如"第3章写完了，保存一下"。`,
+        description: `書き上げた1章を chapters ディレクトリに保存する。ファイル名の連番付けと文字数の計算を自動で行う。
+使う場面: 1章を書き終えたとき（例「第3章が書けたので保存して」）。`,
         args: {
-          chapterNumber: z.number().describe("章节编号（从1开始）"),
-          title: z.string().describe("章节标题"),
-          content: z.string().describe("章节正文内容"),
-          updateState: z.boolean().optional().describe("是否同时更新角色状态和摘要，默认true"),
+          chapterNumber: z.number().describe("章番号（1から数える）"),
+          title: z.string().describe("章タイトル"),
+          content: z.string().describe("本文。章見出しの行は含めない"),
+          updateState: z.boolean().optional().describe("保存後に記録更新の案内を出すかどうか。既定 true"),
         },
         async execute(args, context) {
           return novelSaveChapterExecute(args as any, context as ToolContext)
@@ -96,12 +97,12 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_context": tool({
-        description: `为写作指定章节构建完整的上下文信息。包括：本章大纲、角色档案、角色当前状态、前文摘要、上一章末尾、伏笔提醒、写作提示词模板。
-使用场景：在开始写作某一章之前调用，获取所有必要的参考信息。优先级分层：P0(大纲) > P1(角色/衔接) > P2(伏笔/摘要)。`,
+        description: `指定した章を書くための資料を一式そろえる。この章のプロット、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、執筆プロンプトを返す。
+使う場面: ある章の執筆にとりかかる直前。優先度は P0(プロット) > P1(人物・前章とのつなぎ) > P2(伏線・あらすじ) の順。`,
         args: {
-          chapterNumber: z.number().describe("要写作的章节编号"),
-          sceneId: z.string().optional().describe("场景ID（如 1.1, 2.3）"),
-          includePrompts: z.boolean().optional().describe("是否包含提示词模板，默认true"),
+          chapterNumber: z.number().describe("これから書く章の番号"),
+          sceneId: z.string().optional().describe("シーンID（例 1.1、2.3）"),
+          includePrompts: z.boolean().optional().describe("執筆プロンプトを含めるかどうか。既定 true"),
         },
         async execute(args, context) {
           return novelContextExecute(args as any, context as ToolContext)
@@ -109,11 +110,11 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_guide": tool({
-        description: `获取小说创作工作流指南。包含：完整工作流说明、提示词使用指南、写作技巧、伏笔管理、角色管理等。
-使用场景：用户第一次使用插件时，或需要了解工作流的某个方面。可选 section: workflow, prompts, writing, foreshadow, characters。`,
+        description: `執筆の進め方の手引きを返す。全体の流れ、プロンプトの使い方、文章の書き方、伏線の扱い、人物の管理を収めている。
+使う場面: 初めてこのプラグインを使うとき、またはある工程のやり方を確かめたいとき。section には workflow / prompts / writing / foreshadow / characters を指定できる。`,
         args: {
           section: z.enum(["workflow", "prompts", "writing", "foreshadow", "characters"]).optional()
-            .describe("要查看的指南部分，默认显示完整工作流"),
+            .describe("読みたい手引きの章。既定は全体の流れ"),
         },
         async execute(args, context) {
           return novelGuideExecute(args as any, context as ToolContext)
@@ -121,12 +122,12 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_update": tool({
-        description: `更新小说项目的追踪数据。支持：角色状态更新(character-state)、前文摘要更新(summary)、伏笔追踪更新(foreshadow)、获取更新用提示词(prompt)。
-使用场景：每章写作完成后，更新角色状态变化、前文摘要、伏笔回收情况。也可用于获取特定更新操作的提示词模板。`,
+        description: `作品の記録を更新する。登場人物の状態(character-state)、これまでのあらすじ(summary)、伏線(foreshadow)の更新と、更新用プロンプトの取得(prompt)に対応。
+使う場面: 1章を書き終えたあと、人物の変化・あらすじ・伏線の回収状況を書き残すとき。`,
         args: {
-          action: z.enum(["character-state", "summary", "foreshadow", "prompt"]).describe("更新类型"),
-          content: z.string().describe("更新内容（JSON字符串或Markdown文本）"),
-          chapterNumber: z.number().optional().describe("相关章节编号"),
+          action: z.enum(["character-state", "summary", "foreshadow", "prompt"]).describe("更新の種別"),
+          content: z.string().describe("更新内容（JSON文字列または Markdown テキスト）"),
+          chapterNumber: z.number().optional().describe("対象の章番号"),
         },
         async execute(args, context) {
           return novelUpdateExecute(args as any, context as ToolContext)
@@ -138,6 +139,8 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       const planner = createNovelPlannerAgent(model)
       const writer = createNovelWriterAgent(model)
       const editor = createNovelEditorAgent(model)
+      // 3つの agent はいずれも主 agent セレクタに出す。
+      // 各ファクトリは mode: "subagent" を返すのでここで上書きする。
       planner.mode = "primary"
       writer.mode = "primary"
       editor.mode = "primary"
