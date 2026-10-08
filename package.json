@@ -15,8 +15,9 @@
     "./server": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --outDir test-out && node --test \"test-out/**/*.test.js\""
   },
   "dependencies": {
     "zod": "^3.24.0"
