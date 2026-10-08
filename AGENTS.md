@@ -1,154 +1,188 @@
-# opencode-novel-plugin — 小说创作插件
+# opencode-novel-plugin — 日本語長編小説のための執筆支援プラグイン
 
-## 概述
+## 概要
 
-OpenCode 服务端插件，为 AI 辅助小说创作提供 6 个工具（novel_init、novel_status、novel_save_chapter、novel_context、novel_guide、novel_update）、3 个专属 Agent（novel-planner、novel-writer、novel-editor）、15 个 RTCO 提示词模板（含武侠专属+现实映射）、5 个 Skill（含武侠专项+现实映射），以及完整的文件式数据管理系统。
+OpenCode のサーバープラグインです。日本語の長編小説を書くために、
+6つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update`）、
+3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
+15のRTCOプロンプト、15の文書雛形、5つの skill、11のコマンド、
+そしてファイルで持つ作品データの管理を提供します。
 
-> 文档编辑使用 opencode 内置 Edit/Write 工具，`.novel/` 目录下所有文件均可直接编辑。
+本リポジトリは [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin) の fork で、
+日本語の長編小説執筆向けに全面的に書き直してあります。上流との差分は `README.ja.md` を参照してください。
 
-## 项目结构
+> 文書の編集には opencode 内蔵の Edit / Write ツールを使います。`.novel/` 配下のファイルはすべて直接編集できます。
+
+## ディレクトリ構成
 
 ```
-opencode-noval/
+opencode-novel-plugin/
 ├── src/
-│   ├── index.ts              # 插件入口，PluginModule 格式: { id, server }
-│   ├── utils.ts              # 路径/文件/解析工具函数 + 类型定义
-│   ├── prompts.ts            # 15 个 RTCO 提示词模板（含武侠专属+现实映射）
-│   ├── templates.ts          # 11 个文档模板 + 填充函数
+│   ├── index.ts              # プラグイン入口。形式: { id, server }
+│   ├── constants.ts          # 既定値（DEFAULTS）と資料読み込みの上限（LIMITS）
+│   ├── utils.ts              # パス／ファイル／文書解析／進行判定／文字数
+│   ├── utils.test.ts         # ユニットテスト（node:test）
+│   ├── prompts.ts            # 15のRTCOプロンプト
+│   ├── templates.ts          # 15の文書雛形（Markdown 12 + JSON 3）
 │   ├── agents/
-│   │   ├── novel-planner.ts  # novel-planner 策划师 agent
-│   │   ├── novel-writer.ts   # novel-writer 作者 agent
-│   │   └── novel-editor.ts   # novel-editor 编辑 agent
+│   │   ├── novel-planner.ts  # 企画を手伝うコーチ
+│   │   ├── novel-writer.ts   # 本文を手伝うコーチ
+│   │   └── novel-editor.ts   # 原稿を見る編集コーチ
 │   └── tools/
-│       ├── init.ts           # novel_init — 项目初始化
-│       ├── status.ts         # novel_status — 状态报告
-│       ├── save.ts           # novel_save_chapter 章节保存
-│       ├── context.ts        # novel_context — 写作上下文构建
-│       ├── guide.ts          # novel_guide — 工作流指南
-│       └── track.ts          # novel_update — 状态追踪更新
-├── commands/                # 斜杠命令
-│   ├── novel.md          # /novel — 智能入口（自动检测阶段）
-│   ├── novel-init.md     # /novel-init — 初始化项目
-│   ├── novel-concept.md  # /novel-concept — 故事概念设计
-│   ├── novel-world.md    # /novel-world — 世界观构建
-│   ├── novel-characters.md # /novel-characters — 角色设计
-│   ├── novel-outline.md  # /novel-outline — 大纲编写
-│   ├── novel-scenes.md   # /novel-scenes — 场景设计
-│   ├── novel-reality.md  # /novel-reality — 现实映射素材发掘
-│   ├── write-chapter.md  # /write-chapter — 写章命令
-│   ├── novel-status.md   # /novel-status — 状态查看命令
-│   └── novel-review.md   # /novel-review — 审稿命令
-├── skills/                  # 创作技能
-│   ├── novel-workflow/   # 完整6阶段工作流 skill
-│   ├── novel-writing/    # 章节写作 skill（反AI规则+感官指南）
-│   ├── novel-editor/     # 审稿修订 skill（一致性+六稿修改法）
-│   ├── novel-wuxia/      # 武侠专项 skill（功法/门派/战斗/桥段库）
-│   └── novel-reality/    # 现实映射 skill（批判现实主义/陌生化/原型提取）
+│       ├── init.ts           # novel_init — プロジェクトの作成
+│       ├── status.ts         # novel_status — 進行状況
+│       ├── save.ts           # novel_save_chapter — 章の保存
+│       ├── context.ts        # novel_context — 執筆用の資料
+│       ├── guide.ts          # novel_guide — 進め方の手引き
+│       └── track.ts          # novel_update — 記録の更新
+├── commands/                 # スラッシュコマンド（11本）
+├── skills/                   # 執筆用の skill（5本）
+│   ├── novel-workflow/       # 6工程の進め方（通し作例つき）
+│   ├── novel-writing/        # 本文の書き方【表記規約と反AI一覧の正本】
+│   ├── novel-editor/         # 原稿の点検
+│   ├── novel-wuxia/          # 時代小説・剣豪小説の設定と書き方
+│   └── novel-reality/        # 現実から題材を取る（日本法の注意つき）
 ├── package.json
-└── tsconfig.json
+├── tsconfig.json             # typecheck / test 用（テストを含む）
+└── tsconfig.build.json       # 配布ビルド用（テストを除く）
 ```
 
-## 数据目录（.novel/）
+## 作品データ（.novel/）
 
 ```
 .novel/
-├── config.json              # 项目配置（标题/类型/字数/阶段）
-├── concept.md               # 故事概念
-├── world-building.md        # 世界观设定
+├── config.json              # 作品設定（タイトル／ジャンル／文字数／工程／limits）
+├── concept.md               # 作品コンセプト
+├── world-building.md        # 世界観
 ├── characters/
-│   ├── profiles.md          # 角色总览（清单/关系图/冲突矩阵）
-│   ├── {角色名}.md           # 每个角色独立档案（驱动力三角/弧线/章节状态）
-│   └── state.json           # 角色状态追踪
-├── outline-brief.md         # 简要大纲
-├── outline-detailed.md      # 详细大纲（或拆分为 outline/chapter-001.md 等）
-├── scenes.md                # 场景列表（或拆分为 scenes/chapter-001.md 等）
-├── summary.md               # 前文摘要（每章更新）
-├── foreshadow.json          # 伏笔追踪
-├── wuxia/                   # 武侠专属（genre=武侠时自动创建）
-│   ├── sects.md             # 门派势力（或拆分为 sects/{门派名}.md）
-│   ├── martial-arts.md      # 功法谱
-│   └── weapons.md           # 兵器谱（或拆分为 weapons/{兵器名}.md）
-├── reality-source.md        # 现实映射素材库（或拆分为 reality/events/ 等子目录）
-└── chapters/                # 章节正文
+│   ├── profiles.md          # 登場人物の一覧（関係図・対立表）
+│   ├── {キャラクター名}.md   # 一人ずつの設定（動機の三角形／アーク／章ごとの記録）
+│   └── state.json           # 登場人物の現在の状態
+├── outline-brief.md         # プロット概要
+├── outline-detailed.md      # 章別プロット（outline/chapter-001.md に分割も可）
+├── scenes.md                # シーン一覧（scenes/chapter-001.md に分割も可）
+├── summary.md               # これまでのあらすじ（章ごとに更新）
+├── foreshadow.json          # 伏線
+├── wuxia/                   # 流派・武芸設定（martialArtsSetting が true のとき作成）
+│   ├── sects.md             # 流派・勢力（sects/{流派名}.md に分割も可）
+│   ├── martial-arts.md      # 剣術・技
+│   └── weapons.md           # 刀剣（weapons/{刀剣名}.md に分割も可）
+├── reality-source.md        # 取材メモ（reality/events/ などに分割も可）
+└── chapters/                # 本文
     ├── chapter-001.md
     ├── chapter-002.md
     └── ...
 ```
 
-## 工具清单
+> `wuxia` というディレクトリ名は上流からの互換のために残しています。
+> 中身は日本の時代小説・剣豪小説向けの「流派・武芸設定」です。
 
-| 工具 | 用途 | 关键参数 |
-|------|------|---------|
-| `novel_init` | 初始化项目 | title, genre, targetWords, chapterCount |
-| `novel_status` | 查看进度 | detailed |
-| `novel_save_chapter` | 保存章节 | chapterNumber, title, content |
-| `novel_context` | 构建写作上下文 | chapterNumber, includePrompts |
-| `novel_guide` | 工作流指南 | section |
-| `novel_update` | 更新追踪 | action, content, chapterNumber |
+## ツール
 
-> 文档编辑（概念/世界观/角色/大纲/场景等）使用 opencode 内置 Edit/Write 工具，路径映射见 Agent prompt。
+| ツール | 用途 | 主な引数 |
+|---|---|---|
+| `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting |
+| `novel_status` | 進行状況 | detailed |
+| `novel_save_chapter` | 章の保存 | chapterNumber, title, content |
+| `novel_context` | 執筆用の資料 | chapterNumber, includePrompts |
+| `novel_guide` | 進め方の手引き | section |
+| `novel_update` | 記録の更新 | action, content, chapterNumber |
 
-## Agent 清单
+> コンセプト・世界観・登場人物・プロット・シーンなどの文書は、opencode 内蔵の Edit / Write ツールで編集します。
+> パスの対応は各 agent のプロンプトにあります。
 
-| Agent | 用途 | 模式 | 温度 |
-|-------|------|------|------|
-| `novel-planner` | 故事策划（概念/世界观/角色/大纲/场景）+ 现实素材发掘 | subagent | 0.3 |
-| `novel-writer` | 章节正文创作 | subagent | 0.7 |
-| `novel-editor` | 审稿修订（一致性检查/风格润色/节奏分析） | subagent | 0.1 |
+## agent
 
-## 技能清单
+| agent | 用途 | mode | temperature |
+|---|---|---|---|
+| `novel-planner` | 企画（コンセプト／世界観／人物／プロット／シーン）＋取材 | primary | 0.3 |
+| `novel-writer` | 本文の執筆 | primary | 0.7 |
+| `novel-editor` | 原稿の点検（つじつま／文章／緩急／表記） | primary | 0.1 |
 
-| Skill | 用途 | 加载时机 |
-|-------|------|---------|
-| `novel-workflow` | 6阶段完整工作流 | 规划阶段 |
-| `novel-writing` | 章节写作指导 | 写正文时 |
-| `novel-editor` | 审稿修订 | 审稿时 |
-| `novel-wuxia` | 武侠专项（功法/门派/战斗/桥段库） | 武侠创作时 |
-| `novel-reality` | 现实映射（批判现实主义/陌生化技法/原型提取/合规指南） | 现实映射时 |
+> 各ファクトリは `mode: "subagent"` を返しますが、`src/index.ts` の `config` フックで
+> `primary` に上書きしています。3つとも主 agent セレクタに出ます。
 
-## 命令清单
+## skill
 
-| 命令 | 用途 | 参数 |
-|------|------|------|
-| `/novel` | 自动检测当前阶段并引导下一步 | 无 |
-| `/novel-init` | 初始化新小说项目 | [书名] |
-| `/novel-concept` | 设计故事核心概念 | 无 |
-| `/novel-world` | 构建世界观设定 | 无 |
-| `/novel-characters` | 设计角色群 | 无 |
-| `/novel-outline` | 编写故事大纲 | 无 |
-| `/novel-scenes` | 场景设计 | 无 |
-| `/novel-reality` | 现实映射素材发掘 | 无 |
-| `/write-chapter` | 写一章正文 | 章节编号 |
-| `/novel-status` | 查看进度 | 无 |
-| `/novel-review` | 审稿 | 章节编号/all, --focus |
+| skill | 用途 | 読み込む場面 |
+|---|---|---|
+| `novel-workflow` | 6工程の進め方（『九月の忘れもの』の通し作例つき） | 企画の段階 |
+| `novel-writing` | **表記規約と反AI一覧の正本**、五感、緩急 | 本文を書くとき |
+| `novel-editor` | つじつま確認、六回に分けて見る手順、点検結果の雛形 | 原稿を見るとき |
+| `novel-wuxia` | 流派・武芸の設定、立ち合いの書き方、筋立ての型、刀剣、作法 | 時代小説・剣豪小説のとき |
+| `novel-reality` | 三つの手法、異化の技法、人物の型、**日本法の注意** | 現実から題材を取るとき |
 
-## 工作流阶段
+## コマンド
+
+| コマンド | 用途 | 引数 |
+|---|---|---|
+| `/novel` | 進行を確かめ、次にやることを案内する | なし |
+| `/novel-init` | プロジェクトを作る | `[タイトル]` |
+| `/novel-concept` | 作品の核を決める | なし |
+| `/novel-world` | 世界観を組み立てる | なし |
+| `/novel-characters` | 登場人物を設計する | なし |
+| `/novel-outline` | プロットを作る | なし |
+| `/novel-scenes` | 各章をシーンに割る | なし |
+| `/novel-reality` | 現実から題材を取る | なし |
+| `/write-chapter` | 1章の本文を書く | `<章番号>` |
+| `/novel-status` | 進行状況を見る | なし |
+| `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|full` |
+
+## 工程
 
 ```
-0:概念 → 1:世界观 → 2:角色 → 3:大纲 → 4:场景 → 5:正文(循环)
+0:コンセプト → 1:世界観 → 2:人物 → 3:プロット → 4:シーン → 5:本文（繰り返し）
 ```
 
-每个阶段有明确的输入、输出和检查点。前一阶段完成是下一阶段的前提。
+工程ごとに入力・出力・確認項目があります。前の工程が済んでいることが次の工程の前提です。
 
-## 提示词模板
+進行段階の判定（`determinePhase`）は、`novel_init` が雛形として先に作る3文書
+（concept.md / world-building.md / characters/profiles.md）については
+**角括弧プレースホルダ（`[…]`）が残っていないか**で記入済みを判断します。
+プロット概要・章別プロット・シーン一覧はファイルの有無で判断します。
+本文の数が `chapterCount` に達すると `completed` を返します。
 
-11+2+2个RTCO框架提示词，覆盖从概念到审稿的全部阶段：
-concept, world-building, characters, outline-brief, outline-detailed, scenes, chapter-write, chapter-continue, consistency-check, character-state-update, summary-update
+## プロンプト
 
-武侠专属: wuxia-martial-arts, wuxia-combat
+RTCO（Role-Task-Context-Output）の枠組みで書いた15本です。
 
-现实映射专属: reality-source, character-archetype
+concept, world-building, characters, outline-brief, outline-detailed, scenes,
+chapter-write, chapter-continue, consistency-check, character-state-update, summary-update
 
-## 约定
+流派・武芸設定: wuxia-martial-arts, wuxia-combat
 
-- 所有数据文件使用 UTF-8 编码
-- Markdown 文档用于人类可读内容（概念、世界观、角色等）
-- JSON 文件用于程序化数据（配置、状态、伏笔）
-- 章节文件自动编号（chapter-001.md, chapter-002.md, ...）
-- 字数统计：中文字符 + 英文单词
-- 项目配置存储在 `.novel/config.json`
+取材: reality-source, character-archetype
 
-## 依赖
+## 決めごと
+
+- データファイルはすべて UTF-8
+- 人が読む内容は Markdown（コンセプト、世界観、登場人物など）
+- プログラムが読み書きする内容は JSON（設定、状態、伏線）
+- 本文のファイル名は自動の連番（chapter-001.md、chapter-002.md、…）
+- 本文の章見出しは算用数字で保存する（`# 第1章 タイトル`）。
+  プロットの解析側は算用数字・全角数字・漢数字のいずれも読み取る
+- **文字数は空白（半角・全角）と改行を除いた全文字数**。
+  仮名・漢字・約物・英数字を区別せず1文字として数え、コードポイント単位で走査する
+  （原稿用紙400字詰めの換算と一致する）
+- 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
+  目標文字数 120,000／章数 40／視点「三人称一元視点」
+- 資料読み込みの上限は `src/constants.ts` の `LIMITS` が既定値。
+  `.novel/config.json` の `limits` で作品ごとに上書きできる
+- 流派・武芸設定の有無は `config.json` の `martialArtsSetting`。
+  未指定ならジャンルから推定する（「剣豪」「剣客」「武侠」「チャンバラ」「時代活劇」「剣戟」のみ。
+  「武士」「武装」「武家」などには反応しない）
+
+## 開発
+
+```bash
+pnpm install
+pnpm typecheck   # 型検査（テストも含む）
+pnpm test        # tsc で test-out/ に出力し node:test で実行
+pnpm build       # 配布用ビルド（dist/、テストを除く）
+```
+
+## 依存
 
 - `@opencode-ai/plugin` >= 1.4.0（peer dependency）
-- `zod` ^3.24.0（参数验证）
+- `zod` ^3.24.0（引数の検証）
+- 開発: `typescript`、`@types/node`。テストは Node 24 標準の `node:test` を使い、追加の依存はありません
