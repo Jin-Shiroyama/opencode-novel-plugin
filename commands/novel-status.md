@@ -1,31 +1,31 @@
 ---
-description: 查看小说项目的当前状态和进度
+description: 執筆の進行状況と進捗を見る
 ---
 
 <command-instruction>
 
-查看小说项目的完整状态报告。
+作品の進行状況をまとめて見ます。
 
-## 执行步骤
+## やること
 
-1. 调用 `novel_status(detailed: true)` 获取详细状态
-2. 将结果展示给用户
-3. 根据当前阶段给出下一步建议
+1. `novel_status(detailed: true)` で詳しい状況を取る
+2. 結果を書き手に示す
+3. 現在の工程に応じて次にやることを添える
 
-## 建议逻辑
+## 工程ごとの案内
 
-| 当前阶段 | 建议 |
-|---------|------|
-| concept | "故事概念尚未完成。使用 `/novel-concept` 继续设计。" |
-| world-building | "世界观尚未完成。使用 `/novel-world` 继续构建。" |
-| characters | "角色设计尚未完成。使用 `/novel-characters` 继续设计。" |
-| outline | "大纲尚未完成。使用 `/novel-outline` 继续编写。" |
-| scenes | "场景尚未完成。使用 `/novel-scenes` 继续设计。" |
-| writing | "正在写作中。使用 `/write-chapter {N}` 继续写下一章。" |
-| completed | "恭喜！小说已完成。使用 `/novel-review` 进行终审。" |
+| 工程 | 案内 |
+|---|---|
+| concept | 「コンセプトがまだ固まっていません。`/novel-concept` で続けましょう」 |
+| world-building | 「世界観がまだできていません。`/novel-world` で続けましょう」 |
+| characters | 「登場人物がまだできていません。`/novel-characters` で続けましょう」 |
+| outline | 「プロットがまだできていません。`/novel-outline` で続けましょう」 |
+| scenes | 「シーン一覧がまだできていません。`/novel-scenes` で続けましょう」 |
+| writing | 「執筆中です。`/write-chapter {N}` で次の章へ進みましょう」 |
+| completed | 「全章そろいました。`/novel-review all` で通し読みの推敲へ」 |
 
-## 语言
+## 言語
 
-使用中文回复。
+日本語で答えます。
 
 </command-instruction>
