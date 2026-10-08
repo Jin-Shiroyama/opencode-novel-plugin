@@ -31,7 +31,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --outDir test-out && node --test \"test-out/**/*.test.js\"",
+    "test": "tsc --outDir test-out && node --test \"test-out/**/*.test.js\" \"scripts/**/*.test.mjs\"",
     "check:ja": "node scripts/check-japanese.mjs"
   },
   "dependencies": {
