@@ -112,11 +112,24 @@ describe("truncateChars", () => {
     assert.equal([...cut].length, 2)
     assert.equal(cut, "𠮟𠮟")
   })
+
+  test("上限 0 以下では空文字を返す", () => {
+    assert.deepEqual(truncateChars("あいう", 0), ["", true])
+    assert.deepEqual(truncateChars("あいう", -1), ["", true])
+    assert.deepEqual(truncateChars("", 0), ["", false])
+  })
 })
 
 describe("takeTailChars", () => {
   test("末尾から切り出す", () => {
     assert.equal(takeTailChars("あいうえお", 2), "えお")
+  })
+
+  test("上限 0 以下では空文字を返す（全文を返さない）", () => {
+    // slice(-0) は slice(0) と同じで配列全体を返すため、明示的に弾いている
+    for (const limit of [0, -0, -1]) {
+      assert.equal(takeTailChars("あいうえお", limit), "")
+    }
   })
 
   test("上限以内ならそのまま返す", () => {
@@ -439,7 +452,7 @@ describe("resolveLimit", () => {
   })
 
   test("不正な値は無視して既定値を使う", () => {
-    for (const bad of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const bad of [0, -100, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
       assert.equal(
         resolveLimit({ ...base, limits: { previousChapterTail: bad } }, "previousChapterTail"),
         LIMITS.previousChapterTail,
@@ -449,6 +462,17 @@ describe("resolveLimit", () => {
 
   test("小数は切り捨てる", () => {
     assert.equal(resolveLimit({ ...base, limits: { summary: 1234.9 } }, "summary"), 1234)
+    assert.equal(resolveLimit({ ...base, limits: { summary: 1.9 } }, "summary"), 1)
+  })
+
+  test("切り捨てて 0 になる小数は既定値を使う", () => {
+    // 0.5 を通してから丸めると上限 0 になり、takeTailChars が全文を返していた
+    for (const bad of [0.5, 0.9, 0.0001, -0.5]) {
+      assert.equal(
+        resolveLimit({ ...base, limits: { previousChapterTail: bad } }, "previousChapterTail"),
+        LIMITS.previousChapterTail,
+      )
+    }
   })
 })
 

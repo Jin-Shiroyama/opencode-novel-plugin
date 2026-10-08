@@ -254,11 +254,19 @@ export interface NovelConfig {
   currentPhase: Phase
 }
 
-/** config.json の limits を既定値にかぶせて解決する */
+/**
+ * config.json の limits を既定値にかぶせて解決する。
+ *
+ * 整数に丸めたあとで 1 以上かを確かめる。先に 0 より大きいかだけを見ると
+ * 0.5 のような値が通り、丸めた結果の 0 が上限として使われてしまう。
+ * 上限 0 は takeTailChars で「全文」と同じ意味になるため、
+ * 意図せず前章の全文が資料に載る。
+ */
 export function resolveLimit(config: NovelConfig | null | undefined, key: LimitKey): number {
   const override = config?.limits?.[key]
-  if (typeof override === "number" && Number.isFinite(override) && override > 0) {
-    return Math.floor(override)
+  if (typeof override === "number" && Number.isFinite(override)) {
+    const value = Math.floor(override)
+    if (value >= 1) return value
   }
   return LIMITS[key]
 }
@@ -294,13 +302,20 @@ function isWhitespace(ch: string): boolean {
  * コードポイント単位なのでサロゲートペアが割れない。
  */
 export function truncateChars(text: string, limit: number): [string, boolean] {
+  if (limit <= 0) return ["", text.length > 0]
   const chars = [...text]
   if (chars.length <= limit) return [text, false]
   return [chars.slice(0, limit).join(""), true]
 }
 
-/** 末尾から指定文字数だけ切り出す（前章の引き継ぎ用） */
+/**
+ * 末尾から指定文字数だけ切り出す（前章の引き継ぎ用）。
+ *
+ * limit が 0 以下のときは空文字を返す。slice(-0) は slice(0) と同じで
+ * 配列全体を返してしまうため、ここで先に弾く。
+ */
 export function takeTailChars(text: string, limit: number): string {
+  if (limit <= 0) return ""
   const chars = [...text]
   if (chars.length <= limit) return text
   return chars.slice(-limit).join("")
