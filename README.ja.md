@@ -50,7 +50,7 @@ OpenCode 向けの執筆支援プラグインです。日本語の長編小説�
 
 ```json
 {
-  "plugin": ["@your-scope/opencode-novel-plugin"]
+  "plugin": ["@jin-shiroyama/opencode-novel-plugin"]
 }
 ```
 

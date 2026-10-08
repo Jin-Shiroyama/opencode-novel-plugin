@@ -1,11 +1,16 @@
 {
-  "name": "opencode-novel-plugin",
+  "name": "@jin-shiroyama/opencode-novel-plugin",
   "version": "0.0.0",
-  "description": "OpenCode plugin for AI-assisted novel writing with structured workflow",
+  "description": "OpenCode plugin for writing long-form fiction in Japanese, with a staged workflow from premise to manuscript",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wmzy/opencode-novel-plugin"
+    "url": "https://github.com/Jin-Shiroyama/opencode-novel-plugin"
   },
+  "homepage": "https://github.com/Jin-Shiroyama/opencode-novel-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/Jin-Shiroyama/opencode-novel-plugin/issues"
+  },
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
@@ -13,6 +18,15 @@
       "import": "./dist/index.js"
     },
     "./server": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "commands",
+    "skills",
+    "README.ja.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -46,7 +60,10 @@
     "novel",
     "writing",
     "ai",
-    "creative-writing"
-  ],
-  "license": "AGPL-3.0-or-later"
+    "creative-writing",
+    "japanese",
+    "日本語",
+    "小説",
+    "長編小説"
+  ]
 }

@@ -36,6 +36,16 @@ with checkpoints at each stage and context assembled automatically before each c
 
 ## Install
 
+From npm:
+
+```json
+{
+  "plugin": ["@jin-shiroyama/opencode-novel-plugin"]
+}
+```
+
+From a local path:
+
 ```json
 {
   "plugin": ["file:///path/to/opencode-novel-plugin"]
@@ -43,6 +53,9 @@ with checkpoints at each stage and context assembled automatically before each c
 ```
 
 Or place the repository in `.opencode/plugins/` (per project) or `~/.config/opencode/plugins/` (global).
+
+> Published under a different name from upstream (`opencode-novel-plugin`), since this is a fork
+> with different behaviour. The two are not interchangeable.
 
 ## Quick start
 
