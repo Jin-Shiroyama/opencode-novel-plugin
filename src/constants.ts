@@ -72,6 +72,14 @@ export const MARTIAL_ARTS_GENRE_KEYWORDS = [
   "剣戟",
 ] as const
 
+/**
+ * 伏線を知らせはじめる章数。
+ *
+ * 回収予定がこの章数より先の伏線は知らせない。毎章すべてを並べると
+ * 目が滑って、いま扱うべきものが埋もれる。
+ */
+export const FORESHADOW_LOOKAHEAD = 3
+
 /** 1章あたりの推奨文字数レンジ（プロンプトの表示用） */
 export const CHAPTER_LENGTH = {
   min: 3000,

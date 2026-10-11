@@ -7,7 +7,7 @@
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises"
 import { join, resolve, relative } from "node:path"
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
-import { DEFAULTS, LIMITS, MARTIAL_ARTS_GENRE_KEYWORDS } from "./constants.js"
+import { DEFAULTS, LIMITS, MARTIAL_ARTS_GENRE_KEYWORDS, FORESHADOW_LOOKAHEAD } from "./constants.js"
 import type { LimitKey } from "./constants.js"
 
 export { existsSync } from "node:fs"
@@ -729,6 +729,90 @@ export interface ForeshadowEntry {
   targetChapter?: number
   resolvedChapter?: number
   notes?: string
+}
+
+/**
+ * 伏線を知らせるときの急ぎぐあい。
+ *
+ *   overdue  回収予定の章を過ぎている
+ *   due      この章が回収予定
+ *   upcoming 回収予定が先にある
+ *   undated  回収の章が決まっていない
+ */
+export type ForeshadowTiming = "overdue" | "due" | "upcoming" | "undated"
+
+export interface ForeshadowReminder {
+  item: ForeshadowEntry
+  timing: ForeshadowTiming
+}
+
+/** 終了した伏線の状態。これらは知らせない */
+const FORESHADOW_CLOSED: ReadonlySet<ForeshadowStatus> = new Set<ForeshadowStatus>([
+  "resolved",
+  "abandoned",
+])
+
+const TIMING_ORDER: Record<ForeshadowTiming, number> = {
+  overdue: 0,
+  due: 1,
+  upcoming: 2,
+  undated: 3,
+}
+
+/**
+ * この章で知らせる伏線を選び、急ぎぐあいを付ける。
+ *
+ * **回収済みと取り下げ済みは知らせない。** 以前は targetChapter が近いか
+ * どうかだけで拾っていたため、第1章で回収した伏線が第2章の資料に
+ * 「第1章で回収予定」と出ていた。取り下げたものに「この章で回収」と
+ * 出ることもあり、書き手を誤らせていた。
+ *
+ * 選ぶのは次のいずれか。
+ *   - 張り済み（planted）… 回収を忘れないよう、予定が遠くても知らせる
+ *   - 回収予定が lookahead 章以内に来るもの… 下ごしらえのため
+ *   - 回収予定を過ぎているもの… 取りこぼしに気づけるよう、必ず知らせる
+ *
+ * 並び順は急ぐものから。過ぎたものどうしは予定が古い順、先のものどうしは
+ * 予定が近い順にする。
+ */
+export function selectForeshadowReminders(
+  items: ForeshadowEntry[],
+  chapterNum: number,
+  lookahead: number = FORESHADOW_LOOKAHEAD,
+): ForeshadowReminder[] {
+  const reminders: ForeshadowReminder[] = []
+
+  for (const item of items) {
+    if (FORESHADOW_CLOSED.has(item.status)) continue
+
+    const target = item.targetChapter
+    let timing: ForeshadowTiming
+    if (target === undefined || target === null) {
+      timing = "undated"
+    } else if (target < chapterNum) {
+      timing = "overdue"
+    } else if (target === chapterNum) {
+      timing = "due"
+    } else {
+      timing = "upcoming"
+    }
+
+    // 張り済みと、予定を過ぎたものは常に知らせる。
+    // それ以外は回収予定が近いものだけにする。
+    const always = item.status === "planted" || timing === "overdue" || timing === "due"
+    const near = target !== undefined && target !== null && target <= chapterNum + lookahead
+    if (!always && !near) continue
+
+    reminders.push({ item, timing })
+  }
+
+  return reminders.sort((a, b) => {
+    const byTiming = TIMING_ORDER[a.timing] - TIMING_ORDER[b.timing]
+    if (byTiming !== 0) return byTiming
+    const ta = a.item.targetChapter ?? Number.MAX_SAFE_INTEGER
+    const tb = b.item.targetChapter ?? Number.MAX_SAFE_INTEGER
+    return ta - tb
+  })
 }
 
 /** キャラクターの現在状態 */

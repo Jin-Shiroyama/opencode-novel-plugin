@@ -2,9 +2,11 @@ import {
   safeReadFile, safeReadJson, getDocPath, getChaptersDir, getConfigPath,
   resolveLimit, truncateChars, takeTailChars, parseChapterNumber,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
-  clipDocParts,
+  clipDocParts, selectForeshadowReminders,
 } from "../utils.js"
-import type { ForeshadowEntry, CharacterState, NovelConfig, DocPart } from "../utils.js"
+import type {
+  ForeshadowEntry, CharacterState, NovelConfig, DocPart, ForeshadowReminder,
+} from "../utils.js"
 import { DEFAULTS, CHAPTER_WORD_TOLERANCE } from "../constants.js"
 import type { LimitKey } from "../constants.js"
 import type { ToolContext } from "../index.js"
@@ -128,19 +130,14 @@ export async function novelContextExecute(
   }
 
   const foreshadow = await safeReadJson<{ items: ForeshadowEntry[] }>(getDocPath(dir, "foreshadow"))
-  if (foreshadow && foreshadow.items.length > 0) {
-    const relevant = foreshadow.items.filter(
-      (f) => f.status === "planted" || (f.targetChapter && f.targetChapter <= chapterNum + 3)
-    )
-    if (relevant.length > 0) {
+  if (foreshadow && Array.isArray(foreshadow.items)) {
+    // 回収済みと取り下げ済みは知らせない（selectForeshadowReminders が除く）
+    const reminders = selectForeshadowReminders(foreshadow.items, chapterNum)
+    if (reminders.length > 0) {
       context += `## 🎯 伏線の確認 (P2 — 参考)\n`
-      for (const f of relevant) {
-        const icon = f.status === "planted" ? "🌱" : "⏰"
-        context += `${icon} [${f.id}] ${f.title}: ${f.content}\n`
-        if (f.targetChapter) {
-          const when = f.targetChapter === chapterNum ? "← この章で回収" : `第${f.targetChapter}章で回収予定`
-          context += `   ${when}\n`
-        }
+      for (const r of reminders) {
+        context += `${foreshadowIcon(r)} [${r.item.id}] ${r.item.title}: ${r.item.content}\n`
+        context += `   ${foreshadowNote(r, chapterNum)}\n`
       }
       context += "\n"
     }
@@ -260,4 +257,40 @@ function extractChapterScenes(source: string, chapterNum: number, sceneId?: stri
     }
     return { label: `シーン ${s.id}`, content: raw }
   })
+}
+
+/** 急ぎぐあいを示す印 */
+function foreshadowIcon(r: ForeshadowReminder): string {
+  switch (r.timing) {
+    case "overdue":
+      return "⚠️"
+    case "due":
+      return "🎯"
+    case "upcoming":
+      return "⏰"
+    case "undated":
+      return "🌱"
+  }
+}
+
+/**
+ * 伏線1件の添え書き。
+ *
+ * 張ってあるかどうかと、回収の予定がどうなっているかを一行で示す。
+ * 予定を過ぎたものを「第N章で回収予定」と書くと、まだ先のことのように
+ * 読めてしまうため、過ぎたことがはっきり分かる書き方にする。
+ */
+function foreshadowNote(r: ForeshadowReminder, chapterNum: number): string {
+  const planted = r.item.status === "planted" ? "張り済み" : "まだ張っていません"
+  const target = r.item.targetChapter
+  switch (r.timing) {
+    case "overdue":
+      return `${planted}／回収予定の第${target}章を過ぎています（現在は第${chapterNum}章）`
+    case "due":
+      return `${planted}／← この章で回収`
+    case "upcoming":
+      return `${planted}／第${target}章で回収予定`
+    case "undated":
+      return `${planted}／回収の章は未定`
+  }
 }

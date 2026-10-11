@@ -1,5 +1,5 @@
 import type { ToolContext } from "../index.js"
-import { DEFAULTS, CHAPTER_LENGTH, CHAPTER_WORD_TOLERANCE } from "../constants.js"
+import { DEFAULTS, CHAPTER_LENGTH, CHAPTER_WORD_TOLERANCE, FORESHADOW_LOOKAHEAD } from "../constants.js"
 
 interface GuideArgs {
   section?: "workflow" | "prompts" | "writing" | "foreshadow" | "characters"
@@ -252,20 +252,41 @@ pending → planted → resolved
 | ability | 能力 | まだ目覚めていない力 |
 | prophecy | 予言 | 予言や夢 |
 
-## 知らせ方の距離
+## 知らせ方
 
-本文を書くとき、回収予定の章までの距離で知らせ方を変えます。
+本文を書くとき、\`novel_context\` が伏線を知らせます。知らせるかどうかと、
+どう添え書きするかは次のとおりです。
 
-- **この章で回収**: targetChapter が現在の章 → 必ず処理する
-- **まもなく**: 3章以内 → 下ごしらえを始めてよい
-- **まだ先**: 4章以上先 → 知らせない（気が散るため）
+**知らせないもの**
+
+- **回収済み**（resolved）／**取り下げ済み**（abandoned）
+  終わった伏線を知らせると、済んだものをもう一度回収しようとしてしまいます
+
+**知らせるもの**
+
+| 状況 | 印 | 添え書き |
+|---|---|---|
+| 回収予定の章を過ぎている | ⚠️ | 回収予定の第N章を過ぎています |
+| この章が回収予定 | 🎯 | ← この章で回収 |
+| 回収予定が ${FORESHADOW_LOOKAHEAD}章以内 | ⏰ | 第N章で回収予定 |
+| 張り済みで回収予定が先 | ⏰ | 第N章で回収予定（忘れないよう常に知らせます） |
+| 張り済みで回収の章が未定 | 🌱 | 回収の章は未定 |
+
+回収予定が${FORESHADOW_LOOKAHEAD}章より先で、まだ張っていないものは知らせません
+（毎章すべてを並べると、いま扱うべきものが埋もれるため）。
+
+並び順は急ぐものから。過ぎたものどうしは予定が古い順です。
+
+添え書きには「張り済み」か「まだ張っていません」も付きます。張る前に回収しようと
+しないためです。
 
 ## 手順
 
 1. foreshadow.json に伏線を登録する
 2. 本文を書くとき novel_context が自動で知らせる
-3. 回収したら status を "resolved" にする
-4. ときどき、長く回収されていない伏線がないか見直す
+3. 回収したら status を "resolved" にする（しないと、済んだものが知らされ続けます）
+4. 使わないことにしたら status を "abandoned" にして、理由を notes に書く
+5. ときどき、⚠️ が付いたまま残っている伏線がないか見直す
 `
 
 const CHARACTERS_GUIDE = `# 👤 登場人物の管理
