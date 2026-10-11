@@ -878,6 +878,9 @@ export function resolveLimit(config: NovelConfig | null | undefined, key: LimitK
  *
  * 空白（半角・全角）と改行を除いた全文字数。仮名・漢字・約物・英数字を
  * 区別せず 1 文字として数えるため、原稿用紙 400 字詰めの換算と一致する。
+ *
+ * 章の文字数を数えるときは、先に stripChapterHeading で見出しの行を外す。
+ * 数えるのは本文だけという規則にしてある。
  * サロゲートペア（一部の漢字や絵文字）を 1 文字として数えるため
  * コードポイント単位で走査する。
  */
@@ -888,6 +891,37 @@ export function countWords(text: string): number {
     if (!isWhitespace(ch)) count++
   }
   return count
+}
+
+/**
+ * 章見出しの行。novel_save_chapter が本文の先頭に付ける形に合わせる。
+ * 章番号は算用数字・全角数字・漢数字のいずれでも認める。
+ */
+const CHAPTER_HEADING_LINE = /^#{1,6}\s*第\s*[0-9０-９〇零一二三四五六七八九十百千]+\s*章/
+
+/**
+ * 本文の先頭にある章見出しの行を取り除く。
+ *
+ * novel_save_chapter は保存するファイルの先頭に `# 第N章 タイトル` を付ける。
+ * 進行状況（novel_status）は保存済みのファイルを読んで数えるため、
+ * 見出しをそのまま数えると保存時の報告と食い違う
+ * （タイトル「題」・本文「あいう」で 3 文字と 8 文字になる）。
+ * 文字数は本文だけで数える規則に揃えるため、数える前にこれを通す。
+ *
+ * 取り除くのは**先頭の1行だけ**。本文中に出てくる章見出しは残す。
+ */
+export function stripChapterHeading(content: string): string {
+  if (!content) return content
+  const lines = content.replace(/\r\n/g, "\n").split("\n")
+
+  let i = 0
+  while (i < lines.length && lines[i].trim().length === 0) i++
+  if (i >= lines.length) return ""
+  if (!CHAPTER_HEADING_LINE.test(lines[i].trim())) return content
+
+  i++ // 見出しの行を飛ばす
+  while (i < lines.length && lines[i].trim().length === 0) i++
+  return lines.slice(i).join("\n").replace(/\s+$/, "")
 }
 
 /** 空白文字（全角スペース・各種 Unicode 空白・改行・タブ）かどうか */

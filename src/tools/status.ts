@@ -5,7 +5,7 @@ import {
   safeReadFile, safeReadJson, listMarkdownFiles,
   countWords, progressBar,
   determinePhase, usesMartialArtsSetting, isDocFilled,
-  hasOutlineDetailed, hasSceneList, collectScenes,
+  hasOutlineDetailed, hasSceneList, collectScenes, stripChapterHeading,
 } from "../utils.js"
 import type { NovelConfig, ForeshadowEntry, DocType, Phase } from "../utils.js"
 import type { ToolContext } from "../index.js"
@@ -133,7 +133,9 @@ export async function novelStatusExecute(
       for (const ch of chapters) {
         const content = await safeReadFile(join(chaptersDir, ch))
         if (!content) continue
-        const words = countWords(content)
+        // 保存ツールが付けた章見出しは数えない。
+        // 本文だけを数える規則に、保存時の報告と揃える
+        const words = countWords(stripChapterHeading(content))
         totalWords += words
         if (detailed) {
           report += `  📄 ${ch}: ${words.toLocaleString("ja-JP")}文字\n`

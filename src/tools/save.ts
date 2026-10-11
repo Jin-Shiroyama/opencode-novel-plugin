@@ -1,4 +1,4 @@
-import { safeWriteFile, getChaptersDir, countWords } from "../utils.js"
+import { safeWriteFile, getChaptersDir, countWords, stripChapterHeading } from "../utils.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
 
@@ -20,12 +20,17 @@ export async function novelSaveChapterExecute(
   const chaptersDir = getChaptersDir(dir)
   const filePath = join(chaptersDir, fileName)
 
+  // 本文に章見出しが混ざって渡されることがある（コマンドと skill は
+  // 含めないよう案内しているが、守られない場合に備える）。
+  // そのまま書くと見出しが二重になり、進行状況の文字数ともずれる。
+  const body = stripChapterHeading(args.content)
+
   // 保存ファイルの見出しは算用数字で統一する（機械的に章番号を取り出せるようにするため）。
   // 縦組みの原稿として書き出すときに漢数字へ直せばよい。
   const header = `# 第${num}章 ${args.title}\n\n`
-  await safeWriteFile(filePath, header + args.content)
+  await safeWriteFile(filePath, header + body)
 
-  const wordCount = countWords(args.content)
+  const wordCount = countWords(body)
 
   let report = `✅ 第${num}章「${args.title}」を保存しました\n`
   report += `📄 ファイル: ${filePath}\n`

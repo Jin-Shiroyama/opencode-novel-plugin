@@ -223,7 +223,8 @@ const WRITING_GUIDE = `# ✍️ 文章の書きかた
 - 振れ幅は ±${Math.round(CHAPTER_WORD_TOLERANCE * 100)}% まで
 - 既定では ${DEFAULTS.targetWords.toLocaleString("ja-JP")}文字 ÷ 全${DEFAULTS.chapterCount}章 = 1章 ${Math.round(DEFAULTS.targetWords / DEFAULTS.chapterCount).toLocaleString("ja-JP")}文字
 - 日本語の長編は1章 ${CHAPTER_LENGTH.min.toLocaleString("ja-JP")}〜${CHAPTER_LENGTH.max.toLocaleString("ja-JP")}文字が読みやすい範囲（山場の章は ${CHAPTER_LENGTH.peak.toLocaleString("ja-JP")}文字まで）
-- 文字数は空白と改行を除いた全文字数で数えます（仮名も約物も1文字）
+- 文字数は本文だけを、空白と改行を除いた全文字数で数えます（仮名も約物も1文字）。
+  章見出しの行は数に入れません
 `
 
 const FORESHADOW_GUIDE = `# 🎯 伏線の扱い

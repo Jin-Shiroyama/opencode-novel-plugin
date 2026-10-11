@@ -218,7 +218,10 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 - 本文のファイル名は自動の連番（chapter-001.md、chapter-002.md、…）
 - 本文の章見出しは算用数字で保存する（`# 第1章 タイトル`）。
   プロットの解析側は算用数字・全角数字・漢数字のいずれも読み取る
-- **文字数は空白（半角・全角）と改行を除いた全文字数**。
+- **文字数は本文だけを、空白（半角・全角）と改行を除いた全文字数で数える**。
+  保存ファイルの先頭にある `# 第N章 タイトル` の見出し行は数に入れない
+  （`stripChapterHeading` で外す）。保存時（`novel_save_chapter`）と
+  進行状況（`novel_status`）で同じ数が出るようにするため。
   仮名・漢字・約物・英数字を区別せず1文字として数え、コードポイント単位で走査する
   （原稿用紙400字詰めの換算と一致する）
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
@@ -234,7 +237,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、234件）
+pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、252件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
