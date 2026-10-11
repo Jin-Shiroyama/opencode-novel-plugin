@@ -5,8 +5,8 @@
  */
 
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises"
-import { join, resolve } from "node:path"
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { join, resolve, relative } from "node:path"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { DEFAULTS, LIMITS, MARTIAL_ARTS_GENRE_KEYWORDS } from "./constants.js"
 import type { LimitKey } from "./constants.js"
 
@@ -146,6 +146,177 @@ export async function safeReadJson<T>(filePath: string): Promise<T | null> {
 /** JSON ファイルを書く */
 export async function safeWriteJson<T>(filePath: string, data: T): Promise<void> {
   await safeWriteFile(filePath, JSON.stringify(data, null, 2))
+}
+
+// ============================================================
+// 分割保存
+// ============================================================
+
+/**
+ * 長編では一つの文書が大きくなるため、agent とコマンドは章ごと・項目ごとの
+ * 分割保存を案内している。この節はその分割を読むための道具をまとめる。
+ *
+ *   .novel/outline/chapter-001.md        章別プロット（章ごと）
+ *   .novel/scenes/chapter-001.md         シーン一覧（章ごと）
+ *   .novel/characters/{キャラクター名}.md  一人ずつの設定
+ *   .novel/wuxia/sects/{流派名}.md        流派（1流派1ファイル）
+ *   .novel/wuxia/weapons/{刀剣名}.md      刀剣（1本1ファイル）
+ *   .novel/reality/events/ など           取材メモ
+ */
+
+/** .novel/ 配下のパスを組み立てる */
+export function getNovelPath(projectDir: string, ...parts: string[]): string {
+  return join(getNovelDir(projectDir), ...parts)
+}
+
+/** 文書の一片。label はどのファイル由来かを示す */
+export interface DocPart {
+  label: string
+  content: string
+}
+
+/** ディレクトリを再帰的にたどり、.md のパスを集める（深さは3階層まで） */
+function collectMarkdownPaths(dir: string, depth = 3): string[] {
+  if (depth < 0 || !existsSync(dir)) return []
+  let entries: string[]
+  try {
+    entries = readdirSync(dir).sort()
+  } catch {
+    return []
+  }
+  const out: string[] = []
+  for (const name of entries) {
+    const full = join(dir, name)
+    let st
+    try {
+      st = statSync(full)
+    } catch {
+      continue
+    }
+    if (st.isDirectory()) out.push(...collectMarkdownPaths(full, depth - 1))
+    else if (name.endsWith(".md")) out.push(full)
+  }
+  return out
+}
+
+/**
+ * 統合ファイルと分割ディレクトリの両方から文書を集める。
+ *
+ * 片方しか無ければそれだけを返す。両方あれば両方返す（呼び手が選ぶ）。
+ * 例: readDocParts(dir, "wuxia/sects.md", "wuxia/sects")
+ */
+export async function readDocParts(
+  projectDir: string,
+  filePath: string | null,
+  dirPath: string | null,
+): Promise<DocPart[]> {
+  const parts: DocPart[] = []
+  if (filePath) {
+    const content = await safeReadFile(getNovelPath(projectDir, filePath))
+    if (content && content.trim().length > 0) parts.push({ label: filePath, content })
+  }
+  if (dirPath) {
+    const base = getNovelPath(projectDir, dirPath)
+    for (const full of collectMarkdownPaths(base)) {
+      const content = await safeReadFile(full)
+      if (content && content.trim().length > 0) {
+        parts.push({ label: relative(getNovelDir(projectDir), full), content })
+      }
+    }
+  }
+  return parts
+}
+
+/** 章ごとの分割ファイル名（chapter-002.md のように3桁ゼロ埋め） */
+export function chapterFileName(chapterNum: number): string {
+  return `chapter-${String(chapterNum).padStart(3, "0")}.md`
+}
+
+/**
+ * 章ごとに分割された文書を読む。
+ * 例: readChapterDoc(dir, "outline", 2) → .novel/outline/chapter-002.md
+ */
+export async function readChapterDoc(
+  projectDir: string,
+  dirName: string,
+  chapterNum: number,
+): Promise<string | null> {
+  const path = getNovelPath(projectDir, dirName, chapterFileName(chapterNum))
+  const content = await safeReadFile(path)
+  return content && content.trim().length > 0 ? content : null
+}
+
+/**
+ * 章ごとの分割ファイルが1つ以上あるか（進行段階の判定に使う）。
+ * .keep のような空ファイルや、章ファイル以外は数えない。
+ */
+export function hasChapterDocs(projectDir: string, dirName: string): boolean {
+  const dir = getNovelPath(projectDir, dirName)
+  if (!existsSync(dir)) return false
+  try {
+    return readdirSync(dir).some((f) => /^chapter-\d+\.md$/.test(f))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 一人ずつの人物設定ファイルを列挙する。
+ * profiles.md（一覧）と state.json は除く。
+ */
+export async function listCharacterDocs(projectDir: string): Promise<DocPart[]> {
+  const dir = getNovelPath(projectDir, "characters")
+  if (!existsSync(dir)) return []
+  let names: string[]
+  try {
+    names = readdirSync(dir).filter((f) => f.endsWith(".md") && f !== "profiles.md").sort()
+  } catch {
+    return []
+  }
+  const parts: DocPart[] = []
+  for (const name of names) {
+    const content = await safeReadFile(join(dir, name))
+    if (content && content.trim().length > 0) {
+      parts.push({ label: name.replace(/\.md$/, ""), content })
+    }
+  }
+  return parts
+}
+
+/**
+ * 人物名から、本文中で照合するための手がかりを作る。
+ *
+ * ファイル名は「森田悠」のようにフルネームだが、プロットやシーンでは
+ * 「森田」と姓だけで書かれることが多い。そのため次を手がかりにする。
+ *   - フルネームそのまま
+ *   - 区切り記号（空白・中黒）の前の部分
+ *   - 3文字以上なら先頭2文字（日本語の姓の慣行）
+ */
+export function characterNameKeys(name: string): string[] {
+  const keys = new Set<string>()
+  const trimmed = name.trim()
+  if (trimmed.length === 0) return []
+  keys.add(trimmed)
+  for (const piece of trimmed.split(/[\s\u3000・]+/)) {
+    if (piece.length >= 2) keys.add(piece)
+  }
+  const head = [...trimmed]
+  if (head.length >= 3) keys.add(head.slice(0, 2).join(""))
+  return [...keys]
+}
+
+/**
+ * この章に出る人物の設定ファイルを選ぶ。
+ *
+ * 章のプロットとシーン一覧に名前が現れたものを採る。
+ * 一人も見つからなければ、絞り込みに失敗したものとして全員を返す
+ * （資料が足りないより、多いほうが害が小さい）。
+ */
+export function selectCharacterDocs(docs: DocPart[], haystack: string): DocPart[] {
+  if (docs.length === 0) return []
+  if (haystack.trim().length === 0) return docs
+  const hit = docs.filter((d) => characterNameKeys(d.label).some((k) => haystack.includes(k)))
+  return hit.length > 0 ? hit : docs
 }
 
 // ============================================================
@@ -397,8 +568,17 @@ export function determinePhase(projectDir: string, config?: NovelConfig | null):
   if (!isDocFilled(getDocPath(projectDir, "world-building"))) return "world-building"
   if (!isDocFilled(getDocPath(projectDir, "characters"))) return "characters"
   if (!existsSync(getDocPath(projectDir, "outline-brief"))) return "outline"
-  if (!existsSync(getDocPath(projectDir, "outline-detailed"))) return "outline"
-  if (!existsSync(getDocPath(projectDir, "scenes"))) return "scenes"
+
+  // 章別プロットとシーン一覧は、統合ファイルでも章ごとの分割でもよい。
+  // agent とコマンドが分割保存を案内しているため、片方しか見ないと
+  // 案内どおりに保存した書き手の進行が止まる。
+  const hasOutlineDetailed =
+    existsSync(getDocPath(projectDir, "outline-detailed")) || hasChapterDocs(projectDir, "outline")
+  if (!hasOutlineDetailed) return "outline"
+
+  const hasScenes =
+    existsSync(getDocPath(projectDir, "scenes")) || hasChapterDocs(projectDir, "scenes")
+  if (!hasScenes) return "scenes"
 
   const written = countWrittenChapters(projectDir)
   const planned = config?.chapterCount ?? DEFAULTS.chapterCount

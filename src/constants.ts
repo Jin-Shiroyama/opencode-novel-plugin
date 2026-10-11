@@ -49,6 +49,8 @@ export const LIMITS = {
   weapons: 4000,
   /** 取材メモ（現実の素材） */
   realitySource: 6000,
+  /** この章のシーン一覧（_Prompt を含む） */
+  scenes: 4000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

@@ -446,6 +446,7 @@ export const CONFIG_TEMPLATE = {
     sects: 4000,
     weapons: 4000,
     realitySource: 6000,
+    scenes: 4000,
   },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),

@@ -1,8 +1,9 @@
 import {
   safeReadFile, safeReadJson, getDocPath, getChaptersDir, getConfigPath,
   resolveLimit, truncateChars, takeTailChars, parseChapterNumber,
+  readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
 } from "../utils.js"
-import type { ForeshadowEntry, CharacterState, NovelConfig } from "../utils.js"
+import type { ForeshadowEntry, CharacterState, NovelConfig, DocPart } from "../utils.js"
 import { DEFAULTS, CHAPTER_WORD_TOLERANCE } from "../constants.js"
 import type { LimitKey } from "../constants.js"
 import type { ToolContext } from "../index.js"
@@ -12,6 +13,13 @@ interface ContextArgs {
   chapterNumber: number
   sceneId?: string
   includePrompts?: boolean
+}
+
+/** 複数のファイルから集めた文書を、どこ由来かが分かる形に連ねる */
+function joinParts(parts: DocPart[]): string {
+  if (parts.length === 0) return ""
+  if (parts.length === 1) return parts[0].content.trim()
+  return parts.map((p) => `### ${p.label}\n${p.content.trim()}`).join("\n\n")
 }
 
 export async function novelContextExecute(
@@ -44,18 +52,52 @@ export async function novelContextExecute(
     context += `この章の目安: ${Math.round(targetWords / chapterCount).toLocaleString("ja-JP")}文字 ±${Math.round(CHAPTER_WORD_TOLERANCE * 100)}%\n\n`
   }
 
-  const outline = await safeReadFile(getDocPath(dir, "outline-detailed"))
-  if (outline) {
-    const chapterSection = extractChapterSection(outline, chapterNum)
-    if (chapterSection) {
-      context += `## 📋 この章のプロット (P0 — 必ず従う)\n${chapterSection}\n\n`
-    }
+  // --- この章のプロット（P0） ---
+  // 章ごとに分割された outline/chapter-NNN.md を優先し、
+  // 無ければ統合ファイル outline-detailed.md から該当章を抜き出す。
+  let chapterOutline = await readChapterDoc(dir, "outline", chapterNum)
+  if (!chapterOutline) {
+    const outline = await safeReadFile(getDocPath(dir, "outline-detailed"))
+    if (outline) chapterOutline = extractChapterSection(outline, chapterNum)
+  }
+  if (chapterOutline) {
+    context += `## 📋 この章のプロット (P0 — 必ず従う)\n${chapterOutline.trim()}\n\n`
   }
 
-  const characters = await safeReadFile(getDocPath(dir, "characters"))
-  if (characters) {
+  // --- この章のシーン（P0） ---
+  // scenes/chapter-NNN.md を優先し、無ければ scenes.md から該当章のシーンを抜き出す。
+  const sceneSource =
+    (await readChapterDoc(dir, "scenes", chapterNum)) ??
+    (await safeReadFile(getDocPath(dir, "scenes")))
+  let chapterScenes: string | null = null
+  if (sceneSource) {
+    chapterScenes = extractChapterScenes(sceneSource, chapterNum, args.sceneId)
+  }
+  if (chapterScenes) {
+    context += `## 🎬 この章のシーン (P0 — 執筆の手引き)\n`
+    if (args.sceneId) context += `今回書くシーン: ${args.sceneId}\n\n`
+    context += clip(chapterScenes, "scenes") + "\n\n"
+  }
+
+  // 人物の絞り込みに使う手がかり（この章のプロットとシーン）
+  const chapterText = [chapterOutline ?? "", chapterScenes ?? ""].join("\n")
+
+  // --- 登場人物（P1） ---
+  // 一覧（profiles.md）と、この章に出る人物の個別ファイルを合わせる。
+  const profileParts = (await readDocParts(dir, "characters/profiles.md", null)).map((p) => ({
+    ...p,
+    label: "一覧（profiles.md）",
+  }))
+  const allCharacterDocs = await listCharacterDocs(dir)
+  const relevantDocs = selectCharacterDocs(allCharacterDocs, chapterText)
+  const characterParts = [...profileParts, ...relevantDocs]
+  if (characterParts.length > 0) {
     context += `## 👤 登場人物 (P1 — 重要)\n`
-    context += clip(characters, "characterProfiles") + "\n\n"
+    if (allCharacterDocs.length > 0 && relevantDocs.length < allCharacterDocs.length) {
+      const names = relevantDocs.map((d) => d.label).join("、")
+      context += `（この章に関わる人物の設定を載せています: ${names}）\n`
+    }
+    context += clip(joinParts(characterParts), "characterProfiles") + "\n\n"
   }
 
   const charState = await safeReadJson<{ characters: CharacterState[] }>(getDocPath(dir, "character-state"))
@@ -105,28 +147,30 @@ export async function novelContextExecute(
     }
   }
 
-  const martialArts = await safeReadFile(getDocPath(dir, "martial-art"))
-  if (martialArts) {
+  // --- 流派・武芸設定（分割保存に対応） ---
+  const martialArts = await readDocParts(dir, "wuxia/martial-arts.md", "wuxia/martial-arts")
+  if (martialArts.length > 0) {
     context += `## ⚔️ 剣術・技 (P1 — 流派・武芸設定)\n`
-    context += clip(martialArts, "martialArts") + "\n\n"
+    context += clip(joinParts(martialArts), "martialArts") + "\n\n"
   }
 
-  const sects = await safeReadFile(getDocPath(dir, "sect"))
-  if (sects) {
+  const sects = await readDocParts(dir, "wuxia/sects.md", "wuxia/sects")
+  if (sects.length > 0) {
     context += `## 🏯 流派・勢力 (P1 — 流派・武芸設定)\n`
-    context += clip(sects, "sects") + "\n\n"
+    context += clip(joinParts(sects), "sects") + "\n\n"
   }
 
-  const weapons = await safeReadFile(getDocPath(dir, "weapon"))
-  if (weapons) {
+  const weapons = await readDocParts(dir, "wuxia/weapons.md", "wuxia/weapons")
+  if (weapons.length > 0) {
     context += `## 🗡️ 刀剣 (P2 — 流派・武芸設定)\n`
-    context += clip(weapons, "weapons") + "\n\n"
+    context += clip(joinParts(weapons), "weapons") + "\n\n"
   }
 
-  const realitySource = await safeReadFile(getDocPath(dir, "reality-source"))
-  if (realitySource) {
+  // --- 取材メモ（reality/ 配下の分割保存に対応） ---
+  const realitySource = await readDocParts(dir, "reality-source.md", "reality")
+  if (realitySource.length > 0) {
     context += `## 🌍 取材メモ (P1 — 題材の手がかり)\n`
-    context += clip(realitySource, "realitySource") + "\n\n"
+    context += clip(joinParts(realitySource), "realitySource") + "\n\n"
   }
 
   if (includePrompts) {
@@ -182,4 +226,38 @@ function extractChapterSection(outline: string, chapterNum: number): string | nu
   }
 
   return collected.length > 0 ? collected.join("\n") : null
+}
+
+/**
+ * シーン一覧から該当章のシーンを抜き出す。
+ *
+ * シーンIDは「章番号.連番」の形（1.1、2.3）なので、先頭が指定の章番号の
+ * ものを採る。sceneId が渡されていれば、そのシーンの見出しに印を付けて
+ * どれを書くのかが分かるようにする。
+ *
+ * 章ごとに分割されたファイルでも同じ処理を通す。見出しの形が想定と違って
+ * 1件も拾えなかったときは、ファイルの内容をそのまま返す（取りこぼさない）。
+ */
+function extractChapterScenes(source: string, chapterNum: number, sceneId?: string): string | null {
+  const scenes = parseScenes(source)
+  if (scenes.length === 0) {
+    return source.trim().length > 0 ? source : null
+  }
+
+  const prefix = `${chapterNum}.`
+  const mine = scenes.filter((s) => s.id === String(chapterNum) || s.id.startsWith(prefix))
+  if (mine.length === 0) return null
+
+  const blocks = mine.map((s) => {
+    const raw = s.raw.replace(/\s+$/, "")
+    if (sceneId && s.id === sceneId) {
+      // 見出しの行に印を付ける（どのシーンを書くのかを一目で分かるように）
+      const lines = raw.split("\n")
+      lines[0] = `${lines[0]}　← 今回書くシーン`
+      return lines.join("\n")
+    }
+    return raw
+  })
+
+  return blocks.join("\n\n")
 }

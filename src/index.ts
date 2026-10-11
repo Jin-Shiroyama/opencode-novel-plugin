@@ -98,11 +98,11 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_context": tool({
-        description: `指定した章を書くための資料を一式そろえる。この章のプロット、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、執筆プロンプトを返す。
+        description: `指定した章を書くための資料を一式そろえる。この章のプロットとシーン、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、執筆プロンプトを返す。章ごとに分割保存された資料（outline/chapter-002.md など）も読む。
 使う場面: ある章の執筆にとりかかる直前。優先度は P0(プロット) > P1(人物・前章とのつなぎ) > P2(伏線・あらすじ) の順。`,
         args: {
           chapterNumber: z.number().describe("これから書く章の番号"),
-          sceneId: z.string().optional().describe("シーンID（例 1.1、2.3）"),
+          sceneId: z.string().optional().describe("シーンID（例 1.1、2.3）。渡すとそのシーンに印が付く"),
           includePrompts: z.boolean().optional().describe("執筆プロンプトを含めるかどうか。既定 true"),
         },
         async execute(args, context) {

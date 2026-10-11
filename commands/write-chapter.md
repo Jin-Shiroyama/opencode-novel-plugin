@@ -30,10 +30,17 @@ novel_context(chapterNumber: {N}, includePrompts: true)
 
 返ってくるもの：
 - この章のプロット（P0 — 必ず従う）
-- 登場人物と現在の状態（P1）
+- この章のシーンと `_Prompt`（P0 — 執筆の手引き）
+- 登場人物と現在の状態（P1。この章に出る人物は個別の設定も付きます）
 - これまでのあらすじと前章の末尾（P1／P2）
 - 伏線の確認（P2）
 - 執筆プロンプト
+
+特定のシーンだけを書くときは `sceneId` を渡します。そのシーンに印が付きます。
+
+```
+novel_context(chapterNumber: {N}, sceneId: "2.1", includePrompts: true)
+```
 
 ### 三、資料を読む
 

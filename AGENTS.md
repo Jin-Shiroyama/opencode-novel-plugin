@@ -84,7 +84,7 @@ opencode-novel-plugin/
 | `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting |
 | `novel_status` | 進行状況 | detailed |
 | `novel_save_chapter` | 章の保存 | chapterNumber, title, content |
-| `novel_context` | 執筆用の資料 | chapterNumber, includePrompts |
+| `novel_context` | 執筆用の資料 | chapterNumber, sceneId, includePrompts |
 | `novel_guide` | 進め方の手引き | section |
 | `novel_update` | 記録の更新 | action, content, chapterNumber |
 
@@ -140,7 +140,29 @@ opencode-novel-plugin/
 （concept.md / world-building.md / characters/profiles.md）については
 **角括弧プレースホルダ（`[…]`）が残っていないか**で記入済みを判断します。
 プロット概要・章別プロット・シーン一覧はファイルの有無で判断します。
+章別プロットとシーン一覧は、統合ファイル（`outline-detailed.md` / `scenes.md`）でも
+章ごとの分割（`outline/chapter-*.md` / `scenes/chapter-*.md`）でも可とします。
 本文の数が `chapterCount` に達すると `completed` を返します。
+
+## 分割保存
+
+長編では文書が大きくなるため、agent とコマンドは章ごと・項目ごとの分割保存を
+案内しています。`novel_context` は統合ファイルと分割の両方を読み、分割が
+あればそちらを優先します。
+
+| 資料 | 統合ファイル | 分割 |
+|---|---|---|
+| 章別プロット | `outline-detailed.md` | `outline/chapter-NNN.md` |
+| シーン一覧 | `scenes.md` | `scenes/chapter-NNN.md` |
+| 一人ずつの人物設定 | — | `characters/{キャラクター名}.md` |
+| 流派・勢力 | `wuxia/sects.md` | `wuxia/sects/*.md` |
+| 剣術・技 | `wuxia/martial-arts.md` | `wuxia/martial-arts/*.md` |
+| 刀剣 | `wuxia/weapons.md` | `wuxia/weapons/*.md` |
+| 取材メモ | `reality-source.md` | `reality/**/*.md` |
+
+人物の個別設定は、この章のプロットとシーンに名前が現れたものだけを載せます
+（`selectCharacterDocs`）。照合はフルネームと姓（先頭2文字）の両方で行い、
+一人も特定できなければ全員を載せます。
 
 ## プロンプト
 

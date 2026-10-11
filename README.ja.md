@@ -219,20 +219,35 @@ graph LR
 | 引数 | 型 | 必須 | 説明 |
 |---|---|---|---|
 | `chapterNumber` | number | ✅ | これから書く章の番号 |
-| `sceneId` | string | | シーンID（1.1、2.3 など） |
+| `sceneId` | string | | シーンID（1.1、2.3 など）。渡すとそのシーンに印が付きます |
 | `includePrompts` | boolean | | 執筆プロンプトを含めるか。既定 true |
 
 優先度をつけて返します。
 
 | 優先度 | 内容 |
 |---|---|
-| **P0** | この章のプロット（必ず従う） |
-| **P1** | 登場人物、その現在の状態、前章の末尾 |
+| **P0** | この章のプロット、この章のシーンと `_Prompt` |
+| **P1** | 登場人物（一覧＋この章に出る人物の個別設定）、その現在の状態、前章の末尾 |
 | **P2** | これまでのあらすじ、伏線の確認 |
 
 第2章以降は前章の末尾が付きます。分量は `config.json` の `limits.previousChapterTail` で変えられます（既定 1,200文字）。
 
-章別プロットから該当章を取り出すとき、見出しの章番号は**算用数字・全角数字・漢数字のいずれでも読み取ります**（`## 第2章` でも `## 第二章` でも拾えます）。
+**登場人物の絞り込み** — 一覧（`characters/profiles.md`）に加えて、`characters/{キャラクター名}.md` のうち**この章に出る人物の設定だけ**を載せます。この章のプロットとシーンに名前が現れたかどうかで判断し、ファイル名がフルネームでも姓だけの表記（「森田悠.md」と本文の「森田」）で照合します。一人も特定できなければ全員を載せます（資料が足りないより多いほうが害が小さいため）。
+
+**分割保存に対応** — 次のどちらの保存のしかたでも読みます。分割されたものがあればそちらを優先します。
+
+| 資料 | 統合ファイル | 章ごと・項目ごとの分割 |
+|---|---|---|
+| 章別プロット | `outline-detailed.md` | `outline/chapter-002.md` |
+| シーン一覧 | `scenes.md` | `scenes/chapter-002.md` |
+| 流派・勢力 | `wuxia/sects.md` | `wuxia/sects/{流派名}.md` |
+| 剣術・技 | `wuxia/martial-arts.md` | `wuxia/martial-arts/*.md` |
+| 刀剣 | `wuxia/weapons.md` | `wuxia/weapons/{刀剣名}.md` |
+| 取材メモ | `reality-source.md` | `reality/events/`、`reality/archetypes/`、`reality/mappings/` |
+
+章別プロットから該当章を取り出すとき、見出しの章番号は**算用数字・全角数字・漢数字のいずれでも読み取ります**（`## 第2章` でも `## 第二章` でも拾えます）。シーンは `章番号.連番` の ID で選び分けます。
+
+進行段階の判定（`determinePhase`）も分割保存を見ます。`outline/chapter-*.md` があれば章別プロットができているものとみなし、`scenes/chapter-*.md` があればシーン一覧ができているものとみなします。
 
 ### `novel_guide` — 進め方の手引き
 
@@ -587,7 +602,8 @@ skill には次を収めています。
     "martialArts": 6000,
     "sects": 4000,
     "weapons": 4000,
-    "realitySource": 6000
+    "realitySource": 6000,
+    "scenes": 4000
   },
   "currentPhase": "writing",
   "createdAt": "2026-10-09T00:00:00.000Z",
@@ -606,6 +622,7 @@ skill には次を収めています。
 | `sects` | 4,000 | 流派・勢力 |
 | `weapons` | 4,000 | 刀剣 |
 | `realitySource` | 6,000 | 取材メモ |
+| `scenes` | 4,000 | この章のシーン一覧 |
 
 > 0 以下の値、数値でない値、`NaN`、`Infinity` は無視され、既定値が使われます。
 
