@@ -900,6 +900,28 @@ export function countWords(text: string): number {
 const CHAPTER_HEADING_LINE = /^#{1,6}\s*第\s*[0-9０-９〇零一二三四五六七八九十百千]+\s*章/
 
 /**
+ * 章タイトルを見出しに書ける1行に直す。
+ *
+ * title には改行が入ってくることがある（引数の検証は通る）。そのまま
+ * `# 第N章 {title}` に埋めると見出しが2行以上になり、2行目以降が本文として
+ * 数えられてしまう。先頭の1行だけを外す stripChapterHeading では取り切れない。
+ *
+ * 本文の行を余分に削るのではなく、見出しを作る側で1行であることを保証する。
+ *
+ * 改行・タブ・制御文字は半角空白にまとめる。全角スペースは日本語の
+ * タイトルで正当に使われるため（「雨の駅　再会」）そのまま残す。
+ * 前後の空白は落とす。
+ */
+export function normalizeChapterTitle(title: string): string {
+  if (!title) return ""
+  return title
+    .replace(/[\r\n\u2028\u2029]+/g, " ")
+    .replace(/[\t\v\f\u0000-\u001f\u007f]+/g, " ")
+    .replace(/ {2,}/g, " ")
+    .trim()
+}
+
+/**
  * 本文の先頭にある章見出しの行を取り除く。
  *
  * novel_save_chapter は保存するファイルの先頭に `# 第N章 タイトル` を付ける。

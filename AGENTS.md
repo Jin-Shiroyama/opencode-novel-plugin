@@ -222,6 +222,11 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   保存ファイルの先頭にある `# 第N章 タイトル` の見出し行は数に入れない
   （`stripChapterHeading` で外す）。保存時（`novel_save_chapter`）と
   進行状況（`novel_status`）で同じ数が出るようにするため。
+- **章見出しは必ず1行に収める**。`novel_save_chapter` は `title` を
+  `normalizeChapterTitle` で1行に直してから見出しを作る。改行をそのまま
+  埋めると見出しが2行以上になり、`stripChapterHeading` は先頭の1行しか
+  外さないため、2行目以降が本文として数えられる。
+  本文の行を余分に削るのではなく、見出しを作る側で条件を保証する。
   仮名・漢字・約物・英数字を区別せず1文字として数え、コードポイント単位で走査する
   （原稿用紙400字詰めの換算と一致する）
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
@@ -237,7 +242,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、252件）
+pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、263件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

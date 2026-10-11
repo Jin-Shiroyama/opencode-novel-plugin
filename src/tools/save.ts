@@ -1,4 +1,4 @@
-import { safeWriteFile, getChaptersDir, countWords, stripChapterHeading } from "../utils.js"
+import { safeWriteFile, getChaptersDir, countWords, stripChapterHeading, normalizeChapterTitle } from "../utils.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
 
@@ -25,14 +25,23 @@ export async function novelSaveChapterExecute(
   // そのまま書くと見出しが二重になり、進行状況の文字数ともずれる。
   const body = stripChapterHeading(args.content)
 
+  // タイトルに改行が入っていると見出しが2行以上になり、2行目以降が本文として
+  // 数えられてしまう。見出しを作る側で1行であることを保証する。
+  const title = normalizeChapterTitle(args.title)
+
   // 保存ファイルの見出しは算用数字で統一する（機械的に章番号を取り出せるようにするため）。
   // 縦組みの原稿として書き出すときに漢数字へ直せばよい。
-  const header = `# 第${num}章 ${args.title}\n\n`
+  const header = title.length > 0 ? `# 第${num}章 ${title}\n\n` : `# 第${num}章\n\n`
   await safeWriteFile(filePath, header + body)
 
   const wordCount = countWords(body)
 
-  let report = `✅ 第${num}章「${args.title}」を保存しました\n`
+  let report = title.length > 0
+    ? `✅ 第${num}章「${title}」を保存しました\n`
+    : `✅ 第${num}章を保存しました\n`
+  if (title !== args.title.trim()) {
+    report += `ℹ️ タイトルに改行などが含まれていたため、1行に直しました\n`
+  }
   report += `📄 ファイル: ${filePath}\n`
   report += `📊 文字数: ${wordCount.toLocaleString("ja-JP")}文字\n`
 

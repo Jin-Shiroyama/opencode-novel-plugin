@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
-import { stripChapterHeading, countWords } from "./utils.js"
+import { stripChapterHeading, countWords, normalizeChapterTitle } from "./utils.js"
 import { novelSaveChapterExecute } from "./tools/save.js"
 import { novelStatusExecute } from "./tools/status.js"
 
@@ -15,6 +15,54 @@ import { novelStatusExecute } from "./tools/status.js"
  * `# 第N章 タイトル` の見出し行が混ざる。見出しを数に入れると、
  * 保存時の報告と食い違い、目標文字数に対する進捗も狂う。
  */
+
+// ============================================================
+// タイトルの正規化
+// ============================================================
+
+describe("normalizeChapterTitle", () => {
+  test("改行を半角空白にまとめる", () => {
+    assert.equal(normalizeChapterTitle("雨の駅\n再会"), "雨の駅 再会")
+    assert.equal(normalizeChapterTitle("雨の駅\r\n再会"), "雨の駅 再会")
+    assert.equal(normalizeChapterTitle("雨の駅\r再会"), "雨の駅 再会")
+    assert.equal(normalizeChapterTitle("雨の駅\n\n\n再会"), "雨の駅 再会")
+  })
+
+  test("タブと制御文字も半角空白にまとめる", () => {
+    assert.equal(normalizeChapterTitle("雨の駅\t再会"), "雨の駅 再会")
+    assert.equal(normalizeChapterTitle("雨の駅\v\f再会"), "雨の駅 再会")
+  })
+
+  test("全角スペースは残す（日本語のタイトルで正当に使う）", () => {
+    assert.equal(normalizeChapterTitle("雨の駅　再会"), "雨の駅　再会")
+  })
+
+  test("前後の空白は落とす", () => {
+    assert.equal(normalizeChapterTitle("  雨の駅  "), "雨の駅")
+    assert.equal(normalizeChapterTitle("　雨の駅　"), "雨の駅")
+    assert.equal(normalizeChapterTitle("\n雨の駅\n"), "雨の駅")
+  })
+
+  test("半角空白の連続はひとつにまとめる", () => {
+    assert.equal(normalizeChapterTitle("雨の駅   再会"), "雨の駅 再会")
+  })
+
+  test("1行のタイトルは変えない", () => {
+    assert.equal(normalizeChapterTitle("雨の駅"), "雨の駅")
+    assert.equal(normalizeChapterTitle("雨の駅「再会」"), "雨の駅「再会」")
+  })
+
+  test("空文字列と空白だけなら空になる", () => {
+    assert.equal(normalizeChapterTitle(""), "")
+    assert.equal(normalizeChapterTitle("   \n　"), "")
+  })
+
+  test("直した結果は必ず1行になる", () => {
+    for (const title of ["a\nb", "a\r\nb\nc", "\n\n", "a\tb\nc\rd"]) {
+      assert.doesNotMatch(normalizeChapterTitle(title), /[\r\n]/, `改行が残っている: ${JSON.stringify(title)}`)
+    }
+  })
+})
 
 // ============================================================
 // 見出し行の除去
@@ -170,6 +218,47 @@ describe("保存時と進行状況の文字数", () => {
     assert.match(save, /文字数: 3文字/)
     const status = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
     assert.match(status, /chapter-003\.md: 3文字/)
+  })
+
+  test("タイトルに改行が入っていてもずれない", async () => {
+    // 改行をそのまま見出しに埋めると2行以上になり、2行目以降が本文として
+    // 数えられていた（保存 3 文字・進行状況 5 文字）
+    const dir = project()
+    const save = await novelSaveChapterExecute(
+      { chapterNumber: 1, title: "雨の駅\n再会", content: "あいう" } as any,
+      { directory: dir } as any,
+    )
+    const file = readFileSync(join(dir, ".novel", "chapters", "chapter-001.md"), "utf-8")
+    const status = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
+
+    assert.equal(file.split("\n")[0], "# 第1章 雨の駅 再会", "見出しが1行になっていない")
+    assert.match(save, /文字数: 3文字/)
+    assert.match(status, /chapter-001\.md: 3文字/, "見出しの2行目が本文として数えられている")
+    assert.match(save, /1行に直しました/, "直したことが書き手に伝わらない")
+  })
+
+  test("タイトルの全角スペースは保たれる", async () => {
+    const dir = project()
+    await novelSaveChapterExecute(
+      { chapterNumber: 1, title: "雨の駅　再会", content: "あいう" } as any,
+      { directory: dir } as any,
+    )
+    const file = readFileSync(join(dir, ".novel", "chapters", "chapter-001.md"), "utf-8")
+    assert.equal(file.split("\n")[0], "# 第1章 雨の駅　再会")
+  })
+
+  test("タイトルが空白だけなら見出しに余計な空白を残さない", async () => {
+    const dir = project()
+    const save = await novelSaveChapterExecute(
+      { chapterNumber: 1, title: "   ", content: "あいう" } as any,
+      { directory: dir } as any,
+    )
+    const file = readFileSync(join(dir, ".novel", "chapters", "chapter-001.md"), "utf-8")
+    assert.equal(file.split("\n")[0], "# 第1章")
+    assert.match(save, /第1章を保存しました/)
+    // 見出しは外せるので文字数は本文だけ
+    const status = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
+    assert.match(status, /chapter-001\.md: 3文字/)
   })
 
   test("手で書いた見出しなしのファイルも数える", async () => {
