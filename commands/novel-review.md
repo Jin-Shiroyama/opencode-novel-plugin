@@ -1,6 +1,7 @@
 ---
 description: 原稿を点検して手直しする（つじつま・文章・緩急・表記）
 argument-hint: "[章番号|all] [--focus=consistency|style|pace|typography|full]"
+agent: novel-editor
 ---
 
 <command-instruction>

@@ -1,6 +1,5 @@
 import type { Plugin, PluginInput, Hooks } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin/tool"
-import { readFileSync, readdirSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { novelInitExecute } from "./tools/init.js"
@@ -13,6 +12,7 @@ import { createNovelPlannerAgent } from "./agents/novel-planner.js"
 import { createNovelWriterAgent } from "./agents/novel-writer.js"
 import { createNovelEditorAgent } from "./agents/novel-editor.js"
 import { DEFAULT_MODEL } from "./constants.js"
+import { loadCommands } from "./commands.js"
 
 const z = tool.schema
 
@@ -22,25 +22,7 @@ const pluginRoot = join(__dirname, "..")
 const commandsDir = join(pluginRoot, "commands")
 const skillsDir = join(pluginRoot, "skills")
 
-function loadCommandsFromDir(): Record<string, { template: string; description?: string }> {
-  const commands: Record<string, { template: string; description?: string }> = {}
-  try {
-    const files = readdirSync(commandsDir).filter(f => f.endsWith(".md"))
-    for (const file of files) {
-      const name = file.replace(/\.md$/, "")
-      const raw = readFileSync(join(commandsDir, file), "utf-8")
-      const descMatch = raw.match(/^---\n[\s\S]*?description:\s*(.+)\n[\s\S]*?---\n/)
-      const body = raw.replace(/^---\n[\s\S]*?---\n/, "").trim()
-      commands[name] = {
-        template: body,
-        description: descMatch?.[1]?.trim(),
-      }
-    }
-  } catch {}
-  return commands
-}
-
-const cachedCommands = loadCommandsFromDir()
+const cachedCommands = loadCommands(commandsDir)
 
 export type ToolContext = {
   sessionID: string

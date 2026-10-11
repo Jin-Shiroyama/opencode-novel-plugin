@@ -19,6 +19,7 @@ OpenCode のサーバープラグインです。日本語の長編小説を書�
 opencode-novel-plugin/
 ├── src/
 │   ├── index.ts              # プラグイン入口。形式: { id, server }
+│   ├── commands.ts           # commands/*.md の読み込みと frontmatter の解析
 │   ├── constants.ts          # 既定値（DEFAULTS）と資料読み込みの上限（LIMITS）
 │   ├── utils.ts              # パス／ファイル／文書解析／進行判定／文字数
 │   ├── utils.test.ts         # ユニットテスト（node:test）
@@ -128,6 +129,15 @@ opencode-novel-plugin/
 | `/novel-status` | 進行状況を見る | なし |
 | `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|full` |
 
+各コマンドは frontmatter の `agent` で動かす agent を指定します。`/novel-status`
+以外はすべて指定があり、実行すると専用のプロンプト・温度・権限に切り替わります。
+
+`src/commands.ts` が frontmatter を読み、`config.command` に渡します。
+渡すのは `COMMAND_CONFIG_KEYS`（`description` / `agent` / `model` / `subtask`）と
+本文から作る `template` だけです。OpenCode の `Config` 型が受け付けるのは
+この5つなので、`argument-hint` のような他のキーは渡しません
+（人が読む情報として frontmatter に置くのはかまいません）。
+
 ## 工程
 
 ```
@@ -224,7 +234,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、109件）
+pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、213件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

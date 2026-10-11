@@ -1,6 +1,7 @@
 ---
 description: 1章の本文を書き、資料をそろえて保存する
 argument-hint: "<章番号>"
+agent: novel-writer
 ---
 
 <command-instruction>

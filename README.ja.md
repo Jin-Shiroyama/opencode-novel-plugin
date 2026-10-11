@@ -430,6 +430,18 @@ skill はリポジトリ直下の `skills/` にあり、`config.skills.paths` �
 
 コマンドはリポジトリ直下の `commands/` にあり、`config.command` で登録されます。
 
+**専用 agent への切り替え** — 各コマンドは frontmatter の `agent` で、どの agent で動くかを指定します。これにより、そのコマンドを実行したときに専用のプロンプト・温度・ツール権限へ切り替わります。
+
+| frontmatter のキー | OpenCode に渡すか | 備考 |
+|---|---|---|
+| `description` | ✅ | コマンド一覧に出る説明 |
+| `agent` | ✅ | 動かす agent |
+| `model` | ✅ | モデルの上書き |
+| `subtask` | ✅ | 真偽値に変換して渡す |
+| `argument-hint` | ❌ | OpenCode の設定にはないキー。人が読む情報として置いています |
+
+OpenCode の `command` 設定が受け付けるのは `template` / `description` / `agent` / `model` / `subtask` の5つです（`@opencode-ai/sdk` の `Config` 型）。これ以外のキーは渡しません。渡しても使われず、設定の検証で落ちる恐れがあるためです。
+
 ---
 
 ## プロンプト
@@ -690,7 +702,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（109テスト。src と scripts の両方）
+pnpm test        # node:test で実行（213テスト。src と scripts の両方）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -715,6 +727,7 @@ pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
 src/
 ├── index.ts          # プラグイン入口（6ツール + 3agent + config フック）
+├── commands.ts       # commands/*.md の読み込みと frontmatter の解析
 ├── constants.ts      # 既定値（DEFAULTS）と資料読み込みの上限（LIMITS）
 ├── utils.ts          # パス／ファイル／文書解析／進行判定／文字数
 ├── utils.test.ts     # ユニットテスト
@@ -828,7 +841,7 @@ printf '%s' "<字>" | iconv -f UTF-8 -t EUC-JISX0213 >/dev/null 2>&1
 
 - `src/utils.test.ts` を新設。文字数の数え方は、ひらがな・カタカナ・長音符・漢字・三点リーダ・ダッシュ・約物・半角英数字・各種空白・サロゲートペアの混在を網羅
 - `scripts/check-japanese.test.mjs` を新設。検出器の一覧に JIS X 0213 の収録字が混ざっていないことを `iconv` で機械的に検証する
-- 合計 109 テスト。Node 24 標準の `node:test` を使い、**依存パッケージの追加なし**
+- 合計 213 テスト。Node 24 標準の `node:test` を使い、**依存パッケージの追加なし**
 - `tsconfig.build.json` を新設し、配布ビルドからテストを除外
 - CI に `pnpm test`、`pnpm build`、`pnpm check:ja` を追加
 - `scripts/check-japanese.mjs` を新設（中国語の残存チェック）
