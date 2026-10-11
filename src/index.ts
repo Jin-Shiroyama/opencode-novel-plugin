@@ -12,6 +12,7 @@ import { novelUpdateExecute } from "./tools/track.js"
 import { createNovelPlannerAgent } from "./agents/novel-planner.js"
 import { createNovelWriterAgent } from "./agents/novel-writer.js"
 import { createNovelEditorAgent } from "./agents/novel-editor.js"
+import { DEFAULT_MODEL } from "./constants.js"
 
 const z = tool.schema
 
@@ -135,7 +136,7 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
     },
     config: async (config) => {
-      const model = config.model ?? "anthropic/claude-sonnet-4"
+      const model = config.model ?? DEFAULT_MODEL
       const planner = createNovelPlannerAgent(model)
       const writer = createNovelWriterAgent(model)
       const editor = createNovelEditorAgent(model)

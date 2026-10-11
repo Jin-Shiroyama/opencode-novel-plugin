@@ -179,7 +179,11 @@ pnpm install
 pnpm typecheck   # 型検査（テストも含む）
 pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、109件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
+pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
+
+リリースは自動では走りません。GitHub の Actions 画面から Release ワークフローを
+手動で実行します（既定は試し実行）。詳しくは `README.ja.md` の「公開」を参照。
 
 ## 依存
 

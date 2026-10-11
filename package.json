@@ -1,5 +1,5 @@
 {
-  "name": "@jin-shiroyama/opencode-novel-plugin",
+  "name": "opencode-novel-plugin-ja",
   "version": "0.0.0",
   "description": "OpenCode plugin for writing long-form fiction in Japanese, with a staged workflow from premise to manuscript",
   "repository": {
@@ -25,9 +25,6 @@
     "skills",
     "README.ja.md"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

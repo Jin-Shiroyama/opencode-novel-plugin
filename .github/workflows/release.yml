@@ -1,18 +1,16 @@
 name: Release
 
+# 自動公開はしない。
+# main への push で動かすと、コミットメッセージの BREAKING CHANGE などから
+# semantic-release が勝手に版を上げて npm に公開してしまう。
+# 公開するときは、GitHub の Actions 画面からこのワークフローを手動で実行する。
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "package.json"
-      - ".github/workflows/release.yml"
-
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  id-token: write
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "試し実行（公開せず、何が起きるかだけを出す）"
+        type: boolean
+        default: true
 
 jobs:
   release:
@@ -34,12 +32,21 @@ jobs:
 
       - run: pnpm install
 
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Check Japanese
+        run: pnpm check:ja
+
       - name: Build
-        run: npm run build
+        run: pnpm build
 
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-        run: npx semantic-release
+        run: npx semantic-release ${{ inputs.dry_run && '--dry-run' || '' }}

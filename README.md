@@ -40,7 +40,7 @@ From npm:
 
 ```json
 {
-  "plugin": ["@jin-shiroyama/opencode-novel-plugin"]
+  "plugin": ["opencode-novel-plugin-ja"]
 }
 ```
 
@@ -54,8 +54,9 @@ From a local path:
 
 Or place the repository in `.opencode/plugins/` (per project) or `~/.config/opencode/plugins/` (global).
 
-> Published under a different name from upstream (`opencode-novel-plugin`), since this is a fork
-> with different behaviour. The two are not interchangeable.
+> Published as `opencode-novel-plugin-ja`, a different name from upstream
+> (`opencode-novel-plugin`), since this is a fork with different behaviour.
+> The two are not interchangeable.
 
 ## Quick start
 
@@ -78,6 +79,9 @@ pnpm test        # 69 unit tests via node:test — no extra dependencies
 pnpm build       # distribution build (dist/, tests excluded)
 pnpm check:ja    # check that no Chinese text remains
 ```
+
+Releases are **not** automatic. Run the Release workflow manually from the GitHub
+Actions tab (it defaults to a dry run). See [README.ja.md § 公開](README.ja.md#公開).
 
 ## License
 

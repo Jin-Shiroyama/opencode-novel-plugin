@@ -50,7 +50,7 @@ OpenCode 向けの執筆支援プラグインです。日本語の長編小説�
 
 ```json
 {
-  "plugin": ["@jin-shiroyama/opencode-novel-plugin"]
+  "plugin": ["opencode-novel-plugin-ja"]
 }
 ```
 
@@ -81,7 +81,7 @@ OpenCode プロジェクトの `opencode.json` に書きます。
 
 ```json
 {
-  "model": "anthropic/claude-sonnet-4-5",
+  "model": "anthropic/claude-sonnet-5",
   "plugin": ["file:///path/to/opencode-novel-plugin"]
 }
 ```
@@ -640,6 +640,21 @@ pnpm test        # node:test で実行（109テスト。src と scripts の両�
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
+
+### 公開
+
+**自動公開はしません。** `main` への push でリリースが走ると、コミットメッセージの
+`BREAKING CHANGE` などから semantic-release が勝手に版を上げて npm に公開してしまいます。
+
+公開するときは、GitHub の Actions 画面から Release ワークフローを手動で実行します。
+
+1. Actions → Release → Run workflow
+2. ブランチに `main` を選ぶ（`.releaserc.json` の `branches` が `main` のため、他のブランチでは semantic-release が止まります）
+3. まず **試し実行**（`dry_run` を既定の有効のまま）で、どの版が出るかを確かめる
+4. 内容に納得したら `dry_run` を外して実行する
+
+版の決まり方はコミットメッセージによります（`fix:` → パッチ、`feat:` → マイナー、
+`BREAKING CHANGE:` → メジャー）。npm への公開には `NPM_TOKEN` の設定が必要です。
 
 ### ディレクトリ
 
