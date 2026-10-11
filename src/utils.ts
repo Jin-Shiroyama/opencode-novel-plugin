@@ -229,35 +229,100 @@ export async function readDocParts(
   return parts
 }
 
+/**
+ * 章ごとの分割ファイルの名前。
+ *
+ * この正規表現が「正式な章ファイル」の唯一の定義である。読み込み
+ * （readChapterDoc）、存在判定（hasChapterDocs）、集計の除外判定
+ * （collectScenes）がすべてこれを使う。条件がずれると、読まないファイルを
+ * 根拠に統合ファイルを除外する、といった食い違いが起きる。
+ *
+ * 先頭と末尾を固定しているので `backup-chapter-002.md` や
+ * `chapter-002.md.bak` は章ファイルとみなさない。
+ */
+const CHAPTER_FILE_PATTERN = /^chapter-(\d+)\.md$/
+
 /** 章ごとの分割ファイル名（chapter-002.md のように3桁ゼロ埋め） */
 export function chapterFileName(chapterNum: number): string {
   return `chapter-${String(chapterNum).padStart(3, "0")}.md`
 }
 
 /**
+ * ファイル名（パスではなく名前）から章番号を取る。
+ * `chapter-002.md` → 2。桁数は問わないので `chapter-2.md` も 2。
+ * 正式な章ファイルの名前でなければ null。
+ */
+export function chapterNumberFromFileName(fileName: string): number | null {
+  const m = fileName.match(CHAPTER_FILE_PATTERN)
+  return m ? parseInt(m[1], 10) : null
+}
+
+/**
+ * 分割ファイルの相対パスが、readChapterDoc が実際に読むパスかを判定して
+ * 章番号を返す。`<dirName>/chapter-NNN.md` だけを認める。
+ *
+ * 下の階層（`scenes/old/chapter-002.md`）や名前に接頭辞が付いたもの
+ * （`scenes/backup-chapter-002.md`）は認めない。認めてしまうと、読み込みでは
+ * 使わないファイルを根拠に統合ファイルを集計から外してしまう。
+ */
+export function chapterDocNumber(relPath: string, dirName: string): number | null {
+  const segs = relPath.split(/[\\/]+/).filter((x) => x.length > 0)
+  if (segs.length !== 2 || segs[0] !== dirName) return null
+  return chapterNumberFromFileName(segs[1])
+}
+
+/**
+ * ディレクトリ直下の正式な章ファイルを列挙する。
+ * 下の階層はたどらない（控えや古い版を拾わないため）。
+ */
+export async function listChapterDocs(
+  projectDir: string,
+  dirName: string,
+): Promise<Array<{ chapter: number; label: string; content: string }>> {
+  const dir = getNovelPath(projectDir, dirName)
+  if (!existsSync(dir)) return []
+  let names: string[]
+  try {
+    names = readdirSync(dir).sort()
+  } catch {
+    return []
+  }
+  const out: Array<{ chapter: number; label: string; content: string }> = []
+  const seen = new Set<number>()
+  for (const name of names) {
+    const chapter = chapterNumberFromFileName(name)
+    if (chapter === null) continue
+    // 同じ章に chapter-002.md と chapter-2.md が両方ある場合は、
+    // 名前順で先に来るゼロ埋めのほうを使う
+    if (seen.has(chapter)) continue
+    const content = await safeReadFile(join(dir, name))
+    if (!content || content.trim().length === 0) continue
+    seen.add(chapter)
+    out.push({ chapter, label: `${dirName}/${name}`, content })
+  }
+  return out
+}
+
+/**
  * 章ごとに分割された文書を読む。
  * 例: readChapterDoc(dir, "outline", 2) → .novel/outline/chapter-002.md
+ *
+ * ゼロ埋めの桁数は問わない（chapter-2.md でも読む）。集計の除外判定と
+ * 同じ条件にするため、判定は CHAPTER_FILE_PATTERN に揃えてある。
  */
 export async function readChapterDoc(
   projectDir: string,
   dirName: string,
   chapterNum: number,
 ): Promise<string | null> {
-  const path = getNovelPath(projectDir, dirName, chapterFileName(chapterNum))
-  const content = await safeReadFile(path)
-  return content && content.trim().length > 0 ? content : null
+  const docs = await listChapterDocs(projectDir, dirName)
+  return docs.find((d) => d.chapter === chapterNum)?.content ?? null
 }
 
 /** シーンID「2.1」から章番号 2 を取り出す。読めなければ null */
 export function sceneChapterNumber(sceneId: string): number | null {
   const head = sceneId.split(".")[0]
   return parseChapterNumber(head)
-}
-
-/** ファイル名 chapter-002.md から章番号 2 を取り出す。章ファイルでなければ null */
-export function chapterNumberFromFileName(fileName: string): number | null {
-  const m = fileName.match(/chapter-(\d+)\.md$/)
-  return m ? parseInt(m[1], 10) : null
 }
 
 /** 集計用のシーン。source はどのファイル由来か */
@@ -281,24 +346,23 @@ export interface SceneEntry {
  * そのため、章ファイルがある章は統合側をまるごと除く。
  */
 export async function collectScenes(projectDir: string): Promise<SceneEntry[]> {
-  const splitParts = await readDocParts(projectDir, null, "scenes")
+  // 数えるのは「決めた置き場所」のものだけにする。
+  //   scenes.md と scenes/chapter-NNN.md
+  // scenes/ に置かれたそれ以外のファイル（控え、覚え書き、古い版）は数えない。
+  // 数えると、控えの分だけ二重になるか、古い版で現行を上書きしてしまう。
+  const chapterDocs = await listChapterDocs(projectDir, "scenes")
   const consolidated = await readDocParts(projectDir, "scenes.md", null)
 
   // 章ファイルが受け持つ章。この章は統合側を見ない
-  const coveredChapters = new Set<number>()
-  for (const part of splitParts) {
-    const num = chapterNumberFromFileName(part.label)
-    if (num !== null) coveredChapters.add(num)
-  }
+  const coveredChapters = new Set(chapterDocs.map((d) => d.chapter))
 
   const entries: SceneEntry[] = []
-  const push = (part: DocPart) => {
-    for (const scene of parseScenes(part.content)) {
-      entries.push({ id: scene.id, title: scene.title, status: scene.status, source: part.label })
+
+  for (const doc of chapterDocs) {
+    for (const scene of parseScenes(doc.content)) {
+      entries.push({ id: scene.id, title: scene.title, status: scene.status, source: doc.label })
     }
   }
-
-  for (const part of splitParts) push(part)
 
   for (const part of consolidated) {
     for (const scene of parseScenes(part.content)) {
@@ -319,7 +383,7 @@ export function hasChapterDocs(projectDir: string, dirName: string): boolean {
   const dir = getNovelPath(projectDir, dirName)
   if (!existsSync(dir)) return false
   try {
-    return readdirSync(dir).some((f) => /^chapter-\d+\.md$/.test(f))
+    return readdirSync(dir).some((f) => CHAPTER_FILE_PATTERN.test(f))
   } catch {
     return false
   }

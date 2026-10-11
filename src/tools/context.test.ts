@@ -7,7 +7,8 @@ import { novelContextExecute } from "./context.js"
 import { novelStatusExecute } from "./status.js"
 import {
   determinePhase, allocateCharBudget, characterNameKeys, extractNameAliases,
-  collectScenes, sceneChapterNumber, chapterNumberFromFileName,
+  collectScenes, sceneChapterNumber, chapterNumberFromFileName, chapterDocNumber,
+  listChapterDocs, readChapterDoc,
 } from "../utils.js"
 
 /**
@@ -547,10 +548,85 @@ describe("sceneChapterNumber / chapterNumberFromFileName", () => {
     assert.equal(sceneChapterNumber("x.1"), null)
   })
 
-  test("ファイル名から章番号を取る", () => {
-    assert.equal(chapterNumberFromFileName("scenes/chapter-002.md"), 2)
+  test("ファイル名から章番号を取る（名前のみを受け取る）", () => {
+    assert.equal(chapterNumberFromFileName("chapter-002.md"), 2)
     assert.equal(chapterNumberFromFileName("chapter-012.md"), 12)
-    assert.equal(chapterNumberFromFileName("scenes/メモ.md"), null)
+    assert.equal(chapterNumberFromFileName("chapter-2.md"), 2, "ゼロ埋めの桁数は問わない")
+    assert.equal(chapterNumberFromFileName("メモ.md"), null)
+  })
+
+  test("接頭辞や接尾辞が付いたものは章ファイルとみなさない", () => {
+    // backup-chapter-002.md を正式な章ファイルと誤認すると、
+    // 読み込みでは使わないファイルを根拠に統合ファイルを集計から外してしまう
+    assert.equal(chapterNumberFromFileName("backup-chapter-002.md"), null)
+    assert.equal(chapterNumberFromFileName("old_chapter-002.md"), null)
+    assert.equal(chapterNumberFromFileName("chapter-002.md.bak"), null)
+    assert.equal(chapterNumberFromFileName("chapter-002.markdown"), null)
+    assert.equal(chapterNumberFromFileName("scenes/chapter-002.md"), null, "パスは受け取らない")
+  })
+})
+
+describe("chapterDocNumber", () => {
+  test("readChapterDoc が読むパスだけを認める", () => {
+    assert.equal(chapterDocNumber("scenes/chapter-002.md", "scenes"), 2)
+    assert.equal(chapterDocNumber("outline/chapter-012.md", "outline"), 12)
+  })
+
+  test("接頭辞が付いたものを認めない", () => {
+    assert.equal(chapterDocNumber("scenes/backup-chapter-002.md", "scenes"), null)
+  })
+
+  test("下の階層を認めない", () => {
+    assert.equal(chapterDocNumber("scenes/old/chapter-002.md", "scenes"), null)
+  })
+
+  test("別のディレクトリを認めない", () => {
+    assert.equal(chapterDocNumber("outline/chapter-002.md", "scenes"), null)
+    assert.equal(chapterDocNumber("chapter-002.md", "scenes"), null)
+  })
+})
+
+describe("listChapterDocs / readChapterDoc", () => {
+  test("直下の正式な章ファイルだけを読む", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes/chapter-001.md": "一章の内容。\n",
+      "scenes/chapter-002.md": "二章の内容。\n",
+      "scenes/backup-chapter-002.md": "控えの内容。\n",
+      "scenes/old/chapter-003.md": "下の階層の内容。\n",
+      "scenes/メモ.md": "覚え書き。\n",
+    })
+    const docs = await listChapterDocs(dir, "scenes")
+    assert.deepEqual(docs.map((d) => d.chapter), [1, 2])
+    assert.deepEqual(docs.map((d) => d.label), ["scenes/chapter-001.md", "scenes/chapter-002.md"])
+  })
+
+  test("ゼロ埋めの桁数が違っても読む", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "scenes/chapter-2.md": "二章の内容。\n" })
+    assert.match((await readChapterDoc(dir, "scenes", 2)) ?? "", /二章の内容/)
+  })
+
+  test("同じ章が二通りの名前であればゼロ埋めを使う", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes/chapter-002.md": "ゼロ埋め側。\n",
+      "scenes/chapter-2.md": "ゼロ埋めなし側。\n",
+    })
+    assert.match((await readChapterDoc(dir, "scenes", 2)) ?? "", /ゼロ埋め側/)
+  })
+
+  test("控えや下の階層は読まない", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes/backup-chapter-002.md": "控えの内容。\n",
+      "scenes/old/chapter-002.md": "下の階層の内容。\n",
+    })
+    assert.equal(await readChapterDoc(dir, "scenes", 2), null)
+  })
+
+  test("空のファイルは読まない", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "scenes/chapter-002.md": "   \n\n" })
+    assert.equal(await readChapterDoc(dir, "scenes", 2), null)
   })
 })
 
@@ -600,13 +676,51 @@ describe("collectScenes", () => {
     assert.equal(scenes.length, 2)
   })
 
-  test("章ファイル以外の分割ファイルも数える", async () => {
+  test("決めた置き場所以外のファイルは数えない", async () => {
+    // 控えや覚え書きを数えると、二重になるか古い版で現行を上書きしてしまう
     const dir = makeProject({
       "config.json": CONFIG,
-      "scenes/メモ.md": "### 9.1 予備の場面\n- [ ] 未着手\n",
+      "scenes/メモ.md": "### 9.1 覚え書きの場面\n- [ ] 未着手\n",
+      "scenes/old/chapter-001.md": "### 1.1 古い場面\n- [x] 完了\n",
+    })
+    assert.deepEqual(await collectScenes(dir), [])
+  })
+
+  test("控えの名前のファイルで統合側を外さない", async () => {
+    // backup-chapter-002.md を正式な章ファイルと誤認すると、
+    // 現行の統合ファイルが集計から落ち、執筆資料（現行）と食い違う
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes.md": "### 2.1 現行の場面\n- [ ] **状態**：未着手\n",
+      "scenes/backup-chapter-002.md": "### 2.1 古い場面\n- [x] **状態**：完了\n",
     })
     const scenes = await collectScenes(dir)
-    assert.deepEqual(scenes.map((s) => s.id), ["9.1"])
+    assert.deepEqual(
+      scenes.map((s) => `${s.id}:${s.status}`),
+      ["2.1:pending"],
+      "控えで現行が上書きされている",
+    )
+  })
+
+  test("下の階層の章ファイルで統合側を外さない", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes.md": "### 2.1 現行の場面\n- [ ] **状態**：未着手\n",
+      "scenes/old/chapter-002.md": "### 2.1 古い場面\n- [x] **状態**：完了\n",
+    })
+    const scenes = await collectScenes(dir)
+    assert.deepEqual(scenes.map((s) => `${s.id}:${s.status}`), ["2.1:pending"])
+  })
+
+  test("ゼロ埋めの桁数が違う章ファイルでも統合側を外す", async () => {
+    // readChapterDoc が読むものと判定条件が揃っていること
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes.md": "### 2.1 古い場面\n- [ ] **状態**：未着手\n",
+      "scenes/chapter-2.md": "### 2.1 現行の場面\n- [x] **状態**：完了\n",
+    })
+    const scenes = await collectScenes(dir)
+    assert.deepEqual(scenes.map((s) => `${s.id}:${s.status}`), ["2.1:completed"])
   })
 
   test("シーンが無ければ空", async () => {
@@ -633,5 +747,42 @@ describe("進行表示の重複集計", () => {
     })
     const out = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
     assert.match(out, /100% \(1\/1\)/, "二重に数えている")
+  })
+})
+
+describe("執筆資料と進捗の食い違い", () => {
+  const base = {
+    "config.json": CONFIG,
+    "concept.md": "# C\n書き終えた内容。\n",
+    "world-building.md": "# W\n書き終えた内容。\n",
+    "characters/profiles.md": "# P\n書き終えた内容。\n",
+    "outline-brief.md": "# B\n書き終えた内容。\n",
+    "outline-detailed.md": "# 章別\n\n## 第2章\n内容。\n",
+  }
+
+  test("控えの名前のファイルがあっても、資料と進捗が同じ側を見る", async () => {
+    const dir = makeProject({
+      ...base,
+      "scenes.md": "### 2.1 現行の場面\n- [ ] **状態**：未着手\n- **_Prompt**：現行の手引き\n",
+      "scenes/backup-chapter-002.md": "### 2.1 古い場面\n- [x] **状態**：完了\n- **_Prompt**：古い手引き\n",
+    })
+    const ctx = await run(dir)
+    const status = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
+    assert.match(ctx, /現行の手引き/, "執筆資料が現行を見ていない")
+    assert.doesNotMatch(ctx, /古い手引き/)
+    assert.match(status, /0% \(0\/1\)/, "進捗が控えの側を見ている")
+  })
+
+  test("正式な章ファイルなら、資料と進捗がそろって分割側を見る", async () => {
+    const dir = makeProject({
+      ...base,
+      "scenes.md": "### 2.1 古い場面\n- [ ] **状態**：未着手\n- **_Prompt**：古い手引き\n",
+      "scenes/chapter-002.md": "### 2.1 現行の場面\n- [x] **状態**：完了\n- **_Prompt**：現行の手引き\n",
+    })
+    const ctx = await run(dir)
+    const status = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
+    assert.match(ctx, /現行の手引き/)
+    assert.doesNotMatch(ctx, /古い手引き/)
+    assert.match(status, /100% \(1\/1\)/)
   })
 })

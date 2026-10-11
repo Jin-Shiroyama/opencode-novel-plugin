@@ -181,6 +181,14 @@ opencode-novel-plugin/
 使い、同じ章が統合ファイルと分割の両方にあるときは分割側だけを数えます
 （単純に連結すると、分割へ移したあとも統合側に残る古い記述を二重に数える）。
 
+章ファイルと認めるのは、`scenes/` や `outline/` の**直下**にある
+`chapter-<数字>.md` だけです（`utils.ts` の `CHAPTER_FILE_PATTERN`）。
+`backup-chapter-002.md`、`chapter-002.md.bak`、`scenes/old/chapter-002.md` は
+章ファイルとみなしません。読み込み（`readChapterDoc` / `listChapterDocs`）、
+存在判定（`hasChapterDocs`）、集計の除外判定（`collectScenes` / `chapterDocNumber`）が
+すべてこの定義を共有します。条件がずれると、読まないファイルを根拠に統合ファイルを
+集計から外し、執筆資料と進捗が食い違います。
+
 ## プロンプト
 
 RTCO（Role-Task-Context-Output）の枠組みで書いた15本です。
