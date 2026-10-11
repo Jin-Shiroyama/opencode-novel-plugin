@@ -122,6 +122,38 @@ describe("selectForeshadowReminders", () => {
   test("空でも落ちない", () => {
     assert.deepEqual(selectForeshadowReminders([], 1), [])
   })
+
+  test("説明どおりに動く（状態 × 回収予定の総当たり）", () => {
+    // README.ja.md と novel_guide に書いた規則を、独立に計算した期待値と
+    // 突き合わせる。説明と実装がずれたらここで落ちる。
+    const chapterNum = 5
+    const L = FORESHADOW_LOOKAHEAD
+    const statuses: ForeshadowEntry["status"][] = ["pending", "planted", "resolved", "abandoned"]
+    const targets = [undefined, 1, 4, 5, 6, chapterNum + L, chapterNum + L + 1, 30]
+
+    for (const status of statuses) {
+      for (const targetChapter of targets) {
+        const got = selectForeshadowReminders([item({ id: "F", status, targetChapter })], chapterNum)
+
+        let want: boolean
+        if (status === "resolved" || status === "abandoned") {
+          want = false // 終了したものは知らせない
+        } else if (targetChapter !== undefined && targetChapter <= chapterNum) {
+          want = true // 過ぎた・この章が予定なら状態を問わず知らせる
+        } else if (status === "planted") {
+          want = true // 張り済みは予定が遠くても知らせる
+        } else {
+          want = targetChapter !== undefined && targetChapter <= chapterNum + L
+        }
+
+        assert.equal(
+          got.length > 0,
+          want,
+          `status=${status} targetChapter=${targetChapter} で説明と食い違う`,
+        )
+      }
+    }
+  })
 })
 
 // ============================================================

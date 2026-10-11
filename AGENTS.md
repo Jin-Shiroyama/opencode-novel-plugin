@@ -234,7 +234,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、233件）
+pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、234件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
