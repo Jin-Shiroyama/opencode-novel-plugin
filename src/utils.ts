@@ -173,6 +173,8 @@ export function getNovelPath(projectDir: string, ...parts: string[]): string {
 export interface DocPart {
   label: string
   content: string
+  /** 文字数の枠を先に確保する（指定されたシーンなど） */
+  priority?: boolean
 }
 
 /** ディレクトリを再帰的にたどり、.md のパスを集める（深さは3階層まで） */
@@ -261,10 +263,33 @@ export function hasChapterDocs(projectDir: string, dirName: string): boolean {
 }
 
 /**
+ * 章別プロットができているか。
+ * 統合ファイル outline-detailed.md でも、章ごとの outline/chapter-NNN.md でもよい。
+ * agent とコマンドが分割保存を案内しているため、片方しか見ないと
+ * 案内どおりに保存した書き手の進行が止まる。
+ */
+export function hasOutlineDetailed(projectDir: string): boolean {
+  return existsSync(getDocPath(projectDir, "outline-detailed")) || hasChapterDocs(projectDir, "outline")
+}
+
+/**
+ * シーン一覧ができているか。
+ * 統合ファイル scenes.md でも、章ごとの scenes/chapter-NNN.md でもよい。
+ */
+export function hasSceneList(projectDir: string): boolean {
+  return existsSync(getDocPath(projectDir, "scenes")) || hasChapterDocs(projectDir, "scenes")
+}
+
+/**
  * 一人ずつの人物設定ファイルを列挙する。
  * profiles.md（一覧）と state.json は除く。
  */
-export async function listCharacterDocs(projectDir: string): Promise<DocPart[]> {
+export interface CharacterDoc extends DocPart {
+  /** 文書中に書かれた呼称・別名 */
+  aliases: string[]
+}
+
+export async function listCharacterDocs(projectDir: string): Promise<CharacterDoc[]> {
   const dir = getNovelPath(projectDir, "characters")
   if (!existsSync(dir)) return []
   let names: string[]
@@ -273,50 +298,202 @@ export async function listCharacterDocs(projectDir: string): Promise<DocPart[]> 
   } catch {
     return []
   }
-  const parts: DocPart[] = []
+  const parts: CharacterDoc[] = []
   for (const name of names) {
     const content = await safeReadFile(join(dir, name))
     if (content && content.trim().length > 0) {
-      parts.push({ label: name.replace(/\.md$/, ""), content })
+      parts.push({
+        label: name.replace(/\.md$/, ""),
+        content,
+        aliases: extractNameAliases(content),
+      })
     }
   }
   return parts
 }
 
 /**
+ * 人物設定の文書から呼称・別名を読み取る。
+ *
+ * 「- **呼称**：森田、先生」のような行を拾う。姓の推定が当たらない人物
+ * （一文字姓など）を取りこぼさないための、書き手が明示できる逃げ道。
+ */
+const ALIAS_LINE = /(?:呼称|別名|通称|愛称|あだ名)[^：:\n]{0,6}[：:]\s*(.+)/
+export function extractNameAliases(content: string): string[] {
+  const out: string[] = []
+  for (const line of content.split("\n")) {
+    const m = line.match(ALIAS_LINE)
+    if (!m) continue
+    for (const piece of m[1].split(/[、,\uFF0C・\/\s\u3000]+/)) {
+      const t = piece.replace(/[*`「」『』（）()\[\]]/g, "").trim()
+      if (t.length >= 1) out.push(t)
+    }
+  }
+  return [...new Set(out)]
+}
+
+/**
  * 人物名から、本文中で照合するための手がかりを作る。
  *
  * ファイル名は「森田悠」のようにフルネームだが、プロットやシーンでは
- * 「森田」と姓だけで書かれることが多い。そのため次を手がかりにする。
- *   - フルネームそのまま
- *   - 区切り記号（空白・中黒）の前の部分
- *   - 3文字以上なら先頭2文字（日本語の姓の慣行）
+ * 「森田」と姓だけ、あるいは「悠」と名だけで書かれることが多い。
+ * そこで次を手がかりにする。
+ *
+ *   strong（2文字以上。誤って拾う危険が小さい）
+ *     - フルネームそのまま
+ *     - 区切り記号（空白・中黒）で分けた部分
+ *     - 先頭からの部分（姓）と末尾からの部分（名）
+ *     - 文書に書かれた呼称・別名
+ *   weak（1文字。単独では拾いすぎるので、strong で当たらなかったときだけ使う）
+ *     - 先頭1文字（「林美咲」の「林」のような一文字姓）
+ *     - 1文字の呼称・別名
+ *
+ * 「林美咲」は先頭2文字が「林美」なので、姓だけの「林」では strong が当たらない。
+ * weak の段で拾う。
  */
-export function characterNameKeys(name: string): string[] {
-  const keys = new Set<string>()
+export function characterNameKeys(name: string, aliases: string[] = []): { strong: string[]; weak: string[] } {
+  const strong = new Set<string>()
+  const weak = new Set<string>()
   const trimmed = name.trim()
-  if (trimmed.length === 0) return []
-  keys.add(trimmed)
-  for (const piece of trimmed.split(/[\s\u3000・]+/)) {
-    if (piece.length >= 2) keys.add(piece)
+  if (trimmed.length === 0) return { strong: [], weak: [] }
+
+  const add = (k: string) => {
+    const t = k.trim()
+    if (t.length === 0) return
+    if ([...t].length === 1) weak.add(t)
+    else strong.add(t)
   }
-  const head = [...trimmed]
-  if (head.length >= 3) keys.add(head.slice(0, 2).join(""))
-  return [...keys]
+
+  add(trimmed)
+  for (const piece of trimmed.split(/[\s\u3000・]+/)) add(piece)
+
+  const chars = [...trimmed]
+  for (let n = 1; n < chars.length; n++) {
+    add(chars.slice(0, n).join("")) // 姓の候補
+    add(chars.slice(chars.length - n).join("")) // 名の候補
+  }
+
+  for (const a of aliases) add(a)
+
+  return { strong: [...strong], weak: [...weak] }
 }
 
 /**
  * この章に出る人物の設定ファイルを選ぶ。
  *
- * 章のプロットとシーン一覧に名前が現れたものを採る。
- * 一人も見つからなければ、絞り込みに失敗したものとして全員を返す
+ * 二段で照合する。まず strong（2文字以上）で当たるものを採り、
+ * 当たらなかった人物だけ weak（1文字）でもう一度照合する。
+ * 一段目で誰かが当たったからといって二段目を省かないのが肝心で、
+ * 省くと姓の推定に失敗した人物（一文字姓など）が落ちる。
+ *
+ * 誰も当たらなければ、絞り込みに失敗したものとして全員を返す
  * （資料が足りないより、多いほうが害が小さい）。
  */
-export function selectCharacterDocs(docs: DocPart[], haystack: string): DocPart[] {
+export function selectCharacterDocs<T extends DocPart & { aliases?: string[] }>(
+  docs: T[],
+  haystack: string,
+): T[] {
   if (docs.length === 0) return []
   if (haystack.trim().length === 0) return docs
-  const hit = docs.filter((d) => characterNameKeys(d.label).some((k) => haystack.includes(k)))
-  return hit.length > 0 ? hit : docs
+
+  const keyed = docs.map((d) => ({ doc: d, keys: characterNameKeys(d.label, d.aliases ?? []) }))
+  const hit = new Set<T>()
+
+  for (const { doc, keys } of keyed) {
+    if (keys.strong.some((k) => haystack.includes(k))) hit.add(doc)
+  }
+  for (const { doc, keys } of keyed) {
+    if (hit.has(doc)) continue
+    if (keys.weak.some((k) => haystack.includes(k))) hit.add(doc)
+  }
+
+  if (hit.size === 0) return docs
+  return docs.filter((d) => hit.has(d))
+}
+
+// ============================================================
+// 文字数の枠の配分
+// ============================================================
+
+/**
+ * 複数の文書に文字数の枠を配分する（max-min fair allocation）。
+ *
+ * 単純に連結してから先頭から切ると、前に置いた文書が長いだけで後ろの文書が
+ * 丸ごと落ちる。たとえば人物一覧が上限を超えていると、この章に出る人物の
+ * 個別設定が一件も資料に入らない。
+ *
+ * そこで、小さい文書から順に満たしていく。余った枠は残りに回すので、
+ * 短い文書は必ず全文が入り、長い文書だけが切られる。
+ */
+export function allocateCharBudget(sizes: number[], limit: number): number[] {
+  const alloc = sizes.map(() => 0)
+  if (limit <= 0) return alloc
+
+  let remaining = limit
+  let pending = sizes.map((_, i) => i).filter((i) => sizes[i] > 0)
+
+  while (pending.length > 0 && remaining > 0) {
+    const share = Math.floor(remaining / pending.length)
+    if (share < 1) break
+    const satisfied = pending.filter((i) => sizes[i] <= share)
+    if (satisfied.length === 0) {
+      // 全員が枠を使い切る。均等に配って終わり
+      for (const i of pending) {
+        alloc[i] = share
+        remaining -= share
+      }
+      pending = []
+      break
+    }
+    for (const i of satisfied) {
+      alloc[i] = sizes[i]
+      remaining -= sizes[i]
+    }
+    const done = new Set(satisfied)
+    pending = pending.filter((i) => !done.has(i))
+  }
+
+  // 端数を、まだ余裕のあるものへ順に配る
+  for (const i of pending) {
+    if (remaining <= 0) break
+    const give = Math.min(remaining, sizes[i] - alloc[i])
+    alloc[i] += give
+    remaining -= give
+  }
+
+  return alloc
+}
+
+/**
+ * 複数の文書を、文字数の枠を配分しながら連ねる。
+ *
+ * priority を立てた文書は先頭に置く（どれが今回の対象かを分かりやすくする）。
+ * 枠が回らずまるごと落ちた文書は、名前だけを残して落ちたことが分かるようにする。
+ */
+export function clipDocParts(parts: DocPart[], limit: number): string {
+  if (parts.length === 0) return ""
+
+  const ordered = [...parts.filter((p) => p.priority), ...parts.filter((p) => !p.priority)]
+  const bodies = ordered.map((p) => p.content.trim())
+  const sizes = bodies.map((b) => [...b].length)
+  const showLabels = ordered.length > 1
+  const label = (i: number) => (showLabels ? `### ${ordered[i].label}\n` : "")
+
+  if (sizes.reduce((a, b) => a + b, 0) <= limit) {
+    return ordered.map((_, i) => label(i) + bodies[i]).join("\n\n")
+  }
+
+  const alloc = allocateCharBudget(sizes, limit)
+  const out: string[] = []
+  for (let i = 0; i < ordered.length; i++) {
+    if (alloc[i] <= 0) {
+      out.push(`### ${ordered[i].label}\n…（文字数の枠が足りず省略。全文はファイルを直接参照してください）`)
+      continue
+    }
+    const [body, truncated] = truncateChars(bodies[i], alloc[i])
+    out.push(label(i) + body + (truncated ? "\n…（以下省略。全文は該当ファイルを直接参照してください）" : ""))
+  }
+  return out.join("\n\n")
 }
 
 // ============================================================
@@ -570,15 +747,8 @@ export function determinePhase(projectDir: string, config?: NovelConfig | null):
   if (!existsSync(getDocPath(projectDir, "outline-brief"))) return "outline"
 
   // 章別プロットとシーン一覧は、統合ファイルでも章ごとの分割でもよい。
-  // agent とコマンドが分割保存を案内しているため、片方しか見ないと
-  // 案内どおりに保存した書き手の進行が止まる。
-  const hasOutlineDetailed =
-    existsSync(getDocPath(projectDir, "outline-detailed")) || hasChapterDocs(projectDir, "outline")
-  if (!hasOutlineDetailed) return "outline"
-
-  const hasScenes =
-    existsSync(getDocPath(projectDir, "scenes")) || hasChapterDocs(projectDir, "scenes")
-  if (!hasScenes) return "scenes"
+  if (!hasOutlineDetailed(projectDir)) return "outline"
+  if (!hasSceneList(projectDir)) return "scenes"
 
   const written = countWrittenChapters(projectDir)
   const planned = config?.chapterCount ?? DEFAULTS.chapterCount

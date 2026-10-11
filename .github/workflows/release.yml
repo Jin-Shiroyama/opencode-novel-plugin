@@ -12,6 +12,17 @@ on:
         type: boolean
         default: true
 
+# semantic-release と npm の provenance に必要な権限。
+#   contents: write       タグと GitHub Release の作成
+#   issues / pull-requests: write  リリース告知のコメント
+#   id-token: write       npm の provenance（NPM_CONFIG_PROVENANCE: true に必須）
+# 手動実行に変えたときに落としてしまい、provenance 付き公開が失敗する状態だった。
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
 jobs:
   release:
     runs-on: ubuntu-latest

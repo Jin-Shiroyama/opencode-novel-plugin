@@ -5,6 +5,7 @@ import {
   safeReadFile, safeReadJson, listMarkdownFiles,
   parseScenes, countWords, progressBar,
   determinePhase, usesMartialArtsSetting, isDocFilled,
+  hasOutlineDetailed, hasSceneList, readDocParts,
 } from "../utils.js"
 import type { NovelConfig, ForeshadowEntry, DocType, Phase } from "../utils.js"
 import type { ToolContext } from "../index.js"
@@ -71,37 +72,56 @@ export async function novelStatusExecute(
   //
   // novel_init が雛形として先に作る3文書は、ファイルの有無では判定できない。
   // determinePhase と同じ基準（角括弧プレースホルダが残っていないか）で見る。
-  const stages: Array<{ docType: DocType; label: string; byContent?: boolean }> = [
-    { docType: "concept", label: "作品コンセプト", byContent: true },
-    { docType: "world-building", label: "世界観", byContent: true },
-    { docType: "characters", label: "登場人物", byContent: true },
-    { docType: "outline-brief", label: "プロット概要" },
-    { docType: "outline-detailed", label: "章別プロット" },
-    { docType: "scenes", label: "シーン一覧" },
+  // 章別プロットとシーン一覧は、統合ファイルでも章ごとの分割でも「できている」とみなす。
+  // determinePhase と同じ判定を使う。別々に判定すると、分割保存だけの作品で
+  // 「現在の段階: 本文執筆」と「章別プロット: 未作成」が同時に出てしまう。
+  const stages: Array<{ label: string; done: boolean; template?: boolean }> = [
+    {
+      label: "作品コンセプト",
+      done: isDocFilled(getDocPath(dir, "concept")),
+      template: existsSync(getDocPath(dir, "concept")),
+    },
+    {
+      label: "世界観",
+      done: isDocFilled(getDocPath(dir, "world-building")),
+      template: existsSync(getDocPath(dir, "world-building")),
+    },
+    {
+      label: "登場人物",
+      done: isDocFilled(getDocPath(dir, "characters")),
+      template: existsSync(getDocPath(dir, "characters")),
+    },
+    { label: "プロット概要", done: existsSync(getDocPath(dir, "outline-brief")) },
+    { label: "章別プロット", done: hasOutlineDetailed(dir) },
+    { label: "シーン一覧", done: hasSceneList(dir) },
   ]
 
   report += `📋 工程の進み具合:\n`
   for (const stage of stages) {
-    const path = getDocPath(dir, stage.docType)
-    const done = stage.byContent ? isDocFilled(path) : existsSync(path)
-    let mark = done ? "✅" : "⬜"
+    let mark = stage.done ? "✅" : "⬜"
     // 雛形はあるが未記入の状態を区別して示す
-    if (!done && stage.byContent && existsSync(path)) mark = "📝"
+    if (!stage.done && stage.template) mark = "📝"
     report += `  ${mark} ${stage.label}\n`
   }
   report += `  （✅ 記入済み / 📝 雛形あり・未記入 / ⬜ 未作成）\n`
 
-  const scenesContent = await safeReadFile(getDocPath(dir, "scenes"))
-  if (scenesContent) {
-    const scenes = parseScenes(scenesContent)
+  // シーンは統合ファイルと章ごとの分割の両方から集める
+  const sceneParts = await readDocParts(dir, "scenes.md", "scenes")
+  if (sceneParts.length > 0) {
+    const scenes = sceneParts.flatMap((p) => parseScenes(p.content))
     const completed = scenes.filter((s) => s.status === "completed").length
     const inProgress = scenes.filter((s) => s.status === "in-progress").length
     const total = scenes.length
 
-    report += `\n🎬 シーンの進捗:\n`
-    report += `  ${progressBar(completed, total)}\n`
-    if (inProgress > 0) {
-      report += `  🔄 執筆中: ${inProgress}シーン\n`
+    if (total > 0) {
+      report += `\n🎬 シーンの進捗:\n`
+      report += `  ${progressBar(completed, total)}\n`
+      if (inProgress > 0) {
+        report += `  🔄 執筆中: ${inProgress}シーン\n`
+      }
+      if (sceneParts.length > 1) {
+        report += `  📁 ${sceneParts.length}ファイルから集計\n`
+      }
     }
   }
 

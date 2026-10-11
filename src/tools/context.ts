@@ -2,6 +2,7 @@ import {
   safeReadFile, safeReadJson, getDocPath, getChaptersDir, getConfigPath,
   resolveLimit, truncateChars, takeTailChars, parseChapterNumber,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
+  clipDocParts,
 } from "../utils.js"
 import type { ForeshadowEntry, CharacterState, NovelConfig, DocPart } from "../utils.js"
 import { DEFAULTS, CHAPTER_WORD_TOLERANCE } from "../constants.js"
@@ -15,13 +16,6 @@ interface ContextArgs {
   includePrompts?: boolean
 }
 
-/** 複数のファイルから集めた文書を、どこ由来かが分かる形に連ねる */
-function joinParts(parts: DocPart[]): string {
-  if (parts.length === 0) return ""
-  if (parts.length === 1) return parts[0].content.trim()
-  return parts.map((p) => `### ${p.label}\n${p.content.trim()}`).join("\n\n")
-}
-
 export async function novelContextExecute(
   args: ContextArgs,
   ctx: ToolContext,
@@ -32,11 +26,18 @@ export async function novelContextExecute(
 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
 
-  /** config.json の limits を反映して資料を切り出す */
+  /** config.json の limits を反映して資料を切り出す（単一の文書） */
   const clip = (text: string, key: LimitKey): string => {
     const [body, truncated] = truncateChars(text, resolveLimit(config, key))
     return truncated ? `${body}\n…（以下省略。全文は該当ファイルを直接参照してください）` : body
   }
+
+  /**
+   * 複数の文書に枠を配分して切り出す。
+   * 連結してから先頭から切ると、前に置いた文書が長いだけで後ろが丸ごと落ちる。
+   */
+  const clipParts = (parts: DocPart[], key: LimitKey): string =>
+    clipDocParts(parts, resolveLimit(config, key))
 
   let context = `📝 執筆用の資料 — 第${chapterNum}章\n${"=".repeat(50)}\n\n`
 
@@ -69,18 +70,16 @@ export async function novelContextExecute(
   const sceneSource =
     (await readChapterDoc(dir, "scenes", chapterNum)) ??
     (await safeReadFile(getDocPath(dir, "scenes")))
-  let chapterScenes: string | null = null
-  if (sceneSource) {
-    chapterScenes = extractChapterScenes(sceneSource, chapterNum, args.sceneId)
-  }
-  if (chapterScenes) {
+  const sceneParts = sceneSource ? extractChapterScenes(sceneSource, chapterNum, args.sceneId) : []
+  if (sceneParts.length > 0) {
     context += `## 🎬 この章のシーン (P0 — 執筆の手引き)\n`
     if (args.sceneId) context += `今回書くシーン: ${args.sceneId}\n\n`
-    context += clip(chapterScenes, "scenes") + "\n\n"
+    context += clipParts(sceneParts, "scenes") + "\n\n"
   }
 
-  // 人物の絞り込みに使う手がかり（この章のプロットとシーン）
-  const chapterText = [chapterOutline ?? "", chapterScenes ?? ""].join("\n")
+  // 人物の絞り込みに使う手がかり（この章のプロットとシーン）。
+  // 枠で切る前の全文を使う（切られた部分に出る人物を取りこぼさないため）
+  const chapterText = [chapterOutline ?? "", ...sceneParts.map((p) => p.content)].join("\n")
 
   // --- 登場人物（P1） ---
   // 一覧（profiles.md）と、この章に出る人物の個別ファイルを合わせる。
@@ -97,7 +96,7 @@ export async function novelContextExecute(
       const names = relevantDocs.map((d) => d.label).join("、")
       context += `（この章に関わる人物の設定を載せています: ${names}）\n`
     }
-    context += clip(joinParts(characterParts), "characterProfiles") + "\n\n"
+    context += clipParts(characterParts, "characterProfiles") + "\n\n"
   }
 
   const charState = await safeReadJson<{ characters: CharacterState[] }>(getDocPath(dir, "character-state"))
@@ -151,26 +150,26 @@ export async function novelContextExecute(
   const martialArts = await readDocParts(dir, "wuxia/martial-arts.md", "wuxia/martial-arts")
   if (martialArts.length > 0) {
     context += `## ⚔️ 剣術・技 (P1 — 流派・武芸設定)\n`
-    context += clip(joinParts(martialArts), "martialArts") + "\n\n"
+    context += clipParts(martialArts, "martialArts") + "\n\n"
   }
 
   const sects = await readDocParts(dir, "wuxia/sects.md", "wuxia/sects")
   if (sects.length > 0) {
     context += `## 🏯 流派・勢力 (P1 — 流派・武芸設定)\n`
-    context += clip(joinParts(sects), "sects") + "\n\n"
+    context += clipParts(sects, "sects") + "\n\n"
   }
 
   const weapons = await readDocParts(dir, "wuxia/weapons.md", "wuxia/weapons")
   if (weapons.length > 0) {
     context += `## 🗡️ 刀剣 (P2 — 流派・武芸設定)\n`
-    context += clip(joinParts(weapons), "weapons") + "\n\n"
+    context += clipParts(weapons, "weapons") + "\n\n"
   }
 
   // --- 取材メモ（reality/ 配下の分割保存に対応） ---
   const realitySource = await readDocParts(dir, "reality-source.md", "reality")
   if (realitySource.length > 0) {
     context += `## 🌍 取材メモ (P1 — 題材の手がかり)\n`
-    context += clip(joinParts(realitySource), "realitySource") + "\n\n"
+    context += clipParts(realitySource, "realitySource") + "\n\n"
   }
 
   if (includePrompts) {
@@ -238,26 +237,27 @@ function extractChapterSection(outline: string, chapterNum: number): string | nu
  * 章ごとに分割されたファイルでも同じ処理を通す。見出しの形が想定と違って
  * 1件も拾えなかったときは、ファイルの内容をそのまま返す（取りこぼさない）。
  */
-function extractChapterScenes(source: string, chapterNum: number, sceneId?: string): string | null {
+function extractChapterScenes(source: string, chapterNum: number, sceneId?: string): DocPart[] {
   const scenes = parseScenes(source)
   if (scenes.length === 0) {
-    return source.trim().length > 0 ? source : null
+    // 見出しの形が想定と違って1件も拾えなかったときは、内容をそのまま渡す
+    return source.trim().length > 0 ? [{ label: "シーン一覧", content: source }] : []
   }
 
   const prefix = `${chapterNum}.`
   const mine = scenes.filter((s) => s.id === String(chapterNum) || s.id.startsWith(prefix))
-  if (mine.length === 0) return null
+  if (mine.length === 0) return []
 
-  const blocks = mine.map((s) => {
+  return mine.map((s) => {
     const raw = s.raw.replace(/\s+$/, "")
-    if (sceneId && s.id === sceneId) {
+    const isTarget = Boolean(sceneId) && s.id === sceneId
+    if (isTarget) {
       // 見出しの行に印を付ける（どのシーンを書くのかを一目で分かるように）
       const lines = raw.split("\n")
       lines[0] = `${lines[0]}　← 今回書くシーン`
-      return lines.join("\n")
+      // 指定されたシーンは枠を先に確保する（他のシーンが長くても落ちないように）
+      return { label: `シーン ${s.id}`, content: lines.join("\n"), priority: true }
     }
-    return raw
+    return { label: `シーン ${s.id}`, content: raw }
   })
-
-  return blocks.join("\n\n")
 }

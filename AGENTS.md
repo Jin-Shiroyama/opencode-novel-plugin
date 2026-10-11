@@ -150,19 +150,31 @@ opencode-novel-plugin/
 案内しています。`novel_context` は統合ファイルと分割の両方を読み、分割が
 あればそちらを優先します。
 
-| 資料 | 統合ファイル | 分割 |
-|---|---|---|
-| 章別プロット | `outline-detailed.md` | `outline/chapter-NNN.md` |
-| シーン一覧 | `scenes.md` | `scenes/chapter-NNN.md` |
-| 一人ずつの人物設定 | — | `characters/{キャラクター名}.md` |
-| 流派・勢力 | `wuxia/sects.md` | `wuxia/sects/*.md` |
-| 剣術・技 | `wuxia/martial-arts.md` | `wuxia/martial-arts/*.md` |
-| 刀剣 | `wuxia/weapons.md` | `wuxia/weapons/*.md` |
-| 取材メモ | `reality-source.md` | `reality/**/*.md` |
+| 資料 | 統合ファイル | 分割 | 両方ある場合 |
+|---|---|---|---|
+| 章別プロット | `outline-detailed.md` | `outline/chapter-NNN.md` | 分割を使う |
+| シーン一覧 | `scenes.md` | `scenes/chapter-NNN.md` | 分割を使う |
+| 一人ずつの人物設定 | `characters/profiles.md` | `characters/{キャラクター名}.md` | 両方を載せる |
+| 流派・勢力 | `wuxia/sects.md` | `wuxia/sects/*.md` | 両方を載せる |
+| 剣術・技 | `wuxia/martial-arts.md` | `wuxia/martial-arts/*.md` | 両方を載せる |
+| 刀剣 | `wuxia/weapons.md` | `wuxia/weapons/*.md` | 両方を載せる |
+| 取材メモ | `reality-source.md` | `reality/**/*.md` | 両方を載せる |
+
+章別プロットとシーン一覧はその章の記述が一箇所に収まるため分割を優先します。
+設定の資料は統合ファイルを概観として残す使い方ができるため両方を載せます。
 
 人物の個別設定は、この章のプロットとシーンに名前が現れたものだけを載せます
-（`selectCharacterDocs`）。照合はフルネームと姓（先頭2文字）の両方で行い、
-一人も特定できなければ全員を載せます。
+（`selectCharacterDocs`）。照合は二段です。2文字以上の手がかり（フルネーム・姓・名・
+呼称）で照合し、当たらなかった人物だけ1文字の手がかりで再照合します。
+一段目で誰かが当たっても二段目を省きません（省くと一文字姓などが落ちる）。
+人物設定に `呼称` を書けば、推定に頼らず明示できます。
+誰も特定できなければ全員を載せます。
+
+複数ファイルから集めた資料は `clipDocParts` / `allocateCharBudget` で
+`limits` の枠を短いものから順に満たす形で配分します。連結してから先頭で切ると
+前のファイルが長いだけで後ろが丸ごと落ちるためです。
+`novel_status` の工程表示とシーン進捗も `hasOutlineDetailed` / `hasSceneList` /
+`readDocParts` を使い、`determinePhase` と同じ基準で分割保存を見ます。
 
 ## プロンプト
 
