@@ -75,14 +75,15 @@ export const MARTIAL_ARTS_GENRE_KEYWORDS = [
 /**
  * 未着手の伏線を知らせはじめる章数。
  *
- * **まだ張っていない（pending）伏線**のうち、回収予定がこの章数より先の
- * ものは知らせない。毎章すべてを並べると目が滑って、いま扱うべきものが
- * 埋もれるため。
+ * 伏線を知らせるかどうかの決まりは次のとおり。判定は utils.ts の
+ * selectForeshadowReminders にある。
  *
- * 張り済み（planted）の伏線は、回収予定が遠くても知らせる（回収を
- * 忘れないため）。回収予定を過ぎたものは、張り済みかどうかを問わず
- * 知らせる（取りこぼしに気づけるため）。判定は
- * utils.ts の selectForeshadowReminders にある。
+ *   resolved / abandoned  知らせない（終わっているため）
+ *   planted               回収予定にかかわらず常に知らせる（忘れないため）
+ *   pending               回収予定を過ぎた・この章・この章数以内なら知らせる。
+ *                         回収予定が未定か、この章数より先なら知らせない
+ *
+ * 未着手で遠いものを毎章並べると目が滑って、いま扱うべきものが埋もれる。
  */
 export const FORESHADOW_LOOKAHEAD = 3
 

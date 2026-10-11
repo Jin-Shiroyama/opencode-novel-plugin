@@ -123,9 +123,14 @@ describe("selectForeshadowReminders", () => {
     assert.deepEqual(selectForeshadowReminders([], 1), [])
   })
 
-  test("説明どおりに動く（状態 × 回収予定の総当たり）", () => {
-    // README.ja.md と novel_guide に書いた規則を、独立に計算した期待値と
-    // 突き合わせる。説明と実装がずれたらここで落ちる。
+  test("仕様から作った期待値と照合する（状態 × 回収予定の総当たり）", () => {
+    // 仕様を下の if 文として書き直し、実装の結果と照合する。
+    // 実装を単純化しすぎたり条件を取り違えたりすれば、ここで落ちる。
+    //
+    // 注意: README.ja.md や novel_guide の文章を読み取っているわけではない。
+    // 文書と実装の一致は、文書を直すときに人が確かめる必要がある
+    // （自然言語を機械で突き合わせる仕掛けは置いていない）。
+    // 仕様の出どころは utils.ts の selectForeshadowReminders の説明。
     const chapterNum = 5
     const L = FORESHADOW_LOOKAHEAD
     const statuses: ForeshadowEntry["status"][] = ["pending", "planted", "resolved", "abandoned"]
@@ -149,7 +154,7 @@ describe("selectForeshadowReminders", () => {
         assert.equal(
           got.length > 0,
           want,
-          `status=${status} targetChapter=${targetChapter} で説明と食い違う`,
+          `status=${status} targetChapter=${targetChapter} で仕様と食い違う`,
         )
       }
     }
