@@ -173,8 +173,13 @@ opencode-novel-plugin/
 複数ファイルから集めた資料は `clipDocParts` / `allocateCharBudget` で
 `limits` の枠を短いものから順に満たす形で配分します。連結してから先頭で切ると
 前のファイルが長いだけで後ろが丸ごと落ちるためです。
-`novel_status` の工程表示とシーン進捗も `hasOutlineDetailed` / `hasSceneList` /
-`readDocParts` を使い、`determinePhase` と同じ基準で分割保存を見ます。
+`sceneId` で指定したシーンは `priority` を立てて先に枠を配ります（表示順だけ
+変えても、単独なら収まる長さが切られてしまう）。
+
+`novel_status` の工程表示は `hasOutlineDetailed` / `hasSceneList` を使い、
+`determinePhase` と同じ基準で分割保存を見ます。シーン進捗は `collectScenes` を
+使い、同じ章が統合ファイルと分割の両方にあるときは分割側だけを数えます
+（単純に連結すると、分割へ移したあとも統合側に残る古い記述を二重に数える）。
 
 ## プロンプト
 

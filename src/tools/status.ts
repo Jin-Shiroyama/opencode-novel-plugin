@@ -3,9 +3,9 @@ import { join } from "node:path"
 import {
   getNovelDir, getDocPath, getChaptersDir, getConfigPath,
   safeReadFile, safeReadJson, listMarkdownFiles,
-  parseScenes, countWords, progressBar,
+  countWords, progressBar,
   determinePhase, usesMartialArtsSetting, isDocFilled,
-  hasOutlineDetailed, hasSceneList, readDocParts,
+  hasOutlineDetailed, hasSceneList, collectScenes,
 } from "../utils.js"
 import type { NovelConfig, ForeshadowEntry, DocType, Phase } from "../utils.js"
 import type { ToolContext } from "../index.js"
@@ -105,23 +105,22 @@ export async function novelStatusExecute(
   }
   report += `  （✅ 記入済み / 📝 雛形あり・未記入 / ⬜ 未作成）\n`
 
-  // シーンは統合ファイルと章ごとの分割の両方から集める
-  const sceneParts = await readDocParts(dir, "scenes.md", "scenes")
-  if (sceneParts.length > 0) {
-    const scenes = sceneParts.flatMap((p) => parseScenes(p.content))
+  // シーンは統合ファイルと章ごとの分割の両方から集める。
+  // 同じ章が両方にあるときは分割側だけを数える（collectScenes が面倒を見る）
+  const scenes = await collectScenes(dir)
+  if (scenes.length > 0) {
     const completed = scenes.filter((s) => s.status === "completed").length
     const inProgress = scenes.filter((s) => s.status === "in-progress").length
     const total = scenes.length
+    const sources = new Set(scenes.map((s) => s.source))
 
-    if (total > 0) {
-      report += `\n🎬 シーンの進捗:\n`
-      report += `  ${progressBar(completed, total)}\n`
-      if (inProgress > 0) {
-        report += `  🔄 執筆中: ${inProgress}シーン\n`
-      }
-      if (sceneParts.length > 1) {
-        report += `  📁 ${sceneParts.length}ファイルから集計\n`
-      }
+    report += `\n🎬 シーンの進捗:\n`
+    report += `  ${progressBar(completed, total)}\n`
+    if (inProgress > 0) {
+      report += `  🔄 執筆中: ${inProgress}シーン\n`
+    }
+    if (sources.size > 1) {
+      report += `  📁 ${sources.size}ファイルから集計\n`
     }
   }
 

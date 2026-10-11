@@ -5,7 +5,10 @@ import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { novelContextExecute } from "./context.js"
 import { novelStatusExecute } from "./status.js"
-import { determinePhase, allocateCharBudget, characterNameKeys, extractNameAliases } from "../utils.js"
+import {
+  determinePhase, allocateCharBudget, characterNameKeys, extractNameAliases,
+  collectScenes, sceneChapterNumber, chapterNumberFromFileName,
+} from "../utils.js"
 
 /**
  * novel_context の結合テスト。
@@ -251,6 +254,35 @@ describe("allocateCharBudget", () => {
       }
     }
   })
+
+  test("priority には先に枠を配る", () => {
+    // 同列に扱うと [2000, 2000] になり、単独なら収まる 2933 が切られる
+    assert.deepEqual(allocateCharBudget([2933, 4100], 4000, [true, false]), [2933, 1067])
+  })
+
+  test("priority が枠を超えるときは priority を切り、残りは 0", () => {
+    assert.deepEqual(allocateCharBudget([5000, 100], 4000, [true, false]), [4000, 0])
+  })
+
+  test("priority が複数なら priority のあいだで配る", () => {
+    assert.deepEqual(allocateCharBudget([1000, 1000, 9000], 4000, [true, true, false]), [1000, 1000, 2000])
+  })
+
+  test("priority を指定しなければ全員同列", () => {
+    assert.deepEqual(allocateCharBudget([2933, 4100], 4000), [2000, 2000])
+    assert.deepEqual(allocateCharBudget([2933, 4100], 4000, [false, false]), [2000, 2000])
+  })
+
+  test("priority つきでも合計が枠を超えない", () => {
+    for (const sizes of [[1, 1, 1], [9999, 1], [300, 300, 300], [1, 5000, 50]]) {
+      for (const limit of [1, 7, 100, 1000]) {
+        for (const pri of [[true, false, false], [false, true, false], [true, true, true]]) {
+          const total = allocateCharBudget(sizes, limit, pri).reduce((a, b) => a + b, 0)
+          assert.ok(total <= limit, `sizes=${sizes} limit=${limit} pri=${pri} total=${total}`)
+        }
+      }
+    }
+  })
 })
 
 // ============================================================
@@ -267,6 +299,17 @@ describe("上限を超えたとき", () => {
     })
     const out = await run(dir)
     assert.match(out, /短く切る話し方/, "人物一覧に枠を食われて個別設定が落ちている")
+  })
+
+  test("指定したシーンが長くても、末尾まで落ちない", async () => {
+    // 単独なら上限に収まる長さ（2,933文字）。同列に配分すると約2,000文字で
+    // 切られ、_Prompt の末尾（Success）が落ちる
+    const target =
+      "### 2.2 指定シーン\n- **_Prompt**：" + "あ".repeat(2880) + " | Success: 末尾の合図\n"
+    const other = "### 2.1 他のシーン\n- **_Prompt**：" + "い".repeat(4080) + "\n"
+    const dir = makeProject({ "config.json": CONFIG, "scenes.md": other + "\n" + target })
+    const out = await run(dir, { sceneId: "2.2" })
+    assert.match(out, /末尾の合図/, "指定したシーンの末尾が切られている")
   })
 
   test("他のシーンが長くても、sceneId で指定したシーンは落ちない", async () => {
@@ -489,5 +532,106 @@ describe("進行表示と分割保存の整合", () => {
     })
     const out = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
     assert.match(out, /\(1\/2\)/)
+  })
+})
+
+// ============================================================
+// シーンの集計（統合ファイルと分割の重複）
+// ============================================================
+
+describe("sceneChapterNumber / chapterNumberFromFileName", () => {
+  test("シーンIDから章番号を取る", () => {
+    assert.equal(sceneChapterNumber("2.1"), 2)
+    assert.equal(sceneChapterNumber("12.3"), 12)
+    assert.equal(sceneChapterNumber("2"), 2)
+    assert.equal(sceneChapterNumber("x.1"), null)
+  })
+
+  test("ファイル名から章番号を取る", () => {
+    assert.equal(chapterNumberFromFileName("scenes/chapter-002.md"), 2)
+    assert.equal(chapterNumberFromFileName("chapter-012.md"), 12)
+    assert.equal(chapterNumberFromFileName("scenes/メモ.md"), null)
+  })
+})
+
+describe("collectScenes", () => {
+  test("同じ章が統合と分割の両方にあれば分割だけを数える", async () => {
+    // 分割へ移したあとも統合側に古い記述が残っていると二重に数えてしまう
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes.md": "### 2.1 場面\n- [ ] **状態**：未着手\n",
+      "scenes/chapter-002.md": "### 2.1 場面\n- [x] **状態**：完了\n",
+    })
+    const scenes = await collectScenes(dir)
+    assert.equal(scenes.length, 1, `二重に数えている: ${JSON.stringify(scenes)}`)
+    assert.equal(scenes[0].status, "completed")
+  })
+
+  test("分割で削除した旧シーンも数えない（ID の重複排除では足りない場合）", async () => {
+    // 統合側にあった 2.2 を分割時に削除した、という状況
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes.md": "### 2.1 場面\n- [ ] 未着手\n### 2.2 消したい場面\n- [ ] 未着手\n",
+      "scenes/chapter-002.md": "### 2.1 場面\n- [x] 完了\n",
+    })
+    const scenes = await collectScenes(dir)
+    assert.deepEqual(scenes.map((s) => s.id), ["2.1"])
+  })
+
+  test("章ファイルが無い章は統合側を数える", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes.md": "### 1.1 場面\n- [x] 完了\n### 2.1 場面\n- [ ] 未着手\n",
+      "scenes/chapter-002.md": "### 2.1 場面\n- [-] 執筆中\n",
+    })
+    const scenes = await collectScenes(dir)
+    assert.deepEqual(
+      scenes.map((s) => `${s.id}:${s.status}`).sort(),
+      ["1.1:completed", "2.1:in-progress"],
+    )
+  })
+
+  test("統合ファイルだけでも数える", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes.md": "### 1.1 場面\n- [x] 完了\n### 1.2 場面\n- [ ] 未着手\n",
+    })
+    const scenes = await collectScenes(dir)
+    assert.equal(scenes.length, 2)
+  })
+
+  test("章ファイル以外の分割ファイルも数える", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "scenes/メモ.md": "### 9.1 予備の場面\n- [ ] 未着手\n",
+    })
+    const scenes = await collectScenes(dir)
+    assert.deepEqual(scenes.map((s) => s.id), ["9.1"])
+  })
+
+  test("シーンが無ければ空", async () => {
+    const scenes = await collectScenes(makeProject({ "config.json": CONFIG }))
+    assert.deepEqual(scenes, [])
+  })
+})
+
+describe("進行表示の重複集計", () => {
+  const base = {
+    "config.json": CONFIG,
+    "concept.md": "# C\n書き終えた内容。\n",
+    "world-building.md": "# W\n書き終えた内容。\n",
+    "characters/profiles.md": "# P\n書き終えた内容。\n",
+    "outline-brief.md": "# B\n書き終えた内容。\n",
+    "outline-detailed.md": "# 章別\n\n## 第2章\n内容。\n",
+  }
+
+  test("同じ章が統合と分割にあっても二重に数えない", async () => {
+    const dir = makeProject({
+      ...base,
+      "scenes.md": "### 2.1 場面\n- [ ] **状態**：未着手\n",
+      "scenes/chapter-002.md": "### 2.1 場面\n- [x] **状態**：完了\n",
+    })
+    const out = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
+    assert.match(out, /100% \(1\/1\)/, "二重に数えている")
   })
 })

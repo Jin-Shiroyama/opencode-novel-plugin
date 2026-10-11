@@ -248,6 +248,69 @@ export async function readChapterDoc(
   return content && content.trim().length > 0 ? content : null
 }
 
+/** シーンID「2.1」から章番号 2 を取り出す。読めなければ null */
+export function sceneChapterNumber(sceneId: string): number | null {
+  const head = sceneId.split(".")[0]
+  return parseChapterNumber(head)
+}
+
+/** ファイル名 chapter-002.md から章番号 2 を取り出す。章ファイルでなければ null */
+export function chapterNumberFromFileName(fileName: string): number | null {
+  const m = fileName.match(/chapter-(\d+)\.md$/)
+  return m ? parseInt(m[1], 10) : null
+}
+
+/** 集計用のシーン。source はどのファイル由来か */
+export interface SceneEntry {
+  id: string
+  title: string
+  status: SceneStatus
+  source: string
+}
+
+/**
+ * シーンを集めて数える。
+ *
+ * 統合ファイル scenes.md と、章ごとの scenes/chapter-NNN.md の両方を見る。
+ * **同じ章が両方にある場合は分割側だけを数える。** 単純に連結すると、
+ * 分割へ移したあとも統合側に残っている古い記述を二重に数えてしまう
+ * （分割側で完了にしたシーンが、統合側の未着手と合わせて 1/2 になる）。
+ *
+ * ID の重複を取り除くだけでは足りない。分割するときに統合側から削除した
+ * シーンが、統合側にまだ残っていれば数に入ってしまうためである。
+ * そのため、章ファイルがある章は統合側をまるごと除く。
+ */
+export async function collectScenes(projectDir: string): Promise<SceneEntry[]> {
+  const splitParts = await readDocParts(projectDir, null, "scenes")
+  const consolidated = await readDocParts(projectDir, "scenes.md", null)
+
+  // 章ファイルが受け持つ章。この章は統合側を見ない
+  const coveredChapters = new Set<number>()
+  for (const part of splitParts) {
+    const num = chapterNumberFromFileName(part.label)
+    if (num !== null) coveredChapters.add(num)
+  }
+
+  const entries: SceneEntry[] = []
+  const push = (part: DocPart) => {
+    for (const scene of parseScenes(part.content)) {
+      entries.push({ id: scene.id, title: scene.title, status: scene.status, source: part.label })
+    }
+  }
+
+  for (const part of splitParts) push(part)
+
+  for (const part of consolidated) {
+    for (const scene of parseScenes(part.content)) {
+      const chapter = sceneChapterNumber(scene.id)
+      if (chapter !== null && coveredChapters.has(chapter)) continue
+      entries.push({ id: scene.id, title: scene.title, status: scene.status, source: part.label })
+    }
+  }
+
+  return entries
+}
+
 /**
  * 章ごとの分割ファイルが1つ以上あるか（進行段階の判定に使う）。
  * .keep のような空ファイルや、章ファイル以外は数えない。
@@ -416,16 +479,16 @@ export function selectCharacterDocs<T extends DocPart & { aliases?: string[] }>(
 // ============================================================
 
 /**
- * 複数の文書に文字数の枠を配分する（max-min fair allocation）。
+ * 小さいものから順に満たしていく配分（max-min fair allocation）。
  *
  * 単純に連結してから先頭から切ると、前に置いた文書が長いだけで後ろの文書が
  * 丸ごと落ちる。たとえば人物一覧が上限を超えていると、この章に出る人物の
  * 個別設定が一件も資料に入らない。
  *
- * そこで、小さい文書から順に満たしていく。余った枠は残りに回すので、
- * 短い文書は必ず全文が入り、長い文書だけが切られる。
+ * ここでは小さい文書から順に満たす。余った枠は残りに回すので、短い文書は
+ * 必ず全文が入り、長い文書だけが切られる。
  */
-export function allocateCharBudget(sizes: number[], limit: number): number[] {
+function fairAllocate(sizes: number[], limit: number): number[] {
   const alloc = sizes.map(() => 0)
   if (limit <= 0) return alloc
 
@@ -465,6 +528,45 @@ export function allocateCharBudget(sizes: number[], limit: number): number[] {
 }
 
 /**
+ * 複数の文書に文字数の枠を配分する。
+ *
+ * priority を立てたものには**先に**枠を配り、残りを他に配る。
+ * 全部を同列に扱うと、sceneId で指定したシーンが他のシーンと同じだけしか
+ * もらえず、単独なら収まる長さでも切られてしまう。
+ * 指定したシーンの末尾（_Prompt の Success など）が落ちると手引きとして
+ * 使えないため、ここだけは順番ではなく配分で守る。
+ *
+ * priority が複数あるときは、priority のあいだで同じ規則（小さいものから
+ * 順に満たす）で配る。
+ */
+export function allocateCharBudget(
+  sizes: number[],
+  limit: number,
+  priority: boolean[] = [],
+): number[] {
+  const alloc = sizes.map(() => 0)
+  if (limit <= 0) return alloc
+
+  const priorityIdx = sizes.map((_, i) => i).filter((i) => priority[i])
+  const restIdx = sizes.map((_, i) => i).filter((i) => !priority[i])
+
+  if (priorityIdx.length === 0) return fairAllocate(sizes, limit)
+
+  const priorityAlloc = fairAllocate(priorityIdx.map((i) => sizes[i]), limit)
+  priorityIdx.forEach((i, k) => {
+    alloc[i] = priorityAlloc[k]
+  })
+
+  const used = priorityAlloc.reduce((a, b) => a + b, 0)
+  const restAlloc = fairAllocate(restIdx.map((i) => sizes[i]), limit - used)
+  restIdx.forEach((i, k) => {
+    alloc[i] = restAlloc[k]
+  })
+
+  return alloc
+}
+
+/**
  * 複数の文書を、文字数の枠を配分しながら連ねる。
  *
  * priority を立てた文書は先頭に置く（どれが今回の対象かを分かりやすくする）。
@@ -483,7 +585,7 @@ export function clipDocParts(parts: DocPart[], limit: number): string {
     return ordered.map((_, i) => label(i) + bodies[i]).join("\n\n")
   }
 
-  const alloc = allocateCharBudget(sizes, limit)
+  const alloc = allocateCharBudget(sizes, limit, ordered.map((p) => Boolean(p.priority)))
   const out: string[] = []
   for (let i = 0; i < ordered.length; i++) {
     if (alloc[i] <= 0) {
