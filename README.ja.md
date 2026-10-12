@@ -728,7 +728,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（263テスト。src と scripts の両方）
+pnpm test        # node:test で実行（270テスト。src と scripts の両方）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -867,7 +867,7 @@ printf '%s' "<字>" | iconv -f UTF-8 -t EUC-JISX0213 >/dev/null 2>&1
 
 - `src/utils.test.ts` を新設。文字数の数え方は、ひらがな・カタカナ・長音符・漢字・三点リーダ・ダッシュ・約物・半角英数字・各種空白・サロゲートペアの混在を網羅
 - `scripts/check-japanese.test.mjs` を新設。検出器の一覧に JIS X 0213 の収録字が混ざっていないことを `iconv` で機械的に検証する
-- 合計 263 テスト。Node 24 標準の `node:test` を使い、**依存パッケージの追加なし**
+- 合計 270 テスト。Node 24 標準の `node:test` を使い、**依存パッケージの追加なし**
 - `tsconfig.build.json` を新設し、配布ビルドからテストを除外
 - CI に `pnpm test`、`pnpm build`、`pnpm check:ja` を追加
 - `scripts/check-japanese.mjs` を新設（中国語の残存チェック）

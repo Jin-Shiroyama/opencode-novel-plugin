@@ -1,5 +1,6 @@
 import { test, describe, before } from "node:test"
 import assert from "node:assert/strict"
+import { DEFAULT_MODEL } from "./constants.js"
 
 /**
  * config フックの結合テスト。
@@ -12,12 +13,17 @@ import assert from "node:assert/strict"
 type CommandConfig = { template: string; description?: string; agent?: string }
 let config: { command: Record<string, CommandConfig>; agent: Record<string, any> }
 
-before(async () => {
+/** config フックを、与えた設定に対して走らせる */
+async function applyConfig(userConfig: Record<string, any> = {}): Promise<any> {
   const mod = await import("./index.js")
   const hooks = await (mod.default as any).server({})
-  const c: any = {}
+  const c = structuredClone(userConfig)
   await hooks.config(c)
-  config = c
+  return c
+}
+
+before(async () => {
+  config = await applyConfig()
 })
 
 describe("コマンドの agent 指定", () => {
@@ -90,5 +96,54 @@ describe("agent の登録", () => {
       assert.ok(config.agent[name], `${name} が登録されていない`)
       assert.equal(config.agent[name].mode, "primary")
     }
+  })
+})
+
+describe("opencode.json 側の agent 設定の優先", () => {
+  test("利用者が指定した model が勝つ", async () => {
+    const c = await applyConfig({ agent: { "novel-writer": { model: "anthropic/claude-haiku-4-5-20251001" } } })
+    assert.equal(c.agent["novel-writer"].model, "anthropic/claude-haiku-4-5-20251001")
+  })
+
+  test("指定していないキーはプラグインの既定が残る", async () => {
+    // 以前は agent ごとまるごと置き換えていたため、利用者が model を書くと
+    // プロンプトや温度まで消えていた
+    const c = await applyConfig({ agent: { "novel-writer": { model: "x" } } })
+    assert.equal(c.agent["novel-writer"].temperature, 0.7)
+    assert.ok(c.agent["novel-writer"].prompt?.length > 0, "プロンプトが失われている")
+    assert.equal(c.agent["novel-writer"].mode, "primary")
+  })
+
+  test("指定していない agent は既定のまま", async () => {
+    const c = await applyConfig({ agent: { "novel-writer": { model: "x" } } })
+    assert.equal(c.agent["novel-planner"].model, DEFAULT_MODEL)
+    assert.equal(c.agent["novel-editor"].model, DEFAULT_MODEL)
+  })
+
+  test("利用者の他の agent を消さない", async () => {
+    const c = await applyConfig({ agent: { build: { model: "x" }, "my-agent": { prompt: "p" } } })
+    for (const name of ["build", "my-agent", "novel-planner", "novel-writer", "novel-editor"]) {
+      assert.ok(c.agent[name], `${name} が消えている`)
+    }
+  })
+
+  test("mode も利用者の指定で上書きできる", async () => {
+    const c = await applyConfig({ agent: { "novel-editor": { mode: "subagent" } } })
+    assert.equal(c.agent["novel-editor"].mode, "subagent")
+  })
+
+  test("agent 設定が無くても落ちない", async () => {
+    for (const userConfig of [{}, { agent: undefined }, { agent: {} }]) {
+      const c = await applyConfig(userConfig)
+      assert.equal(c.agent["novel-writer"].model, DEFAULT_MODEL)
+    }
+  })
+
+  test("permission は入れ替わる（浅いマージ）", async () => {
+    // いまの挙動を書き留めておく。利用者が permission を一部だけ書くと、
+    // プラグイン既定（novel-writer は webfetch: "deny"）は残らない。
+    // 深くマージする方針に変えるなら、このテストが変更の合図になる。
+    const c = await applyConfig({ agent: { "novel-writer": { permission: { edit: "ask" } } } })
+    assert.deepEqual(c.agent["novel-writer"].permission, { edit: "ask" })
   })
 })

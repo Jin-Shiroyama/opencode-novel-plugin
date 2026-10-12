@@ -102,6 +102,10 @@ opencode-novel-plugin/
 
 > 各ファクトリは `mode: "subagent"` を返しますが、`src/index.ts` の `config` フックで
 > `primary` に上書きしています。3つとも主 agent セレクタに出ます。
+>
+> `opencode.json` の `agent` に同じ名前で設定を書けば、そちらが**キー単位で**勝ちます
+> （`model` だけ書いてもプロンプトや温度は残ります）。ただし `permission` は浅いマージなので、
+> 一部だけ書くとプラグイン既定（`novel-writer` / `novel-editor` の `webfetch: "deny"`）は残りません。
 
 ## skill
 
@@ -242,7 +246,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、263件）
+pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、270件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

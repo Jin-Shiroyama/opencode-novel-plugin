@@ -127,11 +127,13 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       planner.mode = "primary"
       writer.mode = "primary"
       editor.mode = "primary"
+      // opencode.json 側で agent ごとの設定（model など）が書かれていれば、それを優先する。
+      const userAgents = (config.agent ?? {}) as Record<string, Record<string, unknown>>
       config.agent = {
-        ...config.agent,
-        "novel-planner": planner,
-        "novel-writer": writer,
-        "novel-editor": editor,
+        ...userAgents,
+        "novel-planner": { ...planner, ...userAgents["novel-planner"] },
+        "novel-writer": { ...writer, ...userAgents["novel-writer"] },
+        "novel-editor": { ...editor, ...userAgents["novel-editor"] },
       }
       config.command = {
         ...config.command,
