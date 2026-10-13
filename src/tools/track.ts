@@ -1,7 +1,7 @@
 import { join } from "node:path"
 import {
   safeReadFile, safeReadJson, safeWriteJson, getDocPath, safeWriteFile, getConfigPath, getChaptersDir,
-  listMarkdownFiles, chapterNumberFromFileName,
+  listMarkdownFiles, chapterNumberFromFileName, chapterTitleFromHeading,
 } from "../utils.js"
 import type { ForeshadowEntry, CharacterState } from "../utils.js"
 import {
@@ -192,11 +192,7 @@ async function updateSummary(dir: string, content: string, chapterNumber?: numbe
 async function chapterTitle(dir: string, chapter: number): Promise<string | null> {
   const file = join(getChaptersDir(dir), `chapter-${String(chapter).padStart(3, "0")}.md`)
   const text = await safeReadFile(file)
-  // 見出しの1行だけを見る。空白に改行を含めると、タイトルの無い見出し（# 第2章）の
-  // 次の行の本文をタイトルとして拾ってしまう
-  const firstLine = text?.replace(/\r\n/g, "\n").split("\n").find((l) => l.trim().length > 0) ?? ""
-  const m = firstLine.match(/^#[ \t]*第[ \t]*\d+[ \t]*章[ \t　]+(\S.*)$/)
-  return m ? m[1].trim() : null
+  return (text && chapterTitleFromHeading(text)) || null
 }
 
 /**

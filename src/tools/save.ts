@@ -1,4 +1,5 @@
 import { safeWriteFile, getChaptersDir, countWords, stripChapterHeading, normalizeChapterTitle } from "../utils.js"
+import { summarizeForSave } from "./check.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
 
@@ -32,7 +33,8 @@ export async function novelSaveChapterExecute(
   // 保存ファイルの見出しは算用数字で統一する（機械的に章番号を取り出せるようにするため）。
   // 縦組みの原稿として書き出すときに漢数字へ直せばよい。
   const header = title.length > 0 ? `# 第${num}章 ${title}\n\n` : `# 第${num}章\n\n`
-  await safeWriteFile(filePath, header + body)
+  const saved = header + body
+  await safeWriteFile(filePath, saved)
 
   const wordCount = countWords(body)
 
@@ -44,6 +46,8 @@ export async function novelSaveChapterExecute(
   }
   report += `📄 ファイル: ${filePath}\n`
   report += `📊 文字数: ${wordCount.toLocaleString("ja-JP")}文字\n`
+  // 保存したものをそのまま点検する（行番号が保存ファイルと一致するように）
+  report += summarizeForSave(saved, num)
 
   if (args.updateState !== false) {
     report += `\n💡 novel_update で次の記録を更新しておくと、後の章でつじつまが合わせやすくなります:\n`

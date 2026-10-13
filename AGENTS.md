@@ -3,7 +3,7 @@
 ## 概要
 
 OpenCode のサーバープラグインです。日本語の長編小説を書くために、
-6つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update`）、
+8つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update` / `novel_check` / `novel_export`）、
 3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
 15のRTCOプロンプト、15の文書雛形、5つの skill、11のコマンド、
 そしてファイルで持つ作品データの管理を提供します。
@@ -24,6 +24,7 @@ opencode-novel-plugin/
 │   ├── utils.ts              # パス／ファイル／文書解析／進行判定／文字数
 │   ├── utils.test.ts         # ユニットテスト（node:test）
 │   ├── records.ts            # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
+│   ├── typography.ts         # 表記の点検（表記規約のうち機械で見られるもの）
 │   ├── prompts.ts            # 15のRTCOプロンプト
 │   ├── templates.ts          # 15の文書雛形（Markdown 12 + JSON 3）
 │   ├── agents/
@@ -36,7 +37,9 @@ opencode-novel-plugin/
 │       ├── save.ts           # novel_save_chapter — 章の保存
 │       ├── context.ts        # novel_context — 執筆用の資料
 │       ├── guide.ts          # novel_guide — 進め方の手引き
-│       └── track.ts          # novel_update — 記録の更新
+│       ├── track.ts          # novel_update — 記録の更新
+│       ├── check.ts          # novel_check — 表記の点検
+│       └── export.ts         # novel_export — 原稿の書き出し
 ├── commands/                 # スラッシュコマンド（11本）
 ├── skills/                   # 執筆用の skill（5本）
 │   ├── novel-workflow/       # 6工程の進め方（通し作例つき）
@@ -89,6 +92,8 @@ opencode-novel-plugin/
 | `novel_context` | 執筆用の資料 | chapterNumber, sceneId, includePrompts |
 | `novel_guide` | 進め方の手引き | section |
 | `novel_update` | 記録の更新 | action, content, chapterNumber |
+| `novel_check` | 表記の点検 | chapterNumber, maxIssues |
+| `novel_export` | 原稿の書き出し | format, numerals, fromChapter, toChapter, outputPath |
 
 > コンセプト・世界観・登場人物・プロット・シーンなどの文書は、opencode 内蔵の Edit / Write ツールで編集します。
 > パスの対応は各 agent のプロンプトにあります。
@@ -262,6 +267,16 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 - `novel_status` は「完結」（予定の章数がそろった）とは別に、あらすじの欠け、
   本文があるのに完了になっていないシーンが残る章（一部だけのものはシーンIDも）、
   形の崩れた伏線、分量の不足を「記録の点検」として示す
+- **表記の点検（`src/typography.ts`）は `novel-writing` skill の表記規約を写したもの**。規約を変えたら両方を直す。
+  感嘆符・疑問符の重ねや組み合わせ（`！！` `！？` `？！`）は許し、続けたものを1つの約物として扱う。
+  会話行（「『で始まる行）は字下げしない。`novel_save_chapter` は保存したファイルをそのまま点検して
+  件数を報告に添える（行番号が保存ファイルと一致するように）
+- `novel_export` は本文を書き換えない。保存ファイルの見出しは算用数字のままにし、書き出すときに
+  漢数字へ直す。書き出し先は作品のディレクトリの中に限り、`.novel/chapters/` には書かない。
+  パスの文字列だけで判定せず、書き出し先がリンクなら断り、親ディレクトリは実体（realpath）で判定する
+  （リンク経由で章ファイルや作品の外を上書きしないため）
+- 読み込めない章（`safeReadFile` が null）は空の本文と区別する。`novel_export` は何も書かずに断り、
+  `novel_check` は点検できなかった章として示す（空として扱うと欠落が「成功」「問題なし」になる）
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
   目標文字数 120,000／章数 40／視点「三人称一元視点」
 - 資料読み込みの上限は `src/constants.ts` の `LIMITS` が既定値。
@@ -275,7 +290,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、342件）
+pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、386件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

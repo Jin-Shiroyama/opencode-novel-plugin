@@ -1128,3 +1128,38 @@ export function parseChapterNumber(raw: string): number | null {
   const value = total + section + current
   return value > 0 ? value : null
 }
+
+/**
+ * 章番号を漢数字にする（1 → 一、10 → 十、23 → 二十三、105 → 百五）。
+ * 縦組みの原稿や投稿サイト向けに書き出すときに使う。9999 までを扱う。
+ */
+export function toKanjiNumber(n: number): string {
+  if (!Number.isInteger(n) || n < 0 || n > 9999) return String(n)
+  if (n === 0) return "〇"
+  const digits = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+  const units: Array<[number, string]> = [[1000, "千"], [100, "百"], [10, "十"]]
+  let rest = n
+  let out = ""
+  for (const [value, unit] of units) {
+    const d = Math.floor(rest / value)
+    if (d > 0) out += (d === 1 ? "" : digits[d]) + unit
+    rest %= value
+  }
+  return out + digits[rest]
+}
+
+/** 本文の章ファイル（chapters/chapter-NNN.md）を章番号順に返す */
+export async function listChapterFiles(projectDir: string): Promise<Array<{ chapter: number; path: string }>> {
+  const dir = getChaptersDir(projectDir)
+  return (await listMarkdownFiles(dir))
+    .map((f) => ({ chapter: chapterNumberFromFileName(f), path: join(dir, f) }))
+    .filter((x): x is { chapter: number; path: string } => x.chapter !== null)
+    .sort((a, b) => a.chapter - b.chapter)
+}
+
+/** 保存ファイルの見出し（`# 第N章 タイトル`）からタイトルを読む。無ければ空文字 */
+export function chapterTitleFromHeading(text: string): string {
+  const firstLine = text.replace(/\r\n/g, "\n").split("\n").find((l) => l.trim().length > 0) ?? ""
+  const m = firstLine.match(/^#[ \t]*第[ \t]*[0-9０-９〇零一二三四五六七八九十百千]+[ \t]*章[ \t　]+(\S.*)$/)
+  return m ? m[1].trim() : ""
+}
