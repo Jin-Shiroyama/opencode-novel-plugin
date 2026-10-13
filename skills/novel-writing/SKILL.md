@@ -61,10 +61,14 @@ novel_save_chapter(chapterNumber: N, title: "章タイトル", content: "本文"
 ### 手順5: 記録を更新する
 
 ```
-novel_update(action: "character-state", content: "人物の状態の変化（JSON）")
-novel_update(action: "summary", content: "更新したあらすじ")
-novel_update(action: "foreshadow", content: "伏線の更新（JSON）")
+novel_update(action: "character-state", chapterNumber: N, content: '{"updates":[{"name":"人物名","changes":{"mentalState":"…"}}]}')
+novel_update(action: "summary", chapterNumber: N, content: "この章だけのあらすじ")
+novel_update(action: "foreshadow", chapterNumber: N, content: '{"items":[{"id":"F1","status":"resolved"}]}')
 ```
+
+JSON の形はツールの説明にある例のとおりにします。形が違うと何も書き込まれず理由が返るので、直して渡し直します。
+あらすじは章ごとの節で残るので、前の章の分を書き足す必要はありません。
+最後に、シーン一覧でこの章で書いたシーンの状態を `[x]` に直します。
 
 </writing-flow>
 

@@ -8,6 +8,7 @@ import { novelSaveChapterExecute } from "./tools/save.js"
 import { novelContextExecute } from "./tools/context.js"
 import { novelGuideExecute } from "./tools/guide.js"
 import { novelUpdateExecute } from "./tools/track.js"
+import { CHARACTER_STATE_EXAMPLE, CHARACTER_STATE_KEYS, FORESHADOW_EXAMPLE, FORESHADOW_KEYS } from "./records.js"
 import { createNovelPlannerAgent } from "./agents/novel-planner.js"
 import { createNovelWriterAgent } from "./agents/novel-writer.js"
 import { createNovelEditorAgent } from "./agents/novel-editor.js"
@@ -69,7 +70,7 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
         description: `書き上げた1章を chapters ディレクトリに保存する。ファイル名の連番付けと文字数の計算を自動で行う。
 使う場面: 1章を書き終えたとき（例「第3章が書けたので保存して」）。`,
         args: {
-          chapterNumber: z.number().describe("章番号（1から数える）"),
+          chapterNumber: z.number().int().positive().describe("章番号（1から数える）"),
           title: z.string().describe("章タイトル"),
           content: z.string().describe("本文。章見出しの行は含めない"),
           updateState: z.boolean().optional().describe("保存後に記録更新の案内を出すかどうか。既定 true"),
@@ -83,7 +84,7 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
         description: `指定した章を書くための資料を一式そろえる。この章のプロットとシーン、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、執筆プロンプトを返す。章ごとに分割保存された資料（outline/chapter-002.md など）も読む。
 使う場面: ある章の執筆にとりかかる直前。優先度は P0(プロット) > P1(人物・前章とのつなぎ) > P2(伏線・あらすじ) の順。`,
         args: {
-          chapterNumber: z.number().describe("これから書く章の番号"),
+          chapterNumber: z.number().int().positive().describe("これから書く章の番号"),
           sceneId: z.string().optional().describe("シーンID（例 1.1、2.3）。渡すとそのシーンに印が付く"),
           includePrompts: z.boolean().optional().describe("執筆プロンプトを含めるかどうか。既定 true"),
         },
@@ -105,12 +106,31 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_update": tool({
+        // 形を外すと何も書かずに理由を返す。モデルが最初から正しい形で渡せるよう、
+        // 説明に形と例を載せる（以前は「JSON文字列」としか書いておらず、独自の形が多発した）
         description: `作品の記録を更新する。登場人物の状態(character-state)、これまでのあらすじ(summary)、伏線(foreshadow)の更新と、更新用プロンプトの取得(prompt)に対応。
-使う場面: 1章を書き終えたあと、人物の変化・あらすじ・伏線の回収状況を書き残すとき。`,
+使う場面: 1章を書き終えたあと、人物の変化・あらすじ・伏線の回収状況を書き残すとき。
+形が違うと何も書き込まずに ❌ と理由を返す。そのときは案内どおりに直して渡し直す。
+
+■ character-state（content は JSON。変わった項目だけを渡す）
+changes で使えるキー: ${CHARACTER_STATE_KEYS}
+${CHARACTER_STATE_EXAMPLE}
+
+■ summary（content は**この章だけ**のあらすじ。chapterNumber を必ず渡す）
+章ごとの節として残り、前の章の節は消えない。content を「## 全体の流れ」で始めると全体の要約を差し替える
+（そのときの chapterNumber は「何章までの要約か」。それより前の章を書くときは資料に載らない）。
+
+■ foreshadow（content は JSON。既存の伏線は id で指し、変える項目だけを渡す）
+使えるキー: ${FORESHADOW_KEYS}
+status は英語の4値のみ。補強しただけなら status は変えず notes に書く。
+以前の保存で入った独自のキー（detail など）は通常の更新では残る。外すときは中身を content か notes に移し、"removeKeys": ["detail"] を添える。
+${FORESHADOW_EXAMPLE}`,
         args: {
           action: z.enum(["character-state", "summary", "foreshadow", "prompt"]).describe("更新の種別"),
-          content: z.string().describe("更新内容（JSON文字列または Markdown テキスト）"),
-          chapterNumber: z.number().optional().describe("対象の章番号"),
+          content: z
+            .string()
+            .describe("更新内容。character-state / foreshadow は説明にある形の JSON 文字列、summary はこの章のあらすじ、prompt はプロンプト名"),
+          chapterNumber: z.number().int().positive().optional().describe("対象の章番号（1以上の整数）。summary では必須"),
         },
         async execute(args, context) {
           return novelUpdateExecute(args as any, context as ToolContext)

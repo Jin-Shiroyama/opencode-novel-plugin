@@ -23,6 +23,7 @@ opencode-novel-plugin/
 │   ├── constants.ts          # 既定値（DEFAULTS）と資料読み込みの上限（LIMITS）
 │   ├── utils.ts              # パス／ファイル／文書解析／進行判定／文字数
 │   ├── utils.test.ts         # ユニットテスト（node:test）
+│   ├── records.ts            # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
 │   ├── prompts.ts            # 15のRTCOプロンプト
 │   ├── templates.ts          # 15の文書雛形（Markdown 12 + JSON 3）
 │   ├── agents/
@@ -233,6 +234,34 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   本文の行を余分に削るのではなく、見出しを作る側で条件を保証する。
   仮名・漢字・約物・英数字を区別せず1文字として数え、コードポイント単位で走査する
   （原稿用紙400字詰めの換算と一致する）
+- **`novel_update` は形を確かめてから保存し、外れていれば何も書かない**（`src/records.ts`）。
+  人物の `changes` と伏線の項目は zod の `strict` で、知らないキーも断る。伏線の `status` を
+  日本語から読み替えることはしない（「補強済み」のように対応する値が無いものがあるため）。
+  ツールの説明に形と例を載せ、断るときも正しい形の例を返す。
+  検証を入れる前に保存された崩れた伏線は `splitForeshadowEntries` で分け、
+  `novel_context` と `novel_status` で別に示す（回収済みを「未回収」と知らせないため）。
+  保存済みの記録も入力と同じスキーマで確かめる（章番号の型の誤りは期限の判定を誤らせる）
+- 独自のキー（以前の保存で入った `detail` など）は通常の更新では消さない。`removeKeys` で
+  明示されたときだけ外す。題と中身がそろっていても、独自のキーの内容を移し終えた証拠にはならない
+- 更新の報告は入力の件数ではなく、更新前と比べて実際に変わったもの。変化が無ければ書かずに `ℹ️` で返す
+- 伏線の回収章（`resolvedChapter`）を `chapterNumber` で補うのは、その更新で回収済みに変わったときだけ。
+  回収済みのものへの送り直しで回収章を書き換えない
+- 章番号はツールの引数（`novel_update` / `novel_save_chapter` / `novel_context`）でも、あらすじの見出しでも
+  1以上の整数に限る。`1.5` を通すと読み戻せない見出し（第1.5章）が保存される
+- **あらすじは章ごとの節で持つ**（`## 第N章 タイトル` と `## 全体の流れ`）。
+  `novel_update(summary)` は渡された章の節だけを差し替える。丸ごと置き換えると、
+  モデルが毎回その章の分だけを渡すため前の章が消え続ける。
+  `novel_context` は直前の章から順に枠へ詰める（先頭から切ると新しい章が落ちる）。
+  書く章以降の内容は載せない。「全体の流れ」は見出しに `（第N章まで）` を残してそれで判定し、
+  旧形式の記述（`## 物語の進み` など）は、初めて書き込むときに `## 以前の形式のあらすじ（第N章まで）` へ移して
+  範囲を固定する（読み込むたびに推定すると、過去の章を足しただけで範囲が縮み先の出来事が混ざる）。
+  範囲は、本文のある最後の章・移す前の章の節の最大章番号・差し込む章の直前のうち最大のもの。
+  移す前の章の節は `upsertSummarySections` の中で必ず加える（移しただけで範囲が縮まないように）
+- 取材メモ・流派・武芸設定の統合ファイルは、**雛形から一文字も変えていなければ**資料に載せない
+  （`isUntouchedTemplate`）。角括弧が残っているだけでは除かない（一部だけ書いたメモまで落ちるため）
+- `novel_status` は「完結」（予定の章数がそろった）とは別に、あらすじの欠け、
+  本文があるのに完了になっていないシーンが残る章（一部だけのものはシーンIDも）、
+  形の崩れた伏線、分量の不足を「記録の点検」として示す
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
   目標文字数 120,000／章数 40／視点「三人称一元視点」
 - 資料読み込みの上限は `src/constants.ts` の `LIMITS` が既定値。
@@ -246,7 +275,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/*.test.ts と scripts/*.test.mjs、270件）
+pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、342件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

@@ -1,13 +1,18 @@
 import {
   safeReadFile, safeReadJson, getDocPath, getChaptersDir, getConfigPath,
-  resolveLimit, truncateChars, takeTailChars, parseChapterNumber,
+  resolveLimit, takeTailChars, parseChapterNumber,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
   clipDocParts, selectForeshadowReminders,
 } from "../utils.js"
 import type {
-  ForeshadowEntry, CharacterState, NovelConfig, DocPart, ForeshadowReminder,
+  CharacterState, NovelConfig, DocPart, ForeshadowReminder,
 } from "../utils.js"
 import { DEFAULTS, CHAPTER_WORD_TOLERANCE } from "../constants.js"
+import { buildSummaryContext, splitForeshadowEntries } from "../records.js"
+import {
+  isUntouchedTemplate, REALITY_SOURCE_TEMPLATE,
+  WUXIA_SECTS_TEMPLATE, WUXIA_MARTIAL_ARTS_TEMPLATE, WUXIA_WEAPONS_TEMPLATE,
+} from "../templates.js"
 import type { LimitKey } from "../constants.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
@@ -27,12 +32,6 @@ export async function novelContextExecute(
   const includePrompts = args.includePrompts !== false
 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
-
-  /** config.json の limits を反映して資料を切り出す（単一の文書） */
-  const clip = (text: string, key: LimitKey): string => {
-    const [body, truncated] = truncateChars(text, resolveLimit(config, key))
-    return truncated ? `${body}\n…（以下省略。全文は該当ファイルを直接参照してください）` : body
-  }
 
   /**
    * 複数の文書に枠を配分して切り出す。
@@ -115,8 +114,9 @@ export async function novelContextExecute(
 
   if (chapterNum > 1) {
     const summary = await safeReadFile(getDocPath(dir, "summary"))
-    if (summary) {
-      context += `## 📚 これまでのあらすじ (P2 — 参考)\n${clip(summary, "summary")}\n\n`
+    const summaryText = summary ? buildSummaryContext(summary, chapterNum, resolveLimit(config, "summary")) : ""
+    if (summaryText) {
+      context += `## 📚 これまでのあらすじ (P2 — 参考)\n${summaryText}\n\n`
     }
 
     const prevPadded = String(chapterNum - 1).padStart(3, "0")
@@ -129,41 +129,70 @@ export async function novelContextExecute(
     }
   }
 
-  const foreshadow = await safeReadJson<{ items: ForeshadowEntry[] }>(getDocPath(dir, "foreshadow"))
+  const foreshadow = await safeReadJson<{ items: unknown[] }>(getDocPath(dir, "foreshadow"))
   if (foreshadow && Array.isArray(foreshadow.items)) {
+    // 形の崩れた記録（日本語の status など）は急ぎぐあいを判定できない。
+    // 回収済みのものを「未回収」と知らせないよう、別に並べて直すよう促す
+    const { valid, invalid } = splitForeshadowEntries(foreshadow.items)
     // 回収済みと取り下げ済みは知らせない（selectForeshadowReminders が除く）
-    const reminders = selectForeshadowReminders(foreshadow.items, chapterNum)
-    if (reminders.length > 0) {
+    const reminders = selectForeshadowReminders(valid, chapterNum)
+    if (reminders.length > 0 || invalid.length > 0) {
       context += `## 🎯 伏線の確認 (P2 — 参考)\n`
       for (const r of reminders) {
         context += `${foreshadowIcon(r)} [${r.item.id}] ${r.item.title}: ${r.item.content}\n`
         context += `   ${foreshadowNote(r, chapterNum)}\n`
+      }
+      for (const x of invalid) {
+        const raw = foreshadow.items.find((f) => (f as { id?: unknown })?.id === x.id) as Record<string, unknown> | undefined
+        const text = raw ? String(raw.title ?? raw.detail ?? raw.content ?? "") : ""
+        context += `❓ [${x.id}] ${text}\n`
+        context += `   記録の形が崩れていて状態を判定できません（${x.problems.join("、")}）。本文と照らして novel_update で直してください\n`
       }
       context += "\n"
     }
   }
 
   // --- 流派・武芸設定（分割保存に対応） ---
-  const martialArts = await readDocParts(dir, "wuxia/martial-arts.md", "wuxia/martial-arts")
+  // 雛形のまま手を付けていない統合ファイルは載せない（分割ファイルは書き手が作ったものなので残す）
+  const withoutTemplate = (parts: DocPart[], file: string, template: string): DocPart[] =>
+    parts.filter((p) => !(p.label === file && isUntouchedTemplate(p.content, template)))
+
+  const martialArts = withoutTemplate(
+    await readDocParts(dir, "wuxia/martial-arts.md", "wuxia/martial-arts"),
+    "wuxia/martial-arts.md",
+    WUXIA_MARTIAL_ARTS_TEMPLATE,
+  )
   if (martialArts.length > 0) {
     context += `## ⚔️ 剣術・技 (P1 — 流派・武芸設定)\n`
     context += clipParts(martialArts, "martialArts") + "\n\n"
   }
 
-  const sects = await readDocParts(dir, "wuxia/sects.md", "wuxia/sects")
+  const sects = withoutTemplate(
+    await readDocParts(dir, "wuxia/sects.md", "wuxia/sects"),
+    "wuxia/sects.md",
+    WUXIA_SECTS_TEMPLATE,
+  )
   if (sects.length > 0) {
     context += `## 🏯 流派・勢力 (P1 — 流派・武芸設定)\n`
     context += clipParts(sects, "sects") + "\n\n"
   }
 
-  const weapons = await readDocParts(dir, "wuxia/weapons.md", "wuxia/weapons")
+  const weapons = withoutTemplate(
+    await readDocParts(dir, "wuxia/weapons.md", "wuxia/weapons"),
+    "wuxia/weapons.md",
+    WUXIA_WEAPONS_TEMPLATE,
+  )
   if (weapons.length > 0) {
     context += `## 🗡️ 刀剣 (P2 — 流派・武芸設定)\n`
     context += clipParts(weapons, "weapons") + "\n\n"
   }
 
   // --- 取材メモ（reality/ 配下の分割保存に対応） ---
-  const realitySource = await readDocParts(dir, "reality-source.md", "reality")
+  const realitySource = withoutTemplate(
+    await readDocParts(dir, "reality-source.md", "reality"),
+    "reality-source.md",
+    REALITY_SOURCE_TEMPLATE,
+  )
   if (realitySource.length > 0) {
     context += `## 🌍 取材メモ (P1 — 題材の手がかり)\n`
     context += clipParts(realitySource, "realitySource") + "\n\n"

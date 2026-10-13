@@ -697,10 +697,12 @@ export function parseScenes(content: string): Array<{
       continue
     }
 
-    // チェックボックスから状態を読む
-    const checkMatch = line.match(/^-\s+\[([ x\-])\]/)
+    // チェックボックスから状態を読む。
+    // モデルが箇条書きの印を重ねて `- - [ ]` と書くことがあるので、
+    // 印の重なりと字下げ、大文字の X も受け付ける
+    const checkMatch = line.match(/^\s*(?:[-*+]\s+)+\[([ xX\-])\]/)
     if (checkMatch && currentScene) {
-      const flag = checkMatch[1]
+      const flag = checkMatch[1].toLowerCase()
       if (flag === "x") currentScene.status = "completed"
       else if (flag === "-") currentScene.status = "in-progress"
       else currentScene.status = "pending"

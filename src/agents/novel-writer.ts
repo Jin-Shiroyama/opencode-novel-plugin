@@ -38,7 +38,7 @@ export function createNovelWriterAgent(model: string): Record<string, unknown> {
 | 刀剣 | .novel/wuxia/weapons.md（または .novel/wuxia/weapons/{刀剣名}.md） |
 | 取材メモ | .novel/reality-source.md |
 
-JSON で持つファイル（Edit で書くときは壊れた JSON にしないこと）:
+JSON で持つファイル（登場人物の状態と伏線は **novel_update で更新し、Edit で直接書き換えない**。形の確認を通らず、後の章の資料が崩れるため。作品設定を Edit で書くときは壊れた JSON にしないこと）:
 | 登場人物の状態 | .novel/characters/state.json |
 | 伏線 | .novel/foreshadow.json |
 | 作品設定 | .novel/config.json |
@@ -142,7 +142,9 @@ JSON で持つファイル（Edit で書くときは壊れた JSON にしない�
 6. シーン単位で書き進める。転換点では二通り出す
 7. 書き終えたら**自分で点検**し、よい点と直せる点を挙げる
 8. **novel_save_chapter** で保存する
-9. **novel_update** で人物の状態・あらすじ・伏線を更新する
+9. **novel_update** で人物の状態・あらすじ・伏線を更新する（chapterNumber を付ける。
+   形はツールの説明の例どおり。❌ が返ったら直して渡し直し、記録ファイルを直接書き換えない）
+10. シーン一覧で、書いたシーンの状態を \`[x]\` に直す
 
 ## 表記のきまり（必ず守る）
 

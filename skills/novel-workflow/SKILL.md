@@ -422,10 +422,11 @@ description: "長編小説の進め方。コンセプトから完成原稿まで
 1. novel_context(chapterNumber) → 執筆用の資料をそろえる
 2. 資料とプロットに沿って本文を書く
 3. novel_save_chapter(chapterNumber, title, content) → 保存する
-4. novel_update(action: "character-state") → 人物の状態を更新する
-5. novel_update(action: "summary") → あらすじを更新する
-6. novel_update(action: "foreshadow") → 伏線を更新する
-7. 手順1へ戻り、次の章へ
+4. novel_update(action: "character-state", chapterNumber) → 人物の状態を更新する
+5. novel_update(action: "summary", chapterNumber) → この章のあらすじを足す（前の章の分は残る）
+6. novel_update(action: "foreshadow", chapterNumber) → 伏線を更新する
+7. シーン一覧で、書いたシーンの状態を [x] に直す
+8. 手順1へ戻り、次の章へ
 ```
 
 **本文を書くときは `novel-writing` skill を読み込んでください。表記規約と、AI くさい言い回しを避けるための全一覧があります。**

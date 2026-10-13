@@ -369,20 +369,12 @@ export const SCENES_TEMPLATE = `# 『{title}』シーン一覧
 
 export const SUMMARY_TEMPLATE = `# 『{title}』これまでのあらすじ
 
-> 章が進むたびに書き換えます。全体で2,000文字以内に収めてください。
-> 1章書き終えるごとに更新します。
+> 章ごとに「## 第N章 タイトル」の節で残します。1章書き終えるごとに
+> novel_update(action: "summary", chapterNumber: N) でその章の節だけを足します（前の章の節は残ります）。
+> 執筆用の資料には、直前の章から順に枠いっぱいまで載せます。枠から落ちた古い章の筋は
+> 「全体の流れ」で補います。章が増えてきたら、5章ごとを目安に書き直してください。
 
-## 物語の進み
-
-[第1章ができたら書き入れます]
-
-## 主要人物の現状
-
-[人物が登場したら書き入れます]
-
-## まだ回収していない伏線
-
-[伏線を張ったら書き入れます]
+## 全体の流れ
 `
 
 // ============================================================
@@ -660,4 +652,24 @@ export const JSON_TEMPLATES = {
  */
 export function fillTemplateVars(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? `{${key}}`))
+}
+
+/**
+ * 雛形から一文字も書き換えていないかどうか。
+ *
+ * novel_init は取材メモなどを中身の無い雛形として先に作る。そのまま資料に
+ * 載せると、角括弧だけの文書が毎章の資料を占める。とはいえ角括弧が残って
+ * いるだけで除くと、一部だけ書いた有用なメモまで落ちる。そこで「雛形と同じ」
+ * ときだけを未使用とみなす。
+ *
+ * `{title}` などの差し込み箇所は何が入っていても一致とみなす（作成後に
+ * config.json の題を変えても判定がずれないように）。空白の違いは無視する。
+ */
+export function isUntouchedTemplate(content: string, template: string): boolean {
+  const normalize = (s: string) => s.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "").trim()
+  const pattern = normalize(template)
+    .split(/\{\w+\}/)
+    .map((piece) => piece.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[^\\n]*")
+  return new RegExp(`^${pattern}$`).test(normalize(content))
 }

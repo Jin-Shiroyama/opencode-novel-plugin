@@ -6,8 +6,10 @@ import {
   countWords, progressBar,
   determinePhase, usesMartialArtsSetting, isDocFilled,
   hasOutlineDetailed, hasSceneList, collectScenes, stripChapterHeading,
+  chapterNumberFromFileName, sceneChapterNumber,
 } from "../utils.js"
-import type { NovelConfig, ForeshadowEntry, DocType, Phase } from "../utils.js"
+import type { NovelConfig, DocType, Phase } from "../utils.js"
+import { splitForeshadowEntries, summaryChapters, formatChapterRanges } from "../records.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
@@ -64,7 +66,12 @@ export async function novelStatusExecute(
     report += `📅 開始日: ${new Date(config.createdAt).toLocaleDateString("ja-JP")}\n\n`
   }
 
-  report += `📍 現在の段階: ${PHASE_LABELS[phase] ?? phase}\n\n`
+  report += `📍 現在の段階: ${PHASE_LABELS[phase] ?? phase}\n`
+  if (phase === "completed") {
+    // 完結は「予定の章数がそろった」という意味でしかない。分量と記録は下で別に示す
+    report += `   （予定の章数がそろった状態です。分量と記録の点検は下を参照）\n`
+  }
+  report += `\n`
 
   // 各工程の文書がそろっているか。
   // getDocPath に DocType を渡す（以前はファイル名を渡していたため
@@ -125,6 +132,11 @@ export async function novelStatusExecute(
   }
 
   const chaptersDir = getChaptersDir(dir)
+  // 本文がある章の番号（記録の点検に使う）
+  const writtenChapters = (await listMarkdownFiles(chaptersDir))
+    .map(chapterNumberFromFileName)
+    .filter((n): n is number => n !== null)
+    .sort((a, b) => a - b)
   if (existsSync(chaptersDir)) {
     const chapters = await listMarkdownFiles(chaptersDir)
     if (chapters.length > 0) {
@@ -154,15 +166,64 @@ export async function novelStatusExecute(
     }
   }
 
-  const foreshadow = await safeReadJson<{ items: ForeshadowEntry[] }>(getDocPath(dir, "foreshadow"))
-  if (foreshadow && foreshadow.items.length > 0) {
-    const planted = foreshadow.items.filter((f) => f.status === "planted").length
-    const resolved = foreshadow.items.filter((f) => f.status === "resolved").length
-    const pending = foreshadow.items.filter((f) => f.status === "pending").length
-    const abandoned = foreshadow.items.filter((f) => f.status === "abandoned").length
-    report += `\n🎯 伏線: 張り済み ${planted} / 回収済み ${resolved} / 未着手 ${pending}`
-    if (abandoned > 0) report += ` / 取り下げ ${abandoned}`
+  const foreshadow = await safeReadJson<{ items: unknown[] }>(getDocPath(dir, "foreshadow"))
+  const { valid: foreshadowItems, invalid: brokenForeshadow } = splitForeshadowEntries(
+    Array.isArray(foreshadow?.items) ? foreshadow.items : [],
+  )
+  if (foreshadowItems.length + brokenForeshadow.length > 0) {
+    const count = (status: string) => foreshadowItems.filter((f) => f.status === status).length
+    report += `\n🎯 伏線: 張り済み ${count("planted")} / 回収済み ${count("resolved")} / 未着手 ${count("pending")}`
+    if (count("abandoned") > 0) report += ` / 取り下げ ${count("abandoned")}`
+    if (brokenForeshadow.length > 0) report += ` / 形の崩れた記録 ${brokenForeshadow.length}`
     report += `\n`
+  }
+
+  // --- 記録の点検 ---
+  // 章数がそろっても、あらすじや伏線の記録が追いついていなければ
+  // 後の章や推敲で資料が食い違う。気づけるよう、問題があるときだけ並べる。
+  const issues: string[] = []
+  if (writtenChapters.length > 0) {
+    const summary = await safeReadFile(getDocPath(dir, "summary"))
+    const recorded = new Set(summary ? summaryChapters(summary) : [])
+    const missing = writtenChapters.filter((n) => !recorded.has(n))
+    if (missing.length > 0) {
+      issues.push(`あらすじの記録が無い章: ${formatChapterRanges(missing)}`)
+    }
+
+    // 本文があるのに、完了になっていないシーンが残っている章。
+    // 1つでも残っていれば拾う（全シーン未完了の章だけを見ると、書き残しを見落とす）。
+    // 全シーンが残っている章はまとめ、一部だけのものはシーンIDを示す
+    const allOpen: number[] = []
+    const partlyOpen: string[] = []
+    for (const n of writtenChapters) {
+      const mine = scenes.filter((s) => sceneChapterNumber(s.id) === n)
+      const open = mine.filter((s) => s.status !== "completed")
+      if (open.length === 0) continue
+      if (open.length === mine.length) allOpen.push(n)
+      else partlyOpen.push(`第${n}章（${open.map((s) => s.id).join(", ")}）`)
+    }
+    if (allOpen.length > 0 || partlyOpen.length > 0) {
+      const parts = [...(allOpen.length > 0 ? [`${formatChapterRanges(allOpen)}（全シーン）`] : []), ...partlyOpen]
+      issues.push(`本文はあるが、完了になっていないシーンが残っている章: ${parts.join("、")}（書いたシーンはシーン一覧の状態を [x] に）`)
+    }
+  }
+  for (const x of brokenForeshadow) {
+    issues.push(`伏線 ${x.id} の記録の形が崩れています: ${x.problems.join("、")}`)
+  }
+  if (config?.targetWords && phase === "completed") {
+    // 分量は章数とは別に示す
+    let total = 0
+    for (const n of writtenChapters) {
+      const text = await safeReadFile(join(chaptersDir, `chapter-${String(n).padStart(3, "0")}.md`))
+      if (text) total += countWords(stripChapterHeading(text))
+    }
+    if (total < config.targetWords) {
+      issues.push(`分量が目標に届いていません: ${total.toLocaleString("ja-JP")} / ${config.targetWords.toLocaleString("ja-JP")}文字（${Math.round((total / config.targetWords) * 100)}%）`)
+    }
+  }
+  if (issues.length > 0) {
+    report += `\n🗂️ 記録の点検:\n`
+    for (const issue of issues) report += `  ⚠️ ${issue}\n`
   }
 
   report += `\n💡 次の一手: ${PHASE_HINTS[phase] ?? ""}\n`

@@ -86,11 +86,26 @@ novel_save_chapter(
 
 ### 六、記録を更新する
 
+3つとも、この章で変わったことだけを渡します。形はツールの説明にある例のとおりにします。
+形が違うと何も書き込まれず ❌ と理由が返るので、案内どおりに直して渡し直します。
+**`.novel/characters/state.json` や `.novel/foreshadow.json` を Edit で直接書き換えて済ませない**でください
+（形の確認を通らず、後の章の資料が崩れます）。
+
 ```
-novel_update(action: "character-state", content: "人物の状態の変化（JSON）")
-novel_update(action: "summary", content: "更新したあらすじ")
-novel_update(action: "foreshadow", content: "伏線の更新（JSON）")
+novel_update(action: "character-state", chapterNumber: {N}, content: '{"updates":[{"name":"人物名","changes":{"mentalState":"…","events":["…"]}}]}')
+novel_update(action: "summary", chapterNumber: {N}, content: "この章だけのあらすじ（300〜600文字。前の章の分は書かない）")
+novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id":"F1","status":"resolved"}]}')
 ```
+
+- 人物の `changes` で使えるキーは status / role / physicalState / mentalState / items / abilities / relationships / events / lastUpdatedChapter だけ
+- 伏線の status は `pending` / `planted` / `resolved` / `abandoned` だけ。補強しただけなら status は変えず `notes` に書く
+- 新しい伏線は `title` と `content` を付けて渡す（id は省略できる）
+
+### 六の二、シーンの状態を直す
+
+シーン一覧（`.novel/scenes/chapter-{NNN}.md`、無ければ `.novel/scenes.md`）で、
+この章で**実際に書いた**シーンの状態を `[x]` に直します。
+書かなかった・途中で終わったシーンは `[ ]` や `[-]` のまま残し、報告で触れます。
 
 ### 七、報告する
 

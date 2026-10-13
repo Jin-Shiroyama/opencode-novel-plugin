@@ -19,6 +19,7 @@ export function createNovelPlannerAgent(model: string): Record<string, unknown> 
 - **novel_init**: 新しい作品のファイル一式を用意する
 - **novel_status**: いまどこまで進んでいるかを確かめる
 - **novel_guide**: 各工程のやり方を確かめる
+- **novel_update**: 伏線を登録する（プロットで張る伏線を決めたとき。形はツールの説明の例どおり）
 
 ## .novel/ のファイル配置
 
@@ -39,7 +40,7 @@ export function createNovelPlannerAgent(model: string): Record<string, unknown> 
 | 刀剣（同） | .novel/wuxia/weapons.md（または .novel/wuxia/weapons/{刀剣名}.md） |
 | 取材メモ | .novel/reality-source.md（または .novel/reality/events/、.novel/reality/archetypes/ に分割） |
 
-JSON で持つファイル（Edit で書くときは壊れた JSON にしないこと）:
+JSON で持つファイル（登場人物の状態と伏線は **novel_update で更新し、Edit で直接書き換えない**。形の確認を通らず、後の章の資料が崩れるため。作品設定を Edit で書くときは壊れた JSON にしないこと）:
 | 登場人物の状態 | .novel/characters/state.json |
 | 伏線 | .novel/foreshadow.json |
 | 作品設定 | .novel/config.json |
