@@ -8,7 +8,8 @@ import {
   parseCharacterUpdates, parseForeshadowUpdates, parseSummaryInput, upsertSummarySections,
   summaryChapters, splitForeshadowEntries, formatChapterRanges,
 } from "../records.js"
-import type { CharacterChanges, SummarySection } from "../records.js"
+import { readCharacterStateRecord, readForeshadowRecord, readTextRecord, describeBrokenRecord } from "../records.js"
+import type { CharacterChanges, SummarySection, RecordFile } from "../records.js"
 import type { ToolContext } from "../index.js"
 
 interface UpdateArgs {
@@ -44,6 +45,18 @@ export async function novelUpdateExecute(
 }
 
 /**
+ * 記録ファイルが壊れているときの断り。元のファイルには触れない。
+ *
+ * 空の記録として続けると、壊れたファイルを新しい内容だけで上書きして
+ * それまでの記録がすべて消える。直してから渡し直してもらう。
+ */
+function refuseBroken(label: string, file: string, state: Extract<RecordFile<unknown>, { kind: "broken" }>): string {
+  return `❌ ${label}は更新していません（元のファイルはそのまま残しています）。
+  - ${describeBrokenRecord(file, state)}
+直してから、同じ内容をもう一度渡してください。`
+}
+
+/**
  * 登場人物の状態を更新する。
  *
  * 形が1か所でも違えば何も書かない（一部だけ反映されると、どこまで
@@ -58,8 +71,9 @@ async function updateCharacterState(dir: string, content: string, chapterNumber?
   if (!parsed.ok) return parsed.message
 
   const filePath = getDocPath(dir, "character-state")
-  const current = await safeReadJson<{ characters: CharacterState[] }>(filePath)
-  const characters = current?.characters ?? []
+  const current = await readCharacterStateRecord(filePath)
+  if (current.kind === "broken") return refuseBroken("登場人物の状態", ".novel/characters/state.json", current)
+  const characters = current.kind === "ok" ? current.value.characters : []
   const lines: string[] = []
   let added = 0
   let changed = 0
@@ -169,7 +183,9 @@ async function updateSummary(dir: string, content: string, chapterNumber?: numbe
   }
 
   const filePath = getDocPath(dir, "summary")
-  const current = (await safeReadFile(filePath)) ?? ""
+  const read = await readTextRecord(filePath)
+  if (read.kind === "broken") return refuseBroken("あらすじ", ".novel/summary.md", read)
+  const current = read.kind === "ok" ? read.value : ""
   // 旧形式の記述を移すときの範囲。旧形式は章を書くたびに全体を書き直していたので、
   // 本文のある最後の章までを含みうる。差し込む章の直前のほうが大きければそちらを採る。
   // 既存の章の節の最大章番号は upsertSummarySections の中で必ず加える
@@ -203,8 +219,10 @@ async function chapterTitle(dir: string, chapter: number): Promise<string | null
  */
 async function updateForeshadow(dir: string, content: string, chapterNumber?: number): Promise<string> {
   const filePath = getDocPath(dir, "foreshadow")
-  const current = await safeReadJson<{ items: ForeshadowEntry[] }>(filePath)
-  const items = current?.items ?? []
+  const current = await readForeshadowRecord(filePath)
+  if (current.kind === "broken") return refuseBroken("伏線の記録", ".novel/foreshadow.json", current)
+  // 項目ごとの不正（日本語の status など）はここでは断らない。id を指して渡し直せば直せる
+  const items = (current.kind === "ok" ? current.value.items : []) as unknown as ForeshadowEntry[]
 
   const parsed = parseForeshadowUpdates(content, new Set(items.map((f) => f.id)))
   if (!parsed.ok) return parsed.message

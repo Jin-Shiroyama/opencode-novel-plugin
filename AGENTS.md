@@ -201,6 +201,12 @@ opencode-novel-plugin/
 使い、同じ章が統合ファイルと分割の両方にあるときは分割側だけを数えます
 （単純に連結すると、分割へ移したあとも統合側に残る古い記述を二重に数える）。
 
+`novel_status` の本文の集計も `listChapterFiles`（同じ定義）で章ファイルの一覧を一度だけ取り、
+返されたパスを読んだ1つの集計値を、章数・累計・平均・分量の不足表示に使う。`chapters/` の
+章ファイル以外の `.md` は数えない（以前は累計だけ全 `.md` を数え、同じ画面で数字が食い違っていた）。
+読み込めない章があるときは、章数を「章ファイル N章 ／ 集計できた本文 M章」と分けて示す
+（章ファイルの数は `determinePhase` と同じ。累計と平均は読めた M 章から出す）。
+
 章ファイルと認めるのは、`scenes/` や `outline/` の**直下**にある
 `chapter-<数字>.md` だけです（`utils.ts` の `CHAPTER_FILE_PATTERN`）。
 `backup-chapter-002.md`、`chapter-002.md.bak`、`scenes/old/chapter-002.md` は
@@ -239,6 +245,12 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   本文の行を余分に削るのではなく、見出しを作る側で条件を保証する。
   仮名・漢字・約物・英数字を区別せず1文字として数え、コードポイント単位で走査する
   （原稿用紙400字詰めの換算と一致する）
+- **記録ファイルは更新の前に厳密に読み直す**（`readForeshadowRecord` / `readCharacterStateRecord` /
+  `readTextRecord`）。「無い」「読み込めない」「構文エラー」「形の異常」を区別し、後ろ3つでは元のファイルに
+  触れず更新を断る。共通の `safeReadJson` は無いときも壊れているときも null を返すので、更新処理では使わない
+  （空とみなすと、壊れたファイルを新しい1件だけで上書きして記録が消える）。形として確かめるのは、更新処理が
+  安全に動くのに要るものだけ。伏線の項目ごとの不正は断らない（渡し直して直す経路を塞がないため）。
+  `novel_status` / `novel_context` も同じ読み込みを使い、壊れた記録を空と区別して示す
 - **`novel_update` は形を確かめてから保存し、外れていれば何も書かない**（`src/records.ts`）。
   人物の `changes` と伏線の項目は zod の `strict` で、知らないキーも断る。伏線の `status` を
   日本語から読み替えることはしない（「補強済み」のように対応する値が無いものがあるため）。
@@ -290,7 +302,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、386件）
+pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、402件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

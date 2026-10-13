@@ -1,15 +1,18 @@
 import { existsSync } from "node:fs"
-import { join } from "node:path"
+import { basename } from "node:path"
 import {
   getNovelDir, getDocPath, getChaptersDir, getConfigPath,
   safeReadFile, safeReadJson, listMarkdownFiles,
   countWords, progressBar,
   determinePhase, usesMartialArtsSetting, isDocFilled,
   hasOutlineDetailed, hasSceneList, collectScenes, stripChapterHeading,
-  chapterNumberFromFileName, sceneChapterNumber,
+  sceneChapterNumber, listChapterFiles,
 } from "../utils.js"
 import type { NovelConfig, DocType, Phase } from "../utils.js"
-import { splitForeshadowEntries, summaryChapters, formatChapterRanges } from "../records.js"
+import {
+  splitForeshadowEntries, summaryChapters, formatChapterRanges,
+  readForeshadowRecord, readCharacterStateRecord, readTextRecord, describeBrokenRecord,
+} from "../records.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
@@ -131,46 +134,70 @@ export async function novelStatusExecute(
     }
   }
 
+  // 本文の集計。章ファイル（chapters/chapter-NNN.md）の一覧を一度だけ取り、
+  // 返された実際のパスを読んで数える。章数・累計・平均・分量の不足表示は、
+  // すべてこの1つの集計値を使う。
+  //
+  // 以前は累計を chapters/ の .md すべてで、段階の判定や分量の不足を章ファイルだけで
+  // 数えていたため、推敲メモなどを置くと同じ画面の中で数字が食い違っていた。
   const chaptersDir = getChaptersDir(dir)
-  // 本文がある章の番号（記録の点検に使う）
-  const writtenChapters = (await listMarkdownFiles(chaptersDir))
-    .map(chapterNumberFromFileName)
-    .filter((n): n is number => n !== null)
-    .sort((a, b) => a - b)
-  if (existsSync(chaptersDir)) {
-    const chapters = await listMarkdownFiles(chaptersDir)
-    if (chapters.length > 0) {
-      let totalWords = 0
-      report += `\n✍️ 執筆済み: ${chapters.length}章\n`
-      for (const ch of chapters) {
-        const content = await safeReadFile(join(chaptersDir, ch))
-        if (!content) continue
-        // 保存ツールが付けた章見出しは数えない。
-        // 本文だけを数える規則に、保存時の報告と揃える
-        const words = countWords(stripChapterHeading(content))
-        totalWords += words
-        if (detailed) {
-          report += `  📄 ${ch}: ${words.toLocaleString("ja-JP")}文字\n`
-        }
-      }
-      report += `\n📊 累計: ${totalWords.toLocaleString("ja-JP")}文字`
-      if (config?.targetWords) {
-        const percent = Math.round((totalWords / config.targetWords) * 100)
-        report += ` / ${config.targetWords.toLocaleString("ja-JP")}文字 (${percent}%)`
-      }
-      report += "\n"
-      if (config?.chapterCount) {
-        const perChapter = Math.round(totalWords / chapters.length)
-        report += `📐 1章平均: ${perChapter.toLocaleString("ja-JP")}文字\n`
-      }
+  const chapterFiles = await listChapterFiles(dir)
+  const writtenChapters = chapterFiles.map((f) => f.chapter)
+  const counted: Array<{ chapter: number; file: string; words: number }> = []
+  const unreadableChapters: number[] = []
+  for (const f of chapterFiles) {
+    const content = await safeReadFile(f.path)
+    if (content === null) {
+      unreadableChapters.push(f.chapter)
+      continue
+    }
+    // 保存ツールが付けた章見出しは数えない。本文だけを数える規則に、保存時の報告と揃える
+    counted.push({ chapter: f.chapter, file: basename(f.path), words: countWords(stripChapterHeading(content)) })
+  }
+  const totalWords = counted.reduce((sum, c) => sum + c.words, 0)
+  // chapters/ にある章ファイル以外の .md（推敲メモなど）は数えない。数えないことを示す
+  const chapterFileNames = new Set(chapterFiles.map((f) => basename(f.path)))
+  const otherFiles = (await listMarkdownFiles(chaptersDir)).filter((f) => !chapterFileNames.has(f))
+
+  if (chapterFiles.length > 0) {
+    // 章ファイルの数（段階の判定と同じ数）と、累計・平均の元になった章の数を分けて示す。
+    // 読めない章があると両者が食い違うため、そのときは並べて書く
+    report +=
+      unreadableChapters.length > 0
+        ? `\n✍️ 執筆済み: 章ファイル ${chapterFiles.length}章 ／ 集計できた本文 ${counted.length}章\n`
+        : `\n✍️ 執筆済み: ${chapterFiles.length}章\n`
+    if (detailed) {
+      for (const c of counted) report += `  📄 ${c.file}: ${c.words.toLocaleString("ja-JP")}文字\n`
+    }
+    if (unreadableChapters.length > 0) {
+      report += `  ⚠️ 読み込めず数えていない章: ${formatChapterRanges(unreadableChapters)}\n`
+    }
+    report += `\n📊 累計: ${totalWords.toLocaleString("ja-JP")}文字`
+    if (config?.targetWords) {
+      const percent = Math.round((totalWords / config.targetWords) * 100)
+      report += ` / ${config.targetWords.toLocaleString("ja-JP")}文字 (${percent}%)`
+    }
+    report += "\n"
+    if (counted.length > 0) {
+      const perChapter = Math.round(totalWords / counted.length)
+      report += `📐 1章平均: ${perChapter.toLocaleString("ja-JP")}文字\n`
     }
   }
+  if (otherFiles.length > 0) {
+    report += `ℹ️ chapters/ にある章以外のファイルは数えていません: ${otherFiles.join("、")}\n`
+  }
 
-  const foreshadow = await safeReadJson<{ items: unknown[] }>(getDocPath(dir, "foreshadow"))
+  // 記録ファイルそのものが壊れているとき（構文エラーなど）は、空の記録と区別して示す。
+  // 空として数えると「伏線 0件」に見え、更新が断られる理由にも気づけない
+  const issues: string[] = []
+  const foreshadowRecord = await readForeshadowRecord(getDocPath(dir, "foreshadow"))
   const { valid: foreshadowItems, invalid: brokenForeshadow } = splitForeshadowEntries(
-    Array.isArray(foreshadow?.items) ? foreshadow.items : [],
+    foreshadowRecord.kind === "ok" ? foreshadowRecord.value.items : [],
   )
-  if (foreshadowItems.length + brokenForeshadow.length > 0) {
+  if (foreshadowRecord.kind === "broken") {
+    report += `\n🎯 伏線: ⚠️ 記録を読めません（下の「記録の点検」を参照）\n`
+    issues.push(`${describeBrokenRecord(".novel/foreshadow.json", foreshadowRecord)}。直すまで伏線の更新はできません`)
+  } else if (foreshadowItems.length + brokenForeshadow.length > 0) {
     const count = (status: string) => foreshadowItems.filter((f) => f.status === status).length
     report += `\n🎯 伏線: 張り済み ${count("planted")} / 回収済み ${count("resolved")} / 未着手 ${count("pending")}`
     if (count("abandoned") > 0) report += ` / 取り下げ ${count("abandoned")}`
@@ -181,13 +208,22 @@ export async function novelStatusExecute(
   // --- 記録の点検 ---
   // 章数がそろっても、あらすじや伏線の記録が追いついていなければ
   // 後の章や推敲で資料が食い違う。気づけるよう、問題があるときだけ並べる。
-  const issues: string[] = []
+  const stateRecord = await readCharacterStateRecord(getDocPath(dir, "character-state"))
+  if (stateRecord.kind === "broken") {
+    issues.push(`${describeBrokenRecord(".novel/characters/state.json", stateRecord)}。直すまで人物の状態の更新はできません`)
+  }
+  const summaryRecord = await readTextRecord(getDocPath(dir, "summary"))
+  if (summaryRecord.kind === "broken") {
+    issues.push(`${describeBrokenRecord(".novel/summary.md", summaryRecord)}。直すまであらすじの更新はできません`)
+  }
   if (writtenChapters.length > 0) {
-    const summary = await safeReadFile(getDocPath(dir, "summary"))
-    const recorded = new Set(summary ? summaryChapters(summary) : [])
-    const missing = writtenChapters.filter((n) => !recorded.has(n))
-    if (missing.length > 0) {
-      issues.push(`あらすじの記録が無い章: ${formatChapterRanges(missing)}`)
+    // あらすじが読めないときは、欠けている章を判断できないので数えない
+    if (summaryRecord.kind !== "broken") {
+      const recorded = new Set(summaryRecord.kind === "ok" ? summaryChapters(summaryRecord.value) : [])
+      const missing = writtenChapters.filter((n) => !recorded.has(n))
+      if (missing.length > 0) {
+        issues.push(`あらすじの記録が無い章: ${formatChapterRanges(missing)}`)
+      }
     }
 
     // 本文があるのに、完了になっていないシーンが残っている章。
@@ -210,16 +246,12 @@ export async function novelStatusExecute(
   for (const x of brokenForeshadow) {
     issues.push(`伏線 ${x.id} の記録の形が崩れています: ${x.problems.join("、")}`)
   }
-  if (config?.targetWords && phase === "completed") {
-    // 分量は章数とは別に示す
-    let total = 0
-    for (const n of writtenChapters) {
-      const text = await safeReadFile(join(chaptersDir, `chapter-${String(n).padStart(3, "0")}.md`))
-      if (text) total += countWords(stripChapterHeading(text))
-    }
-    if (total < config.targetWords) {
-      issues.push(`分量が目標に届いていません: ${total.toLocaleString("ja-JP")} / ${config.targetWords.toLocaleString("ja-JP")}文字（${Math.round((total / config.targetWords) * 100)}%）`)
-    }
+  if (unreadableChapters.length > 0) {
+    issues.push(`読み込めない章があります: ${formatChapterRanges(unreadableChapters)}（累計と平均には含めていません。章ファイルとしては数えるので、段階の判定には入ります）`)
+  }
+  if (config?.targetWords && phase === "completed" && totalWords < config.targetWords) {
+    // 分量は章数とは別に示す。数は上の累計と同じ集計値を使う
+    issues.push(`分量が目標に届いていません: ${totalWords.toLocaleString("ja-JP")} / ${config.targetWords.toLocaleString("ja-JP")}文字（${Math.round((totalWords / config.targetWords) * 100)}%）`)
   }
   if (issues.length > 0) {
     report += `\n🗂️ 記録の点検:\n`

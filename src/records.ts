@@ -10,9 +10,10 @@
  * ここでは形を厳密に確かめ、外れていれば何も書かずに理由を返す。
  */
 
+import { readFile } from "node:fs/promises"
 import { z } from "zod"
 import { parseChapterNumber } from "./utils.js"
-import type { ForeshadowEntry } from "./utils.js"
+import type { ForeshadowEntry, CharacterState } from "./utils.js"
 
 // ============================================================
 // 検証エラーの表示
@@ -753,4 +754,114 @@ function clipHead(text: string, limit: number): string {
   const chars = [...text]
   if (chars.length <= limit) return text
   return chars.slice(0, limit).join("") + "\n…（以下省略。全文は .novel/summary.md を参照）"
+}
+
+// ============================================================
+// 記録ファイルの読み込み（更新と点検用）
+// ============================================================
+
+/**
+ * 記録ファイルを読んだ結果。
+ *
+ *   ok       読めて、形も確かめた
+ *   missing  ファイルが無い（空の記録として扱ってよい）
+ *   broken   読み込めない／JSON として読めない／形が違う
+ *
+ * 共通の safeReadJson は、ファイルが無いときも壊れているときも null を返す。
+ * 更新処理がそれを空の記録とみなすと、壊れたファイルを新しい1件だけで
+ * 上書きし、記録が丸ごと消える（id も F1 から振り直される）。
+ * 更新の前には必ずこちらで読み、broken なら書かずに断る。
+ */
+export type RecordFile<T> =
+  | { kind: "ok"; value: T }
+  | { kind: "missing" }
+  | { kind: "broken"; reason: "unreadable" | "syntax" | "structure"; detail: string }
+
+/** 読めないときのファイルの状態を、直し方の案内つきで1文にする */
+export function describeBrokenRecord(file: string, state: Extract<RecordFile<unknown>, { kind: "broken" }>): string {
+  switch (state.reason) {
+    case "unreadable":
+      return `${file} を読み込めません（${state.detail}）。ファイルの権限や、ディレクトリになっていないかを確かめてください`
+    case "syntax":
+      return `${file} が JSON として読めません（${state.detail}）。ファイルを開いて構文を直してください（末尾の余計なカンマ、括弧や引用符の閉じ忘れなど）`
+    case "structure":
+      return `${file} の形が違います（${state.detail}）`
+  }
+}
+
+async function readRaw(path: string): Promise<{ ok: true; text: string } | { ok: false; missing: boolean; detail: string }> {
+  try {
+    return { ok: true, text: await readFile(path, "utf-8") }
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code
+    return { ok: false, missing: code === "ENOENT", detail: code ?? String(e) }
+  }
+}
+
+/** 文章の記録（summary.md）を読む。中身の形は問わない */
+export async function readTextRecord(path: string): Promise<RecordFile<string>> {
+  const raw = await readRaw(path)
+  if (raw.ok) return { kind: "ok", value: raw.text }
+  return raw.missing ? { kind: "missing" } : { kind: "broken", reason: "unreadable", detail: raw.detail }
+}
+
+async function readJsonRecord<T>(path: string, schema: z.ZodType<T>): Promise<RecordFile<T>> {
+  const raw = await readRaw(path)
+  if (!raw.ok) return raw.missing ? { kind: "missing" } : { kind: "broken", reason: "unreadable", detail: raw.detail }
+  let json: unknown
+  try {
+    json = JSON.parse(raw.text)
+  } catch (e) {
+    return { kind: "broken", reason: "syntax", detail: e instanceof Error ? e.message : String(e) }
+  }
+  const result = schema.safeParse(json)
+  if (!result.success) {
+    return { kind: "broken", reason: "structure", detail: formatIssues(result.error).slice(0, 5).join(" / ") }
+  }
+  return { kind: "ok", value: result.data }
+}
+
+/**
+ * 伏線の記録（foreshadow.json）の形。
+ *
+ * 確かめるのは、更新処理が安全に動くのに要る形だけ（最上位の items 配列と、
+ * 各項目がオブジェクトであること）。項目ごとの不正（日本語の status や
+ * 独自のキー）はここでは断らない。断ると、novel_update で渡し直して直す
+ * 経路まで塞いでしまうため。項目ごとの不正は splitForeshadowEntries で別に示す。
+ */
+const foreshadowFileSchema = z.object({
+  items: z.array(z.record(z.unknown())),
+}).passthrough()
+
+export function readForeshadowRecord(path: string): Promise<RecordFile<{ items: Array<Record<string, unknown>> }>> {
+  return readJsonRecord(path, foreshadowFileSchema)
+}
+
+/**
+ * 登場人物の状態（state.json）の形。
+ *
+ * 更新処理は名前で人物を探し、所持品などの配列に足し引きする。名前が無い、
+ * 配列のはずの項目が文字列、といった形のままだと、更新が誤った値を書く
+ * （文字列を配列として展開すると一文字ずつに割れる）。そこで項目の型まで
+ * 確かめる。status や role の値の誤りは断らない（changes で直せるため）。
+ */
+const storedCharacterSchema = z
+  .object({
+    name: z.string().min(1),
+    status: z.string().optional(),
+    role: z.string().optional(),
+    physicalState: z.string().optional(),
+    mentalState: z.string().optional(),
+    items: z.array(z.string()).optional(),
+    abilities: z.array(z.string()).optional(),
+    relationships: z.record(z.string()).optional(),
+    events: z.array(z.string()).optional(),
+    lastUpdatedChapter: z.number().optional(),
+  })
+  .passthrough()
+
+const characterFileSchema = z.object({ characters: z.array(storedCharacterSchema) }).passthrough()
+
+export function readCharacterStateRecord(path: string): Promise<RecordFile<{ characters: CharacterState[] }>> {
+  return readJsonRecord(path, characterFileSchema) as Promise<RecordFile<{ characters: CharacterState[] }>>
 }

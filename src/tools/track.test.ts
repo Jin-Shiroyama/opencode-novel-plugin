@@ -423,3 +423,145 @@ describe("境界条件", () => {
     assert.match(ctx12, /相棒が死亡/)
   })
 })
+
+describe("壊れた記録ファイルは上書きしない", () => {
+  // 構文エラー・形の異常・読み込めない、の3つ。いずれも空の記録として扱うと、
+  // 新しい内容だけで上書きしてそれまでの記録が消える
+  const BROKEN_SYNTAX = '{"items":[{"id":"F1","title":"花","content":"青い花","status":"planted"},]}'
+  const NEW_ITEM = { items: [{ title: "光", content: "空", status: "planted" }] }
+
+  test("伏線: 構文エラーなら断り、元のファイルを残す", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "foreshadow.json": BROKEN_SYNTAX })
+    const out = await update(dir, "foreshadow", NEW_ITEM)
+    assert.match(out, /^❌ 伏線の記録は更新していません（元のファイルはそのまま残しています）/)
+    assert.match(out, /JSON として読めません/)
+    assert.equal(read(dir, "foreshadow.json"), BROKEN_SYNTAX)
+  })
+
+  for (const [name, body] of [
+    ["items が null", '{"items": null}'],
+    ["最上位が配列", "[]"],
+    ["項目がオブジェクトでない", '{"items": [null]}'],
+    ["空のファイル", ""],
+  ] as const) {
+    test(`伏線: 形の異常（${name}）なら断り、元のファイルを残す`, async () => {
+      const dir = makeProject({ "config.json": CONFIG, "foreshadow.json": body })
+      assert.match(await update(dir, "foreshadow", NEW_ITEM), /^❌ 伏線の記録は更新していません/)
+      assert.equal(read(dir, "foreshadow.json"), body)
+    })
+  }
+
+  test("伏線: 項目ごとの不正は断らず、渡し直して直せる", async () => {
+    const body = JSON.stringify({ items: [{ id: "F1", title: "花", content: "青い花", status: "回収済み" }] })
+    const dir = makeProject({ "config.json": CONFIG, "foreshadow.json": body })
+    const out = await update(dir, "foreshadow", { items: [{ id: "F1", status: "resolved" }] }, 12)
+    assert.match(out, /^✅/)
+    assert.equal(JSON.parse(read(dir, "foreshadow.json")).items[0].status, "resolved")
+  })
+
+  for (const [name, body] of [
+    ["構文エラー", '{"characters": [{"name": "レン",}]}'],
+    ["characters が無い", '{"people": []}'],
+    ["名前が無い", '{"characters": [{"mentalState": "不安"}]}'],
+    ["所持品が文字列", '{"characters": [{"name": "レン", "items": "水筒"}]}'],
+  ] as const) {
+    test(`人物の状態: ${name}なら断り、元のファイルを残す`, async () => {
+      const dir = makeProject({ "config.json": CONFIG, "characters/state.json": body })
+      const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "覚悟" } }] })
+      assert.match(out, /^❌ 登場人物の状態は更新していません（元のファイルはそのまま残しています）/)
+      assert.equal(read(dir, "characters/state.json"), body)
+    })
+  }
+
+  test("読み込めないファイル（ディレクトリ）なら断る", async () => {
+    const dir = makeProject({ "config.json": CONFIG })
+    mkdirSync(join(dir, ".novel", "foreshadow.json"))
+    mkdirSync(join(dir, ".novel", "summary.md"))
+    assert.match(await update(dir, "foreshadow", NEW_ITEM), /読み込めません（EISDIR）/)
+    assert.match(await update(dir, "summary", "第1章の筋。", 1), /^❌ あらすじは更新していません（元のファイルはそのまま残しています）/)
+  })
+
+  test("ファイルが無いだけなら、新しく作って更新する", async () => {
+    const dir = makeProject({ "config.json": CONFIG })
+    assert.match(await update(dir, "foreshadow", NEW_ITEM), /^✅/)
+    assert.match(await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "覚悟" } }] }), /^✅/)
+    assert.match(await update(dir, "summary", "第1章の筋。", 1), /^✅/)
+  })
+
+  test("novel_status: 壊れた記録を「0件」と区別して示す", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "foreshadow.json": BROKEN_SYNTAX,
+      "characters/state.json": '{"characters": [{"name": "レン", "items": "水筒"}]}',
+      "chapters/chapter-001.md": "# 第1章\n\n　本文。",
+    })
+    mkdirSync(join(dir, ".novel", "summary.md"))
+    const out = await novelStatusExecute({}, { directory: dir } as never)
+    assert.match(out, /🎯 伏線: ⚠️ 記録を読めません/)
+    assert.doesNotMatch(out, /張り済み 0/)
+    assert.match(out, /\.novel\/foreshadow\.json が JSON として読めません/)
+    assert.match(out, /\.novel\/characters\/state\.json の形が違います/)
+    assert.match(out, /\.novel\/summary\.md を読み込めません/)
+    // あらすじが読めないときは、欠けている章を数えない
+    assert.doesNotMatch(out, /あらすじの記録が無い章/)
+  })
+
+  test("novel_context: 壊れた記録を黙って省かず、知らせる", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "foreshadow.json": BROKEN_SYNTAX,
+      "characters/state.json": "{",
+      "summary.md": "# 題\n\n## 第1章\n\n一。\n",
+    })
+    const out = await novelContextExecute({ chapterNumber: 2, includePrompts: false }, { directory: dir } as never)
+    assert.match(out, /## 🔄 登場人物の現在の状態[^\n]*\n⚠️ \.novel\/characters\/state\.json が JSON として読めません/)
+    assert.match(out, /## 🎯 伏線の確認[^\n]*\n⚠️ \.novel\/foreshadow\.json が JSON として読めません/)
+    assert.match(out, /### 第1章\n一。/)
+  })
+})
+
+describe("novel_status の本文の集計", () => {
+  // 完結の段階まで進めるための最低限の資料（chapterCount は 3）
+  const DOCS = {
+    "config.json": CONFIG,
+    "concept.md": "コンセプト",
+    "world-building.md": "世界観",
+    "characters/profiles.md": "人物",
+    "outline-brief.md": "概要",
+    "outline-detailed.md": "## 第1章\n筋",
+    "scenes.md": "### 1.1 畑\n- [x] **状態**：完了\n",
+  }
+
+  test("章ファイル以外の .md を数えず、累計・平均・不足表示を同じ値にそろえる", async () => {
+    const dir = makeProject({
+      ...DOCS,
+      "chapters/chapter-001.md": "# 第1章 畑\n\n　あいうえお",
+      "chapters/chapter-002.md": "# 第2章 寄り合い\n\n　かきくけこさしすせそ",
+      "chapters/chapter-003.md": "# 第3章 門\n\n　たちつてと",
+      "chapters/推敲メモ.md": "メモ".repeat(150),
+      "chapters/backup-chapter-002.md": "古い原稿".repeat(50),
+    })
+    const out = await novelStatusExecute({ detailed: true }, { directory: dir } as never)
+    assert.match(out, /✍️ 執筆済み: 3章/)
+    assert.match(out, /📊 累計: 20文字 \/ 40,000文字/)
+    assert.match(out, /📐 1章平均: 7文字/)
+    assert.match(out, /分量が目標に届いていません: 20 \/ 40,000文字/)
+    assert.doesNotMatch(out, /📄 推敲メモ\.md/)
+    assert.match(out, /chapters\/ にある章以外のファイルは数えていません: backup-chapter-002\.md、推敲メモ\.md/)
+  })
+
+  test("読み込めない章は数えず、そのことを示す", async () => {
+    const dir = makeProject({
+      ...DOCS,
+      "chapters/chapter-001.md": "# 第1章 畑\n\n　あいうえお",
+      "chapters/chapter-003.md": "# 第3章 門\n\n　たちつてと",
+    })
+    mkdirSync(join(dir, ".novel", "chapters", "chapter-002.md"))
+    const out = await novelStatusExecute({}, { directory: dir } as never)
+    assert.match(out, /✍️ 執筆済み: 章ファイル 3章 ／ 集計できた本文 2章/)
+    assert.match(out, /読み込めず数えていない章: 第2章/)
+    assert.match(out, /📊 累計: 10文字/)
+    assert.match(out, /📐 1章平均: 5文字/)
+    assert.match(out, /読み込めない章があります: 第2章/)
+  })
+})

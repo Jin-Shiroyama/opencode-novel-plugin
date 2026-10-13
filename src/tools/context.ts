@@ -5,10 +5,13 @@ import {
   clipDocParts, selectForeshadowReminders,
 } from "../utils.js"
 import type {
-  CharacterState, NovelConfig, DocPart, ForeshadowReminder,
+  NovelConfig, DocPart, ForeshadowReminder,
 } from "../utils.js"
 import { DEFAULTS, CHAPTER_WORD_TOLERANCE } from "../constants.js"
-import { buildSummaryContext, splitForeshadowEntries } from "../records.js"
+import {
+  buildSummaryContext, splitForeshadowEntries, readCharacterStateRecord, readForeshadowRecord,
+  readTextRecord, describeBrokenRecord,
+} from "../records.js"
 import {
   isUntouchedTemplate, REALITY_SOURCE_TEMPLATE,
   WUXIA_SECTS_TEMPLATE, WUXIA_MARTIAL_ARTS_TEMPLATE, WUXIA_WEAPONS_TEMPLATE,
@@ -100,11 +103,16 @@ export async function novelContextExecute(
     context += clipParts(characterParts, "characterProfiles") + "\n\n"
   }
 
-  const charState = await safeReadJson<{ characters: CharacterState[] }>(getDocPath(dir, "character-state"))
-  if (charState && charState.characters.length > 0) {
+  // 記録が壊れているときは「記録が無い」と区別して知らせる（黙って省くと、
+  // 状態を知らないまま書き進め、更新もできないことに気づけない）
+  const charState = await readCharacterStateRecord(getDocPath(dir, "character-state"))
+  if (charState.kind === "broken") {
     context += `## 🔄 登場人物の現在の状態 (P1 — 重要)\n`
-    for (const c of charState.characters) {
-      context += `**${c.name}**（${c.role}）: ${c.mentalState ?? "平常"}\n`
+    context += `⚠️ ${describeBrokenRecord(".novel/characters/state.json", charState)}。直すまで人物の状態は載せられず、更新もできません\n\n`
+  } else if (charState.kind === "ok" && charState.value.characters.length > 0) {
+    context += `## 🔄 登場人物の現在の状態 (P1 — 重要)\n`
+    for (const c of charState.value.characters) {
+      context += `**${c.name}**（${c.role ?? "役割未設定"}）: ${c.mentalState ?? "平常"}\n`
       if (c.physicalState) context += `  体調: ${c.physicalState}\n`
       if (c.items && c.items.length > 0) context += `  所持品: ${c.items.join("、")}\n`
       if (c.abilities && c.abilities.length > 0) context += `  できること: ${c.abilities.join("、")}\n`
@@ -113,8 +121,13 @@ export async function novelContextExecute(
   }
 
   if (chapterNum > 1) {
-    const summary = await safeReadFile(getDocPath(dir, "summary"))
-    const summaryText = summary ? buildSummaryContext(summary, chapterNum, resolveLimit(config, "summary")) : ""
+    const summary = await readTextRecord(getDocPath(dir, "summary"))
+    const summaryText =
+      summary.kind === "broken"
+        ? `⚠️ ${describeBrokenRecord(".novel/summary.md", summary)}。直すまであらすじは載せられず、更新もできません`
+        : summary.kind === "ok"
+          ? buildSummaryContext(summary.value, chapterNum, resolveLimit(config, "summary"))
+          : ""
     if (summaryText) {
       context += `## 📚 これまでのあらすじ (P2 — 参考)\n${summaryText}\n\n`
     }
@@ -129,8 +142,13 @@ export async function novelContextExecute(
     }
   }
 
-  const foreshadow = await safeReadJson<{ items: unknown[] }>(getDocPath(dir, "foreshadow"))
-  if (foreshadow && Array.isArray(foreshadow.items)) {
+  const foreshadowRecord = await readForeshadowRecord(getDocPath(dir, "foreshadow"))
+  if (foreshadowRecord.kind === "broken") {
+    context += `## 🎯 伏線の確認 (P2 — 参考)\n`
+    context += `⚠️ ${describeBrokenRecord(".novel/foreshadow.json", foreshadowRecord)}。直すまで伏線は確かめられず、更新もできません\n\n`
+  }
+  const foreshadow = foreshadowRecord.kind === "ok" ? foreshadowRecord.value : null
+  if (foreshadow) {
     // 形の崩れた記録（日本語の status など）は急ぎぐあいを判定できない。
     // 回収済みのものを「未回収」と知らせないよう、別に並べて直すよう促す
     const { valid, invalid } = splitForeshadowEntries(foreshadow.items)
