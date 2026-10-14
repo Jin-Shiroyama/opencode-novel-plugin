@@ -15,6 +15,7 @@ import { createNovelPlannerAgent } from "./agents/novel-planner.js"
 import { createNovelWriterAgent } from "./agents/novel-writer.js"
 import { createNovelEditorAgent } from "./agents/novel-editor.js"
 import { DEFAULT_MODEL } from "./constants.js"
+import { mergeAgentConfig } from "./agent-config.js"
 import { loadCommands } from "./commands.js"
 
 const z = tool.schema
@@ -182,13 +183,15 @@ numerals: 章見出しの数字。text は既定で漢数字、markdown は既�
       writer.mode = "primary"
       editor.mode = "primary"
       // opencode.json 側で agent ごとの設定（model など）が書かれていれば、それを優先する。
+      // permission などは中身ごと重ねる（OpenCode が利用者の設定に足す空の permission で
+      // プラグインの権限が消えないように。mergeAgentConfig を参照）
       const userAgents = (config.agent ?? {}) as Record<string, Record<string, unknown>>
       config.agent = {
         ...userAgents,
-        "novel-planner": { ...planner, ...userAgents["novel-planner"] },
-        "novel-writer": { ...writer, ...userAgents["novel-writer"] },
-        "novel-editor": { ...editor, ...userAgents["novel-editor"] },
-      }
+        "novel-planner": mergeAgentConfig(planner, userAgents["novel-planner"]),
+        "novel-writer": mergeAgentConfig(writer, userAgents["novel-writer"]),
+        "novel-editor": mergeAgentConfig(editor, userAgents["novel-editor"]),
+      } as typeof config.agent
       config.command = {
         ...config.command,
         ...cachedCommands,

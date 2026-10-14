@@ -139,11 +139,34 @@ describe("opencode.json 側の agent 設定の優先", () => {
     }
   })
 
-  test("permission は入れ替わる（浅いマージ）", async () => {
-    // いまの挙動を書き留めておく。利用者が permission を一部だけ書くと、
-    // プラグイン既定（novel-writer は webfetch: "deny"）は残らない。
-    // 深くマージする方針に変えるなら、このテストが変更の合図になる。
-    const c = await applyConfig({ agent: { "novel-writer": { permission: { edit: "ask" } } } })
-    assert.deepEqual(c.agent["novel-writer"].permission, { edit: "ask" })
+  test("OpenCode が足す空の permission / options で、プラグインの権限を消さない", async () => {
+    // OpenCode は config フックに渡す前に、利用者の agent 設定へ options: {} と
+    // permission: {} を足す。model しか書いていなくても、この形で渡ってくる。
+    // 以前はこれでプラグインの権限が消え、writer が OpenCode の既定（すべて許可）で動いていた
+    const c = await applyConfig({
+      agent: { "novel-writer": { model: "x", options: {}, permission: {} } },
+    })
+    assert.equal(c.agent["novel-writer"].model, "x")
+    assert.equal(c.agent["novel-writer"].permission.webfetch, "deny")
+    assert.equal(c.agent["novel-writer"].permission.edit, "allow")
+  })
+
+  test("permission は利用者が書いたキーだけが勝ち、ほかはプラグインの既定が残る", async () => {
+    const c = await applyConfig({ agent: { "novel-writer": { permission: { edit: "ask", bash: "deny" } } } })
+    assert.equal(c.agent["novel-writer"].permission.edit, "ask")
+    assert.equal(c.agent["novel-writer"].permission.bash, "deny")
+    assert.equal(c.agent["novel-writer"].permission.webfetch, "deny")
+  })
+
+  test("permission の中の1つのキーの値は丸ごと入れ替える", async () => {
+    const c = await applyConfig({
+      agent: { "novel-editor": { permission: { bash: { "*": "ask", "git *": "allow" } } } },
+    })
+    assert.deepEqual(c.agent["novel-editor"].permission.bash, { "*": "ask", "git *": "allow" })
+  })
+
+  test("options も中身ごと重ねる", async () => {
+    const c = await applyConfig({ agent: { "novel-planner": { options: { foo: 1 } } } })
+    assert.deepEqual(c.agent["novel-planner"].options, { foo: 1 })
   })
 })

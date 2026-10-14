@@ -110,8 +110,14 @@ opencode-novel-plugin/
 > `primary` に上書きしています。3つとも主 agent セレクタに出ます。
 >
 > `opencode.json` の `agent` に同じ名前で設定を書けば、そちらが**キー単位で**勝ちます
-> （`model` だけ書いてもプロンプトや温度は残ります）。ただし `permission` は浅いマージなので、
-> 一部だけ書くとプラグイン既定（`novel-writer` / `novel-editor` の `webfetch: "deny"`）は残りません。
+> （`model` だけ書いてもプロンプトや温度は残ります）。`permission` / `options` / `tools` は
+> **中身ごと重ねます**（`src/agent-config.ts` の `mergeAgentConfig`）。利用者が書いたキーだけが勝ち、
+> 書いていないキーはプラグインの既定（`novel-writer` / `novel-editor` の `webfetch: "deny"` など）が残ります。
+>
+> OpenCode は config フックに渡す前に、利用者の agent 設定へ `options: {}` と `permission: {}` を足します
+> （`model` しか書いていなくても）。キー単位で上書きするだけだと、この空の `permission` が
+> プラグインの権限を消し、OpenCode の既定（すべて許可）で動いてしまいます。
+> 解決後の設定は `opencode debug agent <名前>` で確かめられます。
 
 ## skill
 
@@ -302,7 +308,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、402件）
+pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、405件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
