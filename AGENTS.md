@@ -25,6 +25,7 @@ opencode-novel-plugin/
 │   ├── records.ts            # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
 │   ├── typography.ts         # 表記の点検（表記規約のうち機械で見られるもの）
 │   ├── ruby.ts               # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
+│   ├── manuscript.ts         # 原稿用紙の枚数換算（書式を指定したときだけ使う）
 │   ├── prompts.ts            # 15のRTCOプロンプト
 │   ├── templates.ts          # 15の文書雛形（Markdown 12 + JSON 3）
 │   ├── agents/
@@ -304,6 +305,11 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   感嘆符・疑問符の重ねや組み合わせ（`！！` `！？` `？！`）は許し、続けたものを1つの約物として扱う。
   会話行（「『で始まる行）は字下げしない。`novel_save_chapter` は保存したファイルをそのまま点検して
   件数を報告に添える（行番号が保存ファイルと一致するように）
+- **原稿用紙換算は、書式を指定したときだけ出す**（`config.json` の `manuscript: "20x20"`、または
+  `novel_status` / `novel_export` の引数 `manuscript`。引数が優先）。指定が無ければどの出力も変えない。
+  目標・平均・分量の不足の判定は常に文字数で行い、枚数で置き換えない（Web 小説の文字数で書く使い方を邪魔しないため）。
+  数え方は `src/manuscript.ts`（段落ごとに改行、字下げも1マス、行頭の句読点・閉じ括弧はぶら下げ、
+  ルビの記法は外す、空行と章見出しは数えない、全体の行数を切り上げで枚数にする）
 - **ルビと傍点はカクヨムの記法で持つ**（`｜親文字《ルビ》`・`漢字《ルビ》`・`《《傍点》》`・`｜《` で《そのもの）。
   読み取りは `src/ruby.ts` の `parseRubyLine` だけで行い、文字数（`countWords` は記法を外して親文字だけを数える）、
   表記の点検（記法の崩れは元の行で拾い、ほかの規則は `stripRubyLine` で記法を外した行で見て、字の位置を元の行に戻す）、
@@ -336,7 +342,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、449件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、465件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

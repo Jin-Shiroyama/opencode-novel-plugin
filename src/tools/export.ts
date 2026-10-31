@@ -9,12 +9,14 @@ import { formatChapterRanges } from "../records.js"
 import { checkTypography } from "../typography.js"
 import { convertRuby, countRubyMarks } from "../ruby.js"
 import type { RubyNotation } from "../ruby.js"
+import { resolveManuscriptFormat, countManuscriptLines, linesToPages, formatManuscriptLabel } from "../manuscript.js"
 import type { ToolContext } from "../index.js"
 
 interface ExportArgs {
   format?: "text" | "markdown"
   numerals?: "kanji" | "arabic"
   ruby?: RubyNotation
+  manuscript?: string
   fromChapter?: number
   toChapter?: number
   outputPath?: string
@@ -48,6 +50,10 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
   const workTitle = config?.title?.trim() || "原稿"
+  // 原稿用紙の書式は、指定があるときだけ使う。読めない指定なら書き出す前に断る
+  const manuscript = resolveManuscriptFormat(args.manuscript, config?.manuscript)
+  if (manuscript && "error" in manuscript) return `❌ ${manuscript.error}`
+  const paper = manuscript?.format ?? null
 
   // 書き出し先は作品のディレクトリの中に限る（外へ書かない）
   const ext = format === "text" ? "txt" : "md"
@@ -75,12 +81,14 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
 
   const parts: string[] = []
   let totalChars = 0
+  let totalLines = 0
   let typographyErrors = 0
   const marks = { ruby: 0, emphasis: 0 }
   for (const [i, f] of files.entries()) {
     const text = texts[i]
     const rawBody = stripChapterHeading(text).replace(/\s+$/, "")
     totalChars += countWords(rawBody)
+    if (paper) totalLines += countManuscriptLines(rawBody, paper.columns)
     typographyErrors += checkTypography(text).filter((i) => i.severity === "error").length
     const counted = countRubyMarks(text)
     marks.ruby += counted.ruby
@@ -114,6 +122,9 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
 📚 章: ${range}（${files.length}章）
 📊 文字数: ${totalChars.toLocaleString("ja-JP")}文字（本文のみ。見出しは含まない）
 `
+  if (paper) {
+    report += `📄 原稿用紙換算: ${linesToPages(totalLines, paper).toLocaleString("ja-JP")}枚（${formatManuscriptLabel(paper)}、本文のみ。空行は数えない）\n`
+  }
   if (marks.ruby + marks.emphasis > 0) {
     report += `🔤 ルビ ${marks.ruby}箇所・傍点 ${marks.emphasis}箇所を ${RUBY_NOTATION_LABELS[ruby]} で書き出しました\n`
   }

@@ -140,6 +140,19 @@ describe("novel_export", () => {
     assert.match(out, /文字数: 13文字/)
   })
 
+  test("原稿用紙の書式を指定したときだけ、枚数を添える", async () => {
+    const dir = makeProject(files)
+    assert.doesNotMatch(await novelExportExecute({}, ctx(dir)), /原稿用紙/)
+    assert.match(await novelExportExecute({ manuscript: "20x20" }, ctx(dir)), /原稿用紙換算: 1枚（20字×20行/)
+  })
+
+  test("原稿用紙の書式が読めなければ、何も書き出さずに断る", async () => {
+    const dir = makeProject(files)
+    const out = await novelExportExecute({ manuscript: "四百字" }, ctx(dir))
+    assert.match(out, /^❌ manuscript の指定/)
+    assert.equal(existsSync(join(dir, ".novel", "export")), false)
+  })
+
   test("本文は書き換えず、規約違反の件数を知らせる", async () => {
     const dir = makeProject({ "config.json": CONFIG, "chapters/chapter-002.md": BAD })
     const out = await novelExportExecute({}, ctx(dir))

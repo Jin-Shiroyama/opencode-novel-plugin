@@ -1,6 +1,6 @@
 import { test, describe } from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync } from "node:fs"
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { novelSaveChapterExecute } from "../../src/tools/save.js"
@@ -74,5 +74,35 @@ describe("novel_save_chapter の上書き", () => {
     const status = await novelStatusExecute({ detailed: true } as any, { directory: dir } as any)
     assert.match(status, /chapter-001\.md: 5文字/)
     assert.doesNotMatch(status, /chapter-001-\d{8}/)
+  })
+})
+
+describe("novel_save_chapter と原稿用紙換算", () => {
+  test("config.json に manuscript が無ければ枚数を出さない", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "save-"))
+    assert.doesNotMatch(await save(dir, "　初稿。"), /原稿用紙/)
+  })
+
+  test("config.json に manuscript があれば枚数を添える", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "save-"))
+    mkdirSync(join(dir, ".novel"), { recursive: true })
+    writeFileSync(join(dir, ".novel", "config.json"), JSON.stringify({ title: "t", genre: "g", manuscript: "20x20" }))
+    assert.match(await save(dir, "　初稿。"), /原稿用紙換算: 0\.1枚（20字×20行）/)
+  })
+
+  test("novel_status: 指定が無ければ枚数を出さず、引数か config.json で出す", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "save-"))
+    mkdirSync(join(dir, ".novel"), { recursive: true })
+    writeFileSync(join(dir, ".novel", "config.json"), JSON.stringify({ title: "t", genre: "g" }))
+    await save(dir, "　" + "あ".repeat(30))
+    const status = (args: object) => novelStatusExecute(args as any, { directory: dir } as any)
+    assert.doesNotMatch(await status({ detailed: true }), /原稿用紙/)
+    const out = await status({ detailed: true, manuscript: "20x20" })
+    // 文字数は字下げの全角スペースを数えないが、原稿用紙では1マス使う（31マスで2行）
+    assert.match(out, /chapter-001\.md: 30文字（原稿用紙 0\.1枚）/)
+    assert.match(out, /原稿用紙換算: 1枚（20字×20行、2行。空行は数えない）/)
+
+    writeFileSync(join(dir, ".novel", "config.json"), JSON.stringify({ title: "t", genre: "g", manuscript: "abc" }))
+    assert.match(await status({}), /⚠️ config\.json の manuscript/)
   })
 })

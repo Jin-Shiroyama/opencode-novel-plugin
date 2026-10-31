@@ -1,7 +1,9 @@
 import {
-  safeReadFile, safeWriteFile, getChaptersDir, getNovelDir, countWords, stripChapterHeading, normalizeChapterTitle,
-  existsSync,
+  safeReadFile, safeReadJson, safeWriteFile, getChaptersDir, getNovelDir, getConfigPath, countWords,
+  stripChapterHeading, normalizeChapterTitle, existsSync,
 } from "../utils.js"
+import type { NovelConfig } from "../utils.js"
+import { resolveManuscriptFormat, countManuscriptLines, linesToPagesDecimal, formatManuscriptLabel } from "../manuscript.js"
 import { summarizeForSave } from "./check.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
@@ -67,6 +69,15 @@ export async function novelSaveChapterExecute(
   report += `📄 ファイル: ${filePath}\n`
   report += previousNote
   report += `📊 文字数: ${wordCount.toLocaleString("ja-JP")}文字\n`
+  // 原稿用紙の書式が config.json にあるときだけ枚数を添える
+  const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
+  const manuscript = resolveManuscriptFormat(undefined, config?.manuscript)
+  if (manuscript && "format" in manuscript) {
+    const lines = countManuscriptLines(body, manuscript.format.columns)
+    report += `📄 原稿用紙換算: ${linesToPagesDecimal(lines, manuscript.format)}枚（${formatManuscriptLabel(manuscript.format)}）\n`
+  } else if (manuscript) {
+    report += `⚠️ ${manuscript.error}\n`
+  }
   // 保存したものをそのまま点検する（行番号が保存ファイルと一致するように）
   report += summarizeForSave(saved, num)
 

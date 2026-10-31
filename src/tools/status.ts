@@ -13,10 +13,15 @@ import {
   splitForeshadowEntries, summaryChapters, formatChapterRanges,
   readForeshadowRecord, readCharacterStateRecord, readTextRecord, describeBrokenRecord,
 } from "../records.js"
+import {
+  resolveManuscriptFormat, countManuscriptLines, linesToPages, linesToPagesDecimal, formatManuscriptLabel,
+} from "../manuscript.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
   detailed?: boolean
+  /** 原稿用紙の書式（「20x20」）。省くと config.json の manuscript。どちらも無ければ枚数を出さない */
+  manuscript?: string
 }
 
 const PHASE_LABELS: Record<Phase, string> = {
@@ -143,7 +148,10 @@ export async function novelStatusExecute(
   const chaptersDir = getChaptersDir(dir)
   const chapterFiles = await listChapterFiles(dir)
   const writtenChapters = chapterFiles.map((f) => f.chapter)
-  const counted: Array<{ chapter: number; file: string; words: number }> = []
+  // 原稿用紙の書式は、指定があるときだけ使う（無ければ枚数を出さず、出力は変わらない）
+  const manuscript = resolveManuscriptFormat(args.manuscript, config?.manuscript)
+  const format = manuscript && "format" in manuscript ? manuscript.format : null
+  const counted: Array<{ chapter: number; file: string; words: number; lines: number }> = []
   const unreadableChapters: number[] = []
   for (const f of chapterFiles) {
     const content = await safeReadFile(f.path)
@@ -152,7 +160,13 @@ export async function novelStatusExecute(
       continue
     }
     // 保存ツールが付けた章見出しは数えない。本文だけを数える規則に、保存時の報告と揃える
-    counted.push({ chapter: f.chapter, file: basename(f.path), words: countWords(stripChapterHeading(content)) })
+    const body = stripChapterHeading(content)
+    counted.push({
+      chapter: f.chapter,
+      file: basename(f.path),
+      words: countWords(body),
+      lines: format ? countManuscriptLines(body, format.columns) : 0,
+    })
   }
   const totalWords = counted.reduce((sum, c) => sum + c.words, 0)
   // chapters/ にある章ファイル以外の .md（推敲メモなど）は数えない。数えないことを示す
@@ -167,7 +181,10 @@ export async function novelStatusExecute(
         ? `\n✍️ 執筆済み: 章ファイル ${chapterFiles.length}章 ／ 集計できた本文 ${counted.length}章\n`
         : `\n✍️ 執筆済み: ${chapterFiles.length}章\n`
     if (detailed) {
-      for (const c of counted) report += `  📄 ${c.file}: ${c.words.toLocaleString("ja-JP")}文字\n`
+      for (const c of counted) {
+        const pages = format ? `（原稿用紙 ${linesToPagesDecimal(c.lines, format)}枚）` : ""
+        report += `  📄 ${c.file}: ${c.words.toLocaleString("ja-JP")}文字${pages}\n`
+      }
     }
     if (unreadableChapters.length > 0) {
       report += `  ⚠️ 読み込めず数えていない章: ${formatChapterRanges(unreadableChapters)}\n`
@@ -182,7 +199,12 @@ export async function novelStatusExecute(
       const perChapter = Math.round(totalWords / counted.length)
       report += `📐 1章平均: ${perChapter.toLocaleString("ja-JP")}文字\n`
     }
+    if (format) {
+      const lines = counted.reduce((sum, c) => sum + c.lines, 0)
+      report += `📄 原稿用紙換算: ${linesToPages(lines, format).toLocaleString("ja-JP")}枚（${formatManuscriptLabel(format)}、${lines.toLocaleString("ja-JP")}行。空行は数えない）\n`
+    }
   }
+  if (manuscript && "error" in manuscript) report += `⚠️ ${manuscript.error}\n`
   if (otherFiles.length > 0) {
     report += `ℹ️ chapters/ にある章以外のファイルは数えていません: ${otherFiles.join("、")}\n`
   }

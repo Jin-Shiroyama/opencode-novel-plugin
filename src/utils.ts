@@ -937,6 +937,11 @@ export interface NovelConfig {
   martialArtsSetting?: boolean
   /** 資料読み込みの文字数上限の上書き */
   limits?: NovelLimits
+  /**
+   * 原稿用紙の書式（「20x20」のように字数×行数）。書いたときだけ、文字数に添えて
+   * 原稿用紙換算の枚数を出す。無ければ枚数は出さない（manuscript.ts）
+   */
+  manuscript?: string
   createdAt: string
   updatedAt: string
   currentPhase: Phase

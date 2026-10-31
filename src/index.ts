@@ -60,9 +60,11 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
 
       "novel_status": tool({
         description: `いまの作品の進行状況をまとめて返す。現在の工程、各資料の有無、シーンと章の進捗、文字数、伏線の状態を含む。
+原稿用紙の書式（manuscript、または config.json の manuscript）があれば、原稿用紙換算の枚数も出す。
 使う場面: 全体の進み具合を確かめたいとき、執筆を再開する前の状況確認。`,
         args: {
           detailed: z.boolean().optional().describe("章ごとの文字数まで出すかどうか"),
+          manuscript: z.string().optional().describe("原稿用紙の書式（「20x20」のように字数×行数）。指定すると原稿用紙換算の枚数も出す。省くと config.json の manuscript。どちらも無ければ枚数は出さない"),
         },
         async execute(args, context) {
           return novelStatusExecute(args as any, context as ToolContext)
@@ -166,6 +168,7 @@ ruby: ルビ・傍点の書き出し先の記法。kakuyomu（｜親文字《ル
           format: z.enum(["text", "markdown"]).optional().describe("書き出す形式。既定 text"),
           numerals: z.enum(["kanji", "arabic"]).optional().describe("章見出しの数字。既定は text なら kanji、markdown なら arabic"),
           ruby: z.enum(RUBY_NOTATIONS).optional().describe("ルビ・傍点の記法。既定は text なら kakuyomu、markdown なら html"),
+          manuscript: z.string().optional().describe("原稿用紙の書式（「20x20」）。指定すると報告に原稿用紙換算の枚数を添える。省くと config.json の manuscript"),
           fromChapter: z.number().int().positive().optional().describe("この章から書き出す。既定 1"),
           toChapter: z.number().int().positive().optional().describe("この章まで書き出す。既定は最後の章"),
           outputPath: z.string().optional().describe("書き出し先（作品のディレクトリからの相対パス）"),
