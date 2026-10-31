@@ -16,7 +16,10 @@ import {
   resolveLimit,
   countWrittenChapters,
   progressBar,
+  extractSpeechProfile,
+  extractNameAliases,
 } from "../src/utils.js"
+import { CHARACTER_PROFILE_TEMPLATE } from "../src/templates.js"
 import { LIMITS } from "../src/constants.js"
 
 // ============================================================
@@ -487,5 +490,61 @@ describe("progressBar", () => {
 
   test("割合を表示する", () => {
     assert.match(progressBar(1, 4), /25% \(1\/4\)/)
+  })
+})
+
+// ============================================================
+// ことばづかい
+// ============================================================
+
+describe("extractSpeechProfile", () => {
+  const filled = `# 森田悠
+
+## ことばづかい
+
+- **一人称**：俺
+- **二人称**：お前（生徒には「君」）
+- **丁寧さの基本**：上役と保護者には丁寧語、同僚にはため口
+- **語尾・口調**：短く切る
+
+### 相手ごとの呼び方
+
+| 相手 | 呼び方 | 丁寧さ | 変わるとき |
+|---|---|---|---|
+| 杉本千尋 | 杉本さん | 丁寧語 | 事件のあと「千尋」 |
+| 鏡味征一 | 教頭 | 敬語 | |
+| [人物名] | [「森田さん」など] | [敬語] | [] |
+
+## 章ごとの記録
+
+| 章 | 出来事 |
+|---|---|
+| 第1章 | 着任 |
+`
+
+  test("記入済みの項目と呼び方の表を読む", () => {
+    assert.deepEqual(extractSpeechProfile(filled), {
+      firstPerson: "俺",
+      secondPerson: "お前（生徒には「君」）",
+      politeness: "上役と保護者には丁寧語、同僚にはため口",
+      addressTerms: [
+        { target: "杉本千尋", term: "杉本さん", politeness: "丁寧語" },
+        { target: "鏡味征一", term: "教頭", politeness: "敬語" },
+      ],
+    })
+  })
+
+  test("雛形のままなら null", () => {
+    assert.equal(extractSpeechProfile(CHARACTER_PROFILE_TEMPLATE), null)
+  })
+
+  test("ことばづかいが無い文書は null", () => {
+    assert.equal(extractSpeechProfile("# 森田悠\n38歳、国語教師。\n"), null)
+  })
+})
+
+describe("extractNameAliases と雛形", () => {
+  test("雛形のままの呼称の行からは何も拾わない（記入例の「森田」「先生」を別名にしない）", () => {
+    assert.deepEqual(extractNameAliases(CHARACTER_PROFILE_TEMPLATE), [])
   })
 })

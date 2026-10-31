@@ -1,11 +1,11 @@
 import {
   safeReadFile, safeReadJson, getDocPath, getChaptersDir, getConfigPath,
-  resolveLimit, takeTailChars, parseChapterNumber,
+  resolveLimit, takeTailChars, parseChapterNumber, truncateChars,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
-  clipDocParts, selectForeshadowReminders,
+  clipDocParts, selectForeshadowReminders, extractSpeechProfile,
 } from "../utils.js"
 import type {
-  NovelConfig, DocPart, ForeshadowReminder,
+  NovelConfig, DocPart, ForeshadowReminder, CharacterDoc, CharacterState, SpeechProfile,
 } from "../utils.js"
 import { DEFAULTS, CHAPTER_WORD_TOLERANCE } from "../constants.js"
 import {
@@ -103,9 +103,29 @@ export async function novelContextExecute(
     context += clipParts(characterParts, "characterProfiles") + "\n\n"
   }
 
+  const charState = await readCharacterStateRecord(getDocPath(dir, "character-state"))
+
+  // --- ことばづかい（P1） ---
+  // 人物設定の全文は上の枠で切られることがあるため、一人称・二人称・呼び方だけを
+  // 別に抜き出して載せる。物語の途中で変わったもの（state.json）を上に重ねる。
+  const speech = buildSpeechContext(
+    allCharacterDocs,
+    relevantDocs,
+    charState.kind === "ok" ? charState.value.characters : [],
+    chapterText,
+  )
+  if (speech) {
+    const limit = resolveLimit(config, "speech")
+    const [body, truncated] = truncateChars(speech, limit)
+    context += `## 🗣️ ことばづかい (P1 — 重要)\n`
+    context += `台詞と、一人称の語りなら地の文も、このとおりに書きます。変えるときは理由になる出来事を本文に置き、novel_update(character-state) の firstPerson / addressTerms を更新します。\n`
+    context += body
+    if (truncated) context += `\n…（以下省略。limits.speech で枠を広げられます）`
+    context += "\n\n"
+  }
+
   // 記録が壊れているときは「記録が無い」と区別して知らせる（黙って省くと、
   // 状態を知らないまま書き進め、更新もできないことに気づけない）
-  const charState = await readCharacterStateRecord(getDocPath(dir, "character-state"))
   if (charState.kind === "broken") {
     context += `## 🔄 登場人物の現在の状態 (P1 — 重要)\n`
     context += `⚠️ ${describeBrokenRecord(".novel/characters/state.json", charState)}。直すまで人物の状態は載せられず、更新もできません\n\n`
@@ -243,6 +263,64 @@ export async function novelContextExecute(
   }
 
   return context
+}
+
+/**
+ * ことばづかいの一覧を作る。載せる人物が無ければ空文字。
+ *
+ * 人物設定（初めの設定）に、state.json の firstPerson / addressTerms（途中で変わったもの）を重ねる。
+ * 載せるのはこの章に出る人物（selectCharacterDocs で選んだもの）と、人物設定の文書は無いが
+ * 記録に値があり、この章のプロットかシーンに名前が出る人物。
+ */
+function buildSpeechContext(
+  allDocs: CharacterDoc[],
+  relevantDocs: CharacterDoc[],
+  states: CharacterState[],
+  chapterText: string,
+): string {
+  const matches = (doc: CharacterDoc, name: string) =>
+    doc.label === name || doc.aliases.includes(name) || doc.label.startsWith(name)
+
+  const entries: Array<{ name: string; profile: SpeechProfile; state?: CharacterState }> = []
+  for (const doc of relevantDocs) {
+    const state = states.find((s) => matches(doc, s.name))
+    const profile = extractSpeechProfile(doc.content) ?? { addressTerms: [] }
+    entries.push({ name: doc.label, profile, state })
+  }
+  for (const state of states) {
+    if (!state.firstPerson && !state.addressTerms) continue
+    if (allDocs.some((d) => matches(d, state.name))) continue
+    if (chapterText.trim().length > 0 && !chapterText.includes(state.name)) continue
+    entries.push({ name: state.name, profile: { addressTerms: [] }, state })
+  }
+
+  const blocks: string[] = []
+  for (const { name, profile, state } of entries) {
+    const changed = state?.lastUpdatedChapter ? `（第${state.lastUpdatedChapter}章で変更）` : "（記録で変更）"
+    const fields: string[] = []
+    const firstPerson = state?.firstPerson ?? profile.firstPerson
+    if (firstPerson) {
+      const mark = state?.firstPerson && state.firstPerson !== profile.firstPerson ? changed : ""
+      fields.push(`一人称: ${firstPerson}${mark}`)
+    }
+    if (profile.secondPerson) fields.push(`二人称: ${profile.secondPerson}`)
+    if (profile.politeness) fields.push(`丁寧さ: ${profile.politeness}`)
+
+    const rows = profile.addressTerms.map((r) => ({ ...r, mark: "" }))
+    for (const [target, term] of Object.entries(state?.addressTerms ?? {})) {
+      const row = rows.find((r) => r.target === target)
+      if (!row) rows.push({ target, term, mark: changed })
+      else if (row.term !== term) Object.assign(row, { term, politeness: undefined, mark: changed })
+    }
+
+    if (fields.length === 0 && rows.length === 0) continue
+    let block = `**${name}**${fields.length > 0 ? ` — ${fields.join(" ／ ")}` : ""}`
+    for (const r of rows) {
+      block += `\n  - ${r.target} → ${r.term}${r.politeness ? `（${r.politeness}）` : ""}${r.mark}`
+    }
+    blocks.push(block)
+  }
+  return blocks.join("\n")
 }
 
 /**

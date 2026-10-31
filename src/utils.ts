@@ -440,23 +440,106 @@ export async function listCharacterDocs(projectDir: string): Promise<CharacterDo
 }
 
 /**
+ * 雛形のプレースホルダ（`[…]`）のままの値か。
+ *
+ * 雛形の記入例（「[…（例：森田、先生）]」）を、書き手が書いた値として読まないために使う。
+ */
+export function isPlaceholderValue(value: string): boolean {
+  const t = value.replace(/\*\*/g, "").trim()
+  return t.length === 0 || /^\[[^\]]*\]$/.test(t)
+}
+
+/**
  * 人物設定の文書から呼称・別名を読み取る。
  *
  * 「- **呼称**：森田、先生」のような行を拾う。姓の推定が当たらない人物
  * （一文字姓など）を取りこぼさないための、書き手が明示できる逃げ道。
+ * 雛形のままの行は読まない（記入例の「森田」「先生」を別名として拾い、
+ * 関係のない章にこの人物の設定が載ってしまうため）。
  */
 const ALIAS_LINE = /(?:呼称|別名|通称|愛称|あだ名)[^：:\n]{0,6}[：:]\s*(.+)/
 export function extractNameAliases(content: string): string[] {
   const out: string[] = []
   for (const line of content.split("\n")) {
     const m = line.match(ALIAS_LINE)
-    if (!m) continue
+    if (!m || isPlaceholderValue(m[1])) continue
     for (const piece of m[1].split(/[、,\uFF0C・\/\s\u3000]+/)) {
       const t = piece.replace(/[*`「」『』（）()\[\]]/g, "").trim()
       if (t.length >= 1) out.push(t)
     }
   }
   return [...new Set(out)]
+}
+
+/**
+ * 人物のことばづかい。人物設定の「## ことばづかい」から読み取る。
+ *
+ * 一人称・二人称・敬語・相手の呼び方は、日本語で人物を書き分ける要で、
+ * 長く書くほどぶれやすい。人物設定の全文は枠で切られることがあるので、
+ * novel_context はここだけを抜き出して別に載せる。
+ */
+export interface SpeechProfile {
+  firstPerson?: string
+  secondPerson?: string
+  politeness?: string
+  addressTerms: Array<{ target: string; term: string; politeness?: string }>
+}
+
+const SPEECH_FIELD_LINE = /^\s*[-*・]\s*(?:\*\*)?(一人称|二人称|丁寧さの基本)(?:\*\*)?\s*[：:]\s*(.*)$/
+const ADDRESS_TABLE_HEADING = /^#{2,6}\s*相手ごとの呼び方/
+
+/**
+ * 人物設定の文書からことばづかいを読み取る。記入された項目が無ければ null。
+ *
+ * 読むのは次の2つ。雛形のプレースホルダのままの値は飛ばす。
+ *   - 「- **一人称**：俺」「- **二人称**：お前」「- **丁寧さの基本**：…」の行
+ *   - 「### 相手ごとの呼び方」の表（| 相手 | 呼び方 | 丁寧さ | 変わるとき |）
+ */
+export function extractSpeechProfile(content: string): SpeechProfile | null {
+  const profile: SpeechProfile = { addressTerms: [] }
+  const keys = { 一人称: "firstPerson", 二人称: "secondPerson", 丁寧さの基本: "politeness" } as const
+  const lines = content.split("\n")
+  let inTable = false
+  let headerSeen = false
+  for (const line of lines) {
+    const field = line.match(SPEECH_FIELD_LINE)
+    if (field) {
+      const value = field[2].trim()
+      if (!isPlaceholderValue(value)) profile[keys[field[1] as keyof typeof keys]] = value
+      continue
+    }
+    if (ADDRESS_TABLE_HEADING.test(line)) {
+      inTable = true
+      headerSeen = false
+      continue
+    }
+    if (!inTable) continue
+    const trimmed = line.trim()
+    if (/^#/.test(trimmed)) {
+      inTable = false
+      continue
+    }
+    if (!trimmed.startsWith("|")) {
+      // 表の前の空行や注記は許し、表が始まったあとの表以外の行で終える
+      if (headerSeen && trimmed.length > 0) inTable = false
+      continue
+    }
+    const cells = trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.replace(/\*\*/g, "").trim())
+    if (!headerSeen) {
+      headerSeen = true
+      continue
+    }
+    if (cells.every((c) => /^:?-+:?$/.test(c) || c === "")) continue
+    const [target = "", term = "", politeness = ""] = cells
+    if (isPlaceholderValue(target) || isPlaceholderValue(term)) continue
+    profile.addressTerms.push(isPlaceholderValue(politeness) ? { target, term } : { target, term, politeness })
+  }
+  const filled =
+    profile.firstPerson !== undefined ||
+    profile.secondPerson !== undefined ||
+    profile.politeness !== undefined ||
+    profile.addressTerms.length > 0
+  return filled ? profile : null
 }
 
 /**
@@ -827,6 +910,10 @@ export interface CharacterState {
   items?: string[]
   abilities?: string[]
   relationships?: Record<string, string>
+  /** いまの一人称。人物設定の値から変わったときに記録する */
+  firstPerson?: string
+  /** 相手 → いまの呼び方。人物設定の値から変わったときに記録する */
+  addressTerms?: Record<string, string>
   events?: string[]
   lastUpdatedChapter?: number
 }

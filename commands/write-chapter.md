@@ -61,6 +61,7 @@ novel_context(chapterNumber: {N}, sceneId: "2.1", includePrompts: true)
 必ず守ること：
 - プロットの筋から外れない
 - 人物の性格と話し方を保つ
+- 一人称・二人称・相手の呼び方・敬語は、資料の「🗣️ ことばづかい」どおりにする（変えるなら理由になる出来事を書く）
 - 目標文字数の範囲に収める（±10%）
 - 場面に画を持たせる
 - 台詞をその人らしく書く
@@ -100,7 +101,8 @@ novel_update(action: "summary", chapterNumber: {N}, content: "この章だけの
 novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id":"F1","status":"resolved"}]}')
 ```
 
-- 人物の `changes` で使えるキーは status / role / physicalState / mentalState / items / abilities / relationships / events / lastUpdatedChapter だけ
+- 人物の `changes` で使えるキーは status / role / physicalState / mentalState / items / abilities / relationships / firstPerson / addressTerms / events / lastUpdatedChapter だけ
+- この章で一人称や呼び方が変わったら（苗字から名前へ、敬語からため口へ）、`firstPerson` や `addressTerms`（`{ "相手": "いまの呼び方" }`）で残す
 - 伏線の status は `pending` / `planted` / `resolved` / `abandoned` だけ。補強しただけなら status は変えず `notes` に書く
 - 新しい伏線は `title` と `content` を付けて渡す（id は省略できる）
 

@@ -58,6 +58,21 @@ describe("parseCharacterUpdates", () => {
     )
     assert.equal(r.ok, true)
   })
+
+  test("ことばづかい（firstPerson / addressTerms）を受け付ける", () => {
+    const r = parseCharacterUpdates(
+      JSON.stringify({ updates: [{ name: "レン", changes: { firstPerson: "俺", addressTerms: { ドルガ: "ドルガ" } } }] }),
+    )
+    assert.equal(r.ok, true)
+  })
+
+  test("addressTerms の値が文字列でなければ断る", () => {
+    const r = parseCharacterUpdates(
+      JSON.stringify({ updates: [{ name: "レン", changes: { addressTerms: { ドルガ: ["隊長", "ドルガ"] } } }] }),
+    )
+    assert.equal(r.ok, false)
+    if (!r.ok) assert.match(r.message, /addressTerms/)
+  })
 })
 
 describe("parseForeshadowUpdates", () => {

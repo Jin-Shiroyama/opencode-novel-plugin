@@ -199,7 +199,7 @@ opencode-novel-plugin/
 （`selectCharacterDocs`）。照合は二段です。2文字以上の手がかり（フルネーム・姓・名・
 呼称）で照合し、当たらなかった人物だけ1文字の手がかりで再照合します。
 一段目で誰かが当たっても二段目を省きません（省くと一文字姓などが落ちる）。
-人物設定に `呼称` を書けば、推定に頼らず明示できます。
+人物設定に `呼称` を書けば、推定に頼らず明示できます（雛形のままの行は読まない。`isPlaceholderValue`）。
 誰も特定できなければ全員を載せます。
 
 複数ファイルから集めた資料は `clipDocParts` / `allocateCharBudget` で
@@ -301,6 +301,11 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   （リンク経由で章ファイルや作品の外を上書きしないため）
 - 読み込めない章（`safeReadFile` が null）は空の本文と区別する。`novel_export` は何も書かずに断り、
   `novel_check` は点検できなかった章として示す（空として扱うと欠落が「成功」「問題なし」になる）
+- **ことばづかい（一人称・二人称・敬語・相手ごとの呼び方）は、初めの設定を人物設定に、途中の変化を `state.json` に置く**。
+  人物設定の `## ことばづかい` と `### 相手ごとの呼び方` の表を `extractSpeechProfile` が読み、
+  `novel_context` が `firstPerson` / `addressTerms` を上に重ねて「🗣️ ことばづかい」として載せる。
+  人物設定の全文とは別に載せ、`clipDocParts` に入れない（人物設定が長いと切られて、ぶれやすい部分が落ちるため）。
+  枠は `limits.speech`。雛形の項目名に「呼称」「別名」などを使わない（`extractNameAliases` に別名として拾われる）
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
   目標文字数 120,000／章数 40／視点「三人称一元視点」
 - 資料読み込みの上限は `src/constants.ts` の `LIMITS` が既定値。
@@ -314,7 +319,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、405件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、417件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

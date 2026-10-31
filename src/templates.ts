@@ -171,8 +171,23 @@ export const CHARACTER_PROFILE_TEMPLATE = `# {キャラクター名}
 
 ## 性格
 - **芯になる性格**：[3〜5語。例：強情、人がいい、神経質、見栄っ張り]
-- **話し方の癖**：[口癖、文の長さ、語尾、言いよどみ方]
 - **身ぶりの癖**：[緊張したとき、機嫌がいいときに出る動き]
+
+## ことばづかい
+
+> 執筆用の資料に、この節だけを抜き出して載せます。物語の途中で変わったら
+> novel_update(character-state) の firstPerson / addressTerms に記録します。
+
+- **一人称**：[俺／僕／私／わたし／あたし／自分 など。一人称の語りなら地の文もこの語になる]
+- **二人称**：[お前／あなた／君／あんた、または名前で呼ぶ]
+- **丁寧さの基本**：[誰に敬語を使い、誰にくだけるか。例：上役と客には丁寧語、同期にはため口]
+- **語尾・口調**：[口癖、文の長さ、語尾、方言、言いよどみ方]
+
+### 相手ごとの呼び方
+
+| 相手 | 呼び方 | 丁寧さ | 変わるとき |
+|---|---|---|---|
+| [人物名] | [「森田さん」「先輩」「お前」など] | [敬語／丁寧語／ため口] | [関係がどう変われば呼び方が変わるか] |
 
 ## キャラクターアーク
 | 段階 | 心のありよう | 出来事 | 変化のしるし |
@@ -409,6 +424,8 @@ export const CHARACTER_STATE_TEMPLATE = {
     items: string[]
     abilities: string[]
     relationships: Record<string, string>
+    firstPerson?: string
+    addressTerms?: Record<string, string>
     events: string[]
     lastUpdatedChapter: number | null
   }>,
@@ -440,6 +457,7 @@ export const CONFIG_TEMPLATE = {
     weapons: 4000,
     realitySource: 6000,
     scenes: 4000,
+    speech: 1500,
   },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),

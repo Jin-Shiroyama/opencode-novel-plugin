@@ -786,3 +786,75 @@ describe("執筆資料と進捗の食い違い", () => {
     assert.match(status, /100% \(1\/1\)/)
   })
 })
+
+// ============================================================
+// ことばづかい
+// ============================================================
+
+describe("ことばづかい", () => {
+  const MORITA = `# 森田悠
+
+- **呼称**：森田、先生
+
+## ことばづかい
+
+- **一人称**：俺
+- **二人称**：お前
+
+### 相手ごとの呼び方
+
+| 相手 | 呼び方 | 丁寧さ | 変わるとき |
+|---|---|---|---|
+| 杉本千尋 | 杉本さん | 丁寧語 | |
+| 鏡味征一 | 教頭 | 敬語 | |
+`
+  const SUGIMOTO = "# 杉本千尋\n\n## ことばづかい\n\n- **一人称**：わたし\n"
+  const base = {
+    "config.json": CONFIG,
+    "characters/森田悠.md": MORITA,
+    "characters/杉本千尋.md": SUGIMOTO,
+    "outline-detailed.md": "# 章別\n\n## 第2章\n森田が職員室で話す。\n",
+  }
+
+  test("この章に出る人物の一人称と呼び方を載せ、出ない人物は載せない", async () => {
+    const out = await run(makeProject(base))
+    assert.match(out, /## 🗣️ ことばづかい/)
+    assert.match(out, /\*\*森田悠\*\* — 一人称: 俺 ／ 二人称: お前/)
+    assert.match(out, /杉本千尋 → 杉本さん（丁寧語）/)
+    assert.doesNotMatch(out, /一人称: わたし/)
+  })
+
+  test("記録で変わった呼び方を重ね、変わった章を添える", async () => {
+    const state = JSON.stringify({
+      characters: [
+        { name: "森田悠", status: "active", role: "protagonist", addressTerms: { 杉本千尋: "千尋" }, lastUpdatedChapter: 1 },
+      ],
+    })
+    const out = await run(makeProject({ ...base, "characters/state.json": state }))
+    const speech = out.slice(out.indexOf("## 🗣️"))
+    assert.match(speech, /杉本千尋 → 千尋（第1章で変更）/)
+    assert.doesNotMatch(speech, /杉本さん/)
+    assert.match(out, /鏡味征一 → 教頭（敬語）/)
+  })
+
+  test("人物設定が無く記録だけにある人物も、章に名前が出れば載せる", async () => {
+    const state = JSON.stringify({
+      characters: [{ name: "森田", status: "active", role: "protagonist", firstPerson: "僕" }],
+    })
+    const out = await run(
+      makeProject({
+        "config.json": CONFIG,
+        "characters/state.json": state,
+        "outline-detailed.md": "# 章別\n\n## 第2章\n森田が職員室で話す。\n",
+      }),
+    )
+    assert.match(out, /\*\*森田\*\* — 一人称: 僕（記録で変更）/)
+  })
+
+  test("人物設定が枠で切られても、ことばづかいの一覧は残る", async () => {
+    const config = JSON.stringify({ ...JSON.parse(CONFIG), limits: { characterProfiles: 10 } })
+    const out = await run(makeProject({ ...base, "config.json": config }))
+    assert.match(out, /以下省略|枠が足りず省略/)
+    assert.match(out, /\*\*森田悠\*\* — 一人称: 俺/)
+  })
+})

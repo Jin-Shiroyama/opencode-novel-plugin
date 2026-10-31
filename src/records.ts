@@ -67,6 +67,8 @@ const characterChangesSchema = z
     items: addRemove.optional(),
     abilities: addRemove.optional(),
     relationships: z.record(z.string()).optional(),
+    firstPerson: z.string().min(1).optional(),
+    addressTerms: z.record(z.string().min(1)).optional(),
     events: z.array(z.string()).optional(),
     lastUpdatedChapter: chapterNo.optional(),
   })
@@ -93,6 +95,7 @@ export const CHARACTER_STATE_EXAMPLE = `{
         "mentalState": "「自分で選んだから立つ」と初めて口にする",
         "items": { "added": ["古い剣"], "removed": ["父の剣"] },
         "relationships": { "ドルガ": "撤退を拒んだドルガを信頼する" },
+        "addressTerms": { "ドルガ": "ドルガ（「隊長」と呼ぶのをやめた）" },
         "events": ["魔王の波に吹き飛ばされ、剣を失う"]
       }
     }
@@ -102,7 +105,8 @@ export const CHARACTER_STATE_EXAMPLE = `{
 export const CHARACTER_STATE_KEYS =
   "status（active / deceased / missing / retired）, role（protagonist / supporting / antagonist / minor）, " +
   "physicalState, mentalState, items（{ added, removed }）, abilities（{ added, removed }）, " +
-  "relationships（{ 相手: 変化 }）, events（文字列の配列）, lastUpdatedChapter"
+  "relationships（{ 相手: 変化 }）, firstPerson（いまの一人称）, addressTerms（{ 相手: いまの呼び方 }）, " +
+  "events（文字列の配列）, lastUpdatedChapter"
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; message: string }
 
@@ -855,6 +859,8 @@ const storedCharacterSchema = z
     items: z.array(z.string()).optional(),
     abilities: z.array(z.string()).optional(),
     relationships: z.record(z.string()).optional(),
+    firstPerson: z.string().optional(),
+    addressTerms: z.record(z.string()).optional(),
     events: z.array(z.string()).optional(),
     lastUpdatedChapter: z.number().optional(),
   })

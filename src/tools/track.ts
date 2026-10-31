@@ -119,7 +119,7 @@ ${lines.join("\n")}`
  */
 function applyCharacterChanges(target: CharacterState, changes: CharacterChanges, chapterNumber?: number): string[] {
   const applied: string[] = []
-  for (const key of ["status", "role", "physicalState", "mentalState"] as const) {
+  for (const key of ["status", "role", "physicalState", "mentalState", "firstPerson"] as const) {
     const value = changes[key]
     if (value === undefined || target[key] === value) continue
     ;(target as unknown as Record<string, unknown>)[key] = value
@@ -135,13 +135,14 @@ function applyCharacterChanges(target: CharacterState, changes: CharacterChanges
     target[key] = [...before, ...toAdd].filter((x) => !toRemove.includes(x))
     applied.push(`${key}(+${toAdd.length}/-${toRemove.length})`)
   }
-  if (changes.relationships) {
-    const before = target.relationships ?? {}
-    const keys = Object.keys(changes.relationships).filter((k) => before[k] !== changes.relationships![k])
-    if (keys.length > 0) {
-      target.relationships = { ...before, ...changes.relationships }
-      applied.push(`relationships(${keys.join("・")})`)
-    }
+  for (const key of ["relationships", "addressTerms"] as const) {
+    const incoming = changes[key]
+    if (!incoming) continue
+    const before = target[key] ?? {}
+    const keys = Object.keys(incoming).filter((k) => before[k] !== incoming[k])
+    if (keys.length === 0) continue
+    target[key] = { ...before, ...incoming }
+    applied.push(`${key}(${keys.join("・")})`)
   }
   if (changes.events) {
     const before = target.events ?? []

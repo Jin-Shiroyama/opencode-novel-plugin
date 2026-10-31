@@ -111,6 +111,24 @@ describe("novel_update(character-state) の変化の数え方", () => {
     assert.deepEqual(JSON.parse(read(dir, "characters/state.json")).characters[0].items, ["水筒", "剣"])
   })
 
+  test("呼び方は相手ごとに重ね、変わった相手を示す。送り直しは変更なし", async () => {
+    const state = JSON.stringify({
+      characters: [{ name: "レン", status: "active", role: "protagonist", addressTerms: { ドルガ: "隊長", ミナ: "ミナ" } }],
+    })
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": state })
+    const change = { updates: [{ name: "レン", changes: { firstPerson: "俺", addressTerms: { ドルガ: "ドルガ", ミナ: "ミナ" } } }] }
+    const out = await update(dir, "character-state", change, 5)
+    assert.match(out, /レン: firstPerson, addressTerms\(ドルガ\)/)
+    const saved = JSON.parse(read(dir, "characters/state.json")).characters[0]
+    assert.deepEqual(saved.addressTerms, { ドルガ: "ドルガ", ミナ: "ミナ" })
+    assert.equal(saved.firstPerson, "俺")
+    assert.equal(saved.lastUpdatedChapter, 5)
+
+    const before = read(dir, "characters/state.json")
+    assert.match(await update(dir, "character-state", change, 6), /^ℹ️/)
+    assert.equal(read(dir, "characters/state.json"), before)
+  })
+
   test("一部の人物だけ変わったときは、変わらなかった人物も示す", async () => {
     const state = JSON.stringify({
       characters: [
@@ -464,6 +482,7 @@ describe("壊れた記録ファイルは上書きしない", () => {
     ["characters が無い", '{"people": []}'],
     ["名前が無い", '{"characters": [{"mentalState": "不安"}]}'],
     ["所持品が文字列", '{"characters": [{"name": "レン", "items": "水筒"}]}'],
+    ["呼び方が文字列", '{"characters": [{"name": "レン", "addressTerms": "隊長"}]}'],
   ] as const) {
     test(`人物の状態: ${name}なら断り、元のファイルを残す`, async () => {
       const dir = makeProject({ "config.json": CONFIG, "characters/state.json": body })

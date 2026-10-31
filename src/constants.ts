@@ -51,6 +51,8 @@ export const LIMITS = {
   realitySource: 6000,
   /** この章のシーン一覧（_Prompt を含む） */
   scenes: 4000,
+  /** ことばづかいの一覧（一人称・二人称・相手ごとの呼び方） */
+  speech: 1500,
 } as const
 
 export type LimitKey = keyof typeof LIMITS
