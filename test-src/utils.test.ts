@@ -16,8 +16,8 @@ import {
   resolveLimit,
   countWrittenChapters,
   progressBar,
-} from "./utils.js"
-import { LIMITS } from "./constants.js"
+} from "../src/utils.js"
+import { LIMITS } from "../src/constants.js"
 
 // ============================================================
 // countWords — 空白・改行を除いた全文字数

@@ -28,7 +28,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --outDir test-out && node --test \"test-out/**/*.test.js\" \"scripts/**/*.test.mjs\"",
+    "test": "tsc && node test-src/prepare-test-out.mjs && node --test \"test-out/test-src/**/*.test.js\" \"test-src/**/*.test.mjs\"",
     "check:ja": "node scripts/check-japanese.mjs"
   },
   "dependencies": {

@@ -842,7 +842,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（405テスト。src と scripts の両方）
+pnpm test        # node:test で実行（405テスト。test-src/ にまとめてある）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -870,7 +870,6 @@ src/
 ├── commands.ts       # commands/*.md の読み込みと frontmatter の解析
 ├── constants.ts      # 既定値（DEFAULTS）と資料読み込みの上限（LIMITS）
 ├── utils.ts          # パス／ファイル／文書解析／進行判定／文字数
-├── utils.test.ts     # ユニットテスト
 ├── records.ts        # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
 ├── typography.ts     # 表記の点検（novel-writing skill の表記規約のうち機械で見られるもの）
 ├── prompts.ts        # 15のRTCOプロンプト
@@ -881,13 +880,20 @@ commands/             # 11のコマンド
 skills/               # 5つの skill
 scripts/
 └── check-japanese.mjs  # 中国語の残存チェック
+test-src/             # テスト（src/ と同じ並び）
+├── *.test.ts         # src/*.ts のテスト
+├── tools/            # src/tools/*.ts のテスト
+├── scripts/          # scripts/check-japanese.mjs のテスト
+└── prepare-test-out.mjs  # test-out/ に commands/ と skills/ を写す
 ```
 
 ### テストについて
 
 Node 24 標準の `node:test` を使い、**テスト用の依存パッケージはありません**。
 
-Node は `./utils.js` という指定子を `.ts` に解決しないため、`tsc` で `test-out/` に出力してからテストを走らせます。配布ビルドは `tsconfig.build.json` を使い、テストを除外します。
+テストは `src/` に混ぜず `test-src/` にまとめています。`src/` には配布する本体だけを置きます。
+
+Node は `../src/utils.js` という指定子を `.ts` に解決しないため、`tsc` で `src/` と `test-src/` を `test-out/` に出力してからテストを走らせます。本体は `test-out/src/` に入ります。`src/index.ts` は自分の位置から `../commands` と `../skills` を読むので、`test-src/prepare-test-out.mjs` が実物を `test-out/` の直下に写します。配布ビルドは `tsconfig.build.json` を使い、`src/` だけを `dist/` に出力します。
 
 ### 中国語の残存チェック
 
@@ -916,7 +922,7 @@ printf '%s' "<字>" | iconv -f UTF-8 -t EUC-JISX0213 >/dev/null 2>&1
 
 **限界** — 手順3により、簡体字でありながら JIS X 0213 に収録されている字（`关` `复` `开` `异` `种` `确` `离` `适` など 64 字）は一覧に入りません。それらだけで書かれた中国語の文は第一段では捕まりません。これは意図した取り引きです。CI を止める検査が正しい内容を落とす害のほうが大きいからです。取りこぼしは第二段・第三段が補います。
 
-**検出器そのもののテスト** — `scripts/check-japanese.test.mjs` が `pnpm test` で走ります。一覧に JIS X 0213 の収録字が混ざっていないことを `iconv` で機械的に検証し（混ざればテストが落ちます）、日本語13ケースが検出されないこと・中国語6ケースが検出されることを確かめます。あわせて CLI も実際に起動して確かめます（`#` や空白や日本語を含むパスでも検査が走ること、終了コードが正しいこと）。`iconv` が `EUC-JISX0213` を扱えない環境では、一覧の検証は空振りさせずにスキップします。`node scripts/check-japanese.mjs --self-test` でも判定表を目で確認できます。
+**検出器そのもののテスト** — `test-src/scripts/check-japanese.test.mjs` が `pnpm test` で走ります。一覧に JIS X 0213 の収録字が混ざっていないことを `iconv` で機械的に検証し（混ざればテストが落ちます）、日本語13ケースが検出されないこと・中国語6ケースが検出されることを確かめます。あわせて CLI も実際に起動して確かめます（`#` や空白や日本語を含むパスでも検査が走ること、終了コードが正しいこと）。`iconv` が `EUC-JISX0213` を扱えない環境では、一覧の検証は空振りさせずにスキップします。`node scripts/check-japanese.mjs --self-test` でも判定表を目で確認できます。
 
 意図的に残す箇所は `ALLOW` に `{ file, contains, reason }` で追記します（行番号指定は編集でずれるため、内容指定を推奨）。
 `LICENSE`（AGPL-3.0 の原文）は検査対象に含めていません。

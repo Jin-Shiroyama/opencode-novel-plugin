@@ -3,10 +3,10 @@ import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
-import { selectForeshadowReminders } from "./utils.js"
-import type { ForeshadowEntry } from "./utils.js"
-import { FORESHADOW_LOOKAHEAD } from "./constants.js"
-import { novelContextExecute } from "./tools/context.js"
+import { selectForeshadowReminders } from "../src/utils.js"
+import type { ForeshadowEntry } from "../src/utils.js"
+import { FORESHADOW_LOOKAHEAD } from "../src/constants.js"
+import { novelContextExecute } from "../src/tools/context.js"
 
 /**
  * 伏線の知らせ方のテスト。

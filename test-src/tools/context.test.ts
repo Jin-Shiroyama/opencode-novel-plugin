@@ -3,13 +3,13 @@ import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
-import { novelContextExecute } from "./context.js"
-import { novelStatusExecute } from "./status.js"
+import { novelContextExecute } from "../../src/tools/context.js"
+import { novelStatusExecute } from "../../src/tools/status.js"
 import {
   determinePhase, allocateCharBudget, characterNameKeys, extractNameAliases,
   collectScenes, sceneChapterNumber, chapterNumberFromFileName, chapterDocNumber,
   listChapterDocs, readChapterDoc,
-} from "../utils.js"
+} from "../../src/utils.js"
 
 /**
  * novel_context の結合テスト。

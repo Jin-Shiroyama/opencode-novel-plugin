@@ -1,6 +1,6 @@
 import { test, describe, before } from "node:test"
 import assert from "node:assert/strict"
-import { DEFAULT_MODEL } from "./constants.js"
+import { DEFAULT_MODEL } from "../src/constants.js"
 
 /**
  * config フックの結合テスト。
@@ -15,7 +15,7 @@ let config: { command: Record<string, CommandConfig>; agent: Record<string, any>
 
 /** config フックを、与えた設定に対して走らせる */
 async function applyConfig(userConfig: Record<string, any> = {}): Promise<any> {
-  const mod = await import("./index.js")
+  const mod = await import("../src/index.js")
   const hooks = await (mod.default as any).server({})
   const c = structuredClone(userConfig)
   await hooks.config(c)

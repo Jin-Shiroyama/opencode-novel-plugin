@@ -22,7 +22,6 @@ opencode-novel-plugin/
 │   ├── commands.ts           # commands/*.md の読み込みと frontmatter の解析
 │   ├── constants.ts          # 既定値（DEFAULTS）と資料読み込みの上限（LIMITS）
 │   ├── utils.ts              # パス／ファイル／文書解析／進行判定／文字数
-│   ├── utils.test.ts         # ユニットテスト（node:test）
 │   ├── records.ts            # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
 │   ├── typography.ts         # 表記の点検（表記規約のうち機械で見られるもの）
 │   ├── prompts.ts            # 15のRTCOプロンプト
@@ -40,6 +39,13 @@ opencode-novel-plugin/
 │       ├── track.ts          # novel_update — 記録の更新
 │       ├── check.ts          # novel_check — 表記の点検
 │       └── export.ts         # novel_export — 原稿の書き出し
+├── test-src/                 # テスト（node:test）。src/ と同じ並びで置く
+│   ├── *.test.ts             # src/*.ts のテスト
+│   ├── tools/*.test.ts       # src/tools/*.ts のテスト
+│   ├── scripts/              # scripts/check-japanese.mjs のテスト
+│   └── prepare-test-out.mjs  # test-out/ に commands/ と skills/ を写す
+├── scripts/
+│   └── check-japanese.mjs    # 中国語の残存チェック
 ├── commands/                 # スラッシュコマンド（11本）
 ├── skills/                   # 執筆用の skill（5本）
 │   ├── novel-workflow/       # 6工程の進め方（通し作例つき）
@@ -48,8 +54,8 @@ opencode-novel-plugin/
 │   ├── novel-wuxia/          # 時代小説・剣豪小説の設定と書き方
 │   └── novel-reality/        # 現実から題材を取る（日本法の注意つき）
 ├── package.json
-├── tsconfig.json             # typecheck / test 用（テストを含む）
-└── tsconfig.build.json       # 配布ビルド用（テストを除く）
+├── tsconfig.json             # typecheck / test 用（src と test-src。出力は test-out/）
+└── tsconfig.build.json       # 配布ビルド用（src だけ。出力は dist/）
 ```
 
 ## 作品データ（.novel/）
@@ -308,10 +314,16 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（src/**/*.test.ts と scripts/*.test.mjs、405件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、405件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
+
+テストは `src/` に置かず `test-src/` にまとめます（`src/` は配布する本体だけ）。
+`test-src/` は `src/` と同じ並びにし、本体を `../src/…` で import します。
+`pnpm test` は `tsc` で `src/` と `test-src/` を `test-out/` に出力してから走らせます。
+本体は `test-out/src/` に入り、`src/index.ts` は自分の位置から `../commands` と `../skills` を読むため、
+`test-src/prepare-test-out.mjs` が実物を `test-out/` の直下に写します（本体をテストに合わせて変えない）。
 
 リリースは自動では走りません。GitHub の Actions 画面から Release ワークフローを
 手動で実行します（既定は試し実行）。詳しくは `README.ja.md` の「公開」を参照。

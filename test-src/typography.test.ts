@@ -1,8 +1,8 @@
 import { test, describe } from "node:test"
 import assert from "node:assert/strict"
-import { checkTypography, countByRule } from "./typography.js"
-import type { TypographyRule } from "./typography.js"
-import { toKanjiNumber } from "./utils.js"
+import { checkTypography, countByRule } from "../src/typography.js"
+import type { TypographyRule } from "../src/typography.js"
+import { toKanjiNumber } from "../src/utils.js"
 
 /**
  * 表記の点検の単体テスト。規約の正本は novel-writing skill。

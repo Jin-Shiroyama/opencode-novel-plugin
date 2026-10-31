@@ -11,9 +11,9 @@ import {
   SIMPLIFIED,
   CHINESE_WORDS,
   SELF_TEST_CASES,
-} from "./check-japanese.mjs"
+} from "../../scripts/check-japanese.mjs"
 
-const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "check-japanese.mjs")
+const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "scripts", "check-japanese.mjs")
 
 /**
  * iconv で JIS X 0213 に収録されているかを調べる。

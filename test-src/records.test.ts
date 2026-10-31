@@ -3,8 +3,8 @@ import assert from "node:assert/strict"
 import {
   parseCharacterUpdates, parseForeshadowUpdates, parseSummaryInput, upsertSummarySections,
   buildSummaryContext, summaryChapters, splitForeshadowEntries, formatChapterRanges,
-} from "./records.js"
-import { isUntouchedTemplate, fillTemplateVars, REALITY_SOURCE_TEMPLATE, SUMMARY_TEMPLATE } from "./templates.js"
+} from "../src/records.js"
+import { isUntouchedTemplate, fillTemplateVars, REALITY_SOURCE_TEMPLATE, SUMMARY_TEMPLATE } from "../src/templates.js"
 
 /**
  * 記録の形の検証と、あらすじを章ごとの節で持つ処理の単体テスト。

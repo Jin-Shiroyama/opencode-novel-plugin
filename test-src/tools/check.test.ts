@@ -3,9 +3,9 @@ import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
-import { novelCheckExecute } from "./check.js"
-import { novelExportExecute } from "./export.js"
-import { novelSaveChapterExecute } from "./save.js"
+import { novelCheckExecute } from "../../src/tools/check.js"
+import { novelExportExecute } from "../../src/tools/export.js"
+import { novelSaveChapterExecute } from "../../src/tools/save.js"
 
 /**
  * novel_check / novel_export と、保存時の表記の報告の結合テスト。

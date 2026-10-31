@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseFrontmatter, loadCommands, COMMAND_CONFIG_KEYS } from "./commands.js"
+import { parseFrontmatter, loadCommands, COMMAND_CONFIG_KEYS } from "../src/commands.js"
 
 /**
  * コマンド定義の読み込みのテスト。

@@ -3,9 +3,9 @@ import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
-import { stripChapterHeading, countWords, normalizeChapterTitle } from "./utils.js"
-import { novelSaveChapterExecute } from "./tools/save.js"
-import { novelStatusExecute } from "./tools/status.js"
+import { stripChapterHeading, countWords, normalizeChapterTitle } from "../src/utils.js"
+import { novelSaveChapterExecute } from "../src/tools/save.js"
+import { novelStatusExecute } from "../src/tools/status.js"
 
 /**
  * 章の文字数の数え方のテスト。

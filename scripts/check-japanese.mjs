@@ -48,7 +48,7 @@
  *   node scripts/check-japanese.mjs <path...>  # 対象を指定する（リポジトリ相対）
  *   node scripts/check-japanese.mjs --self-test # 検出器そのものを確かめる
  *
- * 検出器の単体テストは scripts/check-japanese.test.mjs にあり、pnpm test で走る。
+ * 検出器の単体テストは test-src/scripts/check-japanese.test.mjs にあり、pnpm test で走る。
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs"
@@ -57,7 +57,7 @@ import { pathToFileURL } from "node:url"
 
 /** 調べる対象（ディレクトリは再帰的にたどる） */
 export const DEFAULT_TARGETS = [
-  "src", "commands", "skills", "scripts",
+  "src", "test-src", "commands", "skills", "scripts",
   "README.md", "README.ja.md", "AGENTS.md", "package.json",
 ]
 
@@ -70,7 +70,7 @@ const SKIP_DIRS = new Set(["node_modules", "dist", "test-out", ".git", ".notes"]
  */
 const SKIP_FILES = new Set([
   "scripts/check-japanese.mjs",
-  "scripts/check-japanese.test.mjs",
+  "test-src/scripts/check-japanese.test.mjs",
 ])
 
 /** 調べる拡張子 */

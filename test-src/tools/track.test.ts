@@ -3,10 +3,10 @@ import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
-import { novelUpdateExecute } from "./track.js"
-import { novelContextExecute } from "./context.js"
-import { novelStatusExecute } from "./status.js"
-import { fillTemplateVars, REALITY_SOURCE_TEMPLATE, SUMMARY_TEMPLATE } from "../templates.js"
+import { novelUpdateExecute } from "../../src/tools/track.js"
+import { novelContextExecute } from "../../src/tools/context.js"
+import { novelStatusExecute } from "../../src/tools/status.js"
+import { fillTemplateVars, REALITY_SOURCE_TEMPLATE, SUMMARY_TEMPLATE } from "../../src/templates.js"
 
 /**
  * novel_update と、その記録を読む novel_context / novel_status の結合テスト。
@@ -376,7 +376,7 @@ describe("境界条件", () => {
   })
 
   test("ツールの引数でも chapterNumber を1以上の整数に限る", async () => {
-    const mod = await import("../index.js")
+    const mod = await import("../../src/index.js")
     const hooks = await (mod.default as any).server({})
     for (const name of ["novel_update", "novel_save_chapter", "novel_context"]) {
       const schema = hooks.tool[name].args.chapterNumber
