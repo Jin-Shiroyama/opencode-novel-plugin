@@ -79,10 +79,12 @@ opencode-novel-plugin/
 │   ├── martial-arts.md      # 剣術・技
 │   └── weapons.md           # 刀剣（weapons/{刀剣名}.md に分割も可）
 ├── reality-source.md        # 取材メモ（reality/events/ などに分割も可）
-└── chapters/                # 本文
-    ├── chapter-001.md
-    ├── chapter-002.md
-    └── ...
+├── chapters/                # 本文
+│   ├── chapter-001.md
+│   ├── chapter-002.md
+│   └── ...
+└── drafts/                  # 旧稿（保存し直したときに前の原稿を残す）
+    └── chapter-001-20261031-153012.md
 ```
 
 > `wuxia` というディレクトリ名は上流からの互換のために残しています。
@@ -304,6 +306,10 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   漢数字へ直す。書き出し先は作品のディレクトリの中に限り、`.novel/chapters/` には書かない。
   パスの文字列だけで判定せず、書き出し先がリンクなら断り、親ディレクトリは実体（realpath）で判定する
   （リンク経由で章ファイルや作品の外を上書きしないため）
+- **`novel_save_chapter` はすでにある章を黙って上書きしない**。内容が変わるときは、前の原稿を
+  `.novel/drafts/chapter-NNN-YYYYMMDD-HHMMSS.md` に残してから書く（同じ秒なら `-2` を付ける）。
+  旧稿は chapters/ の外に置き、名前も章ファイルの形から外す（章として数えないため）。
+  いまの章ファイルを読み込めないときは、旧稿を残せないので保存を断る
 - 読み込めない章（`safeReadFile` が null）は空の本文と区別する。`novel_export` は何も書かずに断り、
   `novel_check` は点検できなかった章として示す（空として扱うと欠落が「成功」「問題なし」になる）
 - **ことばづかい（一人称・二人称・敬語・相手ごとの呼び方）は、初めの設定を人物設定に、途中の変化を `state.json` に置く**。
@@ -324,7 +330,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、418件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、424件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

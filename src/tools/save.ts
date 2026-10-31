@@ -1,4 +1,7 @@
-import { safeWriteFile, getChaptersDir, countWords, stripChapterHeading, normalizeChapterTitle } from "../utils.js"
+import {
+  safeReadFile, safeWriteFile, getChaptersDir, getNovelDir, countWords, stripChapterHeading, normalizeChapterTitle,
+  existsSync,
+} from "../utils.js"
 import { summarizeForSave } from "./check.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
@@ -34,6 +37,23 @@ export async function novelSaveChapterExecute(
   // 縦組みの原稿として書き出すときに漢数字へ直せばよい。
   const header = title.length > 0 ? `# 第${num}章 ${title}\n\n` : `# 第${num}章\n\n`
   const saved = header + body
+
+  // 書き直しで前の原稿が消えないよう、内容が変わるときは旧稿を drafts/ に残してから上書きする。
+  // 読み込めない（ディレクトリになっている、権限が無い）ときは、旧稿を残せないので書かずに断る
+  let previousNote = ""
+  if (existsSync(filePath)) {
+    const previous = await safeReadFile(filePath)
+    if (previous === null) {
+      return `❌ 第${num}章は保存していません。いまの ${fileName} を読み込めず、前の原稿を残せないためです。
+   ファイルの権限や中身（ディレクトリになっていないか）を確かめてください。`
+    }
+    if (previous === saved) {
+      previousNote = `ℹ️ 前に保存した内容と同じでした\n`
+    } else {
+      const backupPath = await backupPreviousDraft(dir, fileName, previous)
+      previousNote = `🗂️ 前の原稿を残しました: ${backupPath}\n`
+    }
+  }
   await safeWriteFile(filePath, saved)
 
   const wordCount = countWords(body)
@@ -45,6 +65,7 @@ export async function novelSaveChapterExecute(
     report += `ℹ️ タイトルに改行などが含まれていたため、1行に直しました\n`
   }
   report += `📄 ファイル: ${filePath}\n`
+  report += previousNote
   report += `📊 文字数: ${wordCount.toLocaleString("ja-JP")}文字\n`
   // 保存したものをそのまま点検する（行番号が保存ファイルと一致するように）
   report += summarizeForSave(saved, num)
@@ -57,4 +78,24 @@ export async function novelSaveChapterExecute(
   }
 
   return report
+}
+
+/**
+ * 旧稿を .novel/drafts/chapter-NNN-YYYYMMDD-HHMMSS.md に書き、そのパスを返す。
+ *
+ * 置き場所を chapters/ の外にし、名前も chapter-NNN.md の形から外す
+ * （章ファイルとして数えたり読んだりされないように。utils.ts の CHAPTER_FILE_PATTERN）。
+ * 同じ秒に二度書き直したときは -2, -3 … を付けて、先の旧稿を消さない。
+ */
+async function backupPreviousDraft(dir: string, fileName: string, content: string): Promise<string> {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const stamp =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-` +
+    `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  const base = join(getNovelDir(dir), "drafts", `${fileName.replace(/\.md$/, "")}-${stamp}`)
+  let path = `${base}.md`
+  for (let n = 2; existsSync(path); n++) path = `${base}-${n}.md`
+  await safeWriteFile(path, content)
+  return path
 }

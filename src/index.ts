@@ -70,6 +70,7 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
 
       "novel_save_chapter": tool({
         description: `書き上げた1章を chapters ディレクトリに保存する。ファイル名の連番付けと文字数の計算を自動で行う。
+すでにある章を保存し直すと、前の原稿を .novel/drafts/ に残してから上書きする。
 使う場面: 1章を書き終えたとき（例「第3章が書けたので保存して」）。`,
         args: {
           chapterNumber: z.number().int().positive().describe("章番号（1から数える）"),
