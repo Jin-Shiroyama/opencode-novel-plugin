@@ -9,6 +9,7 @@ import { join, resolve, relative } from "node:path"
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { DEFAULTS, LIMITS, MARTIAL_ARTS_GENRE_KEYWORDS, FORESHADOW_LOOKAHEAD } from "./constants.js"
 import type { LimitKey } from "./constants.js"
+import { stripRuby } from "./ruby.js"
 
 export { existsSync } from "node:fs"
 
@@ -966,7 +967,11 @@ export function resolveLimit(config: NovelConfig | null | undefined, key: LimitK
  * 文字数を数える。
  *
  * 空白（半角・全角）と改行を除いた全文字数。仮名・漢字・約物・英数字を
- * 区別せず 1 文字として数えるため、原稿用紙 400 字詰めの換算と一致する。
+ * 区別せず 1 文字として数える。原稿用紙の枚数とは一致しない（改行で余るマスや
+ * 字下げのマスを数えないため）。
+ *
+ * ルビと傍点は記法を外して数える（｜漢字《かんじ》は「漢字」の2文字、《《傍点》》は2文字）。
+ * 読者に見える文字だけを数えるため。ruby.ts を参照。
  *
  * 章の文字数を数えるときは、先に stripChapterHeading で見出しの行を外す。
  * 数えるのは本文だけという規則にしてある。
@@ -976,7 +981,7 @@ export function resolveLimit(config: NovelConfig | null | undefined, key: LimitK
 export function countWords(text: string): number {
   if (!text) return 0
   let count = 0
-  for (const ch of text) {
+  for (const ch of stripRuby(text)) {
     if (!isWhitespace(ch)) count++
   }
   return count

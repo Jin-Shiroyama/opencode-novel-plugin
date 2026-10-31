@@ -27,6 +27,13 @@ import { LIMITS } from "../src/constants.js"
 // ============================================================
 
 describe("countWords", () => {
+  test("ルビと傍点は記法を外し、読者に見える文字だけを数える", () => {
+    assert.equal(countWords("｜漢字《かんじ》"), 2)
+    assert.equal(countWords("東京《とうきょう》"), 2)
+    assert.equal(countWords("《《本当に》》"), 3)
+    assert.equal(countWords("あの《黒の騎士団》"), 9) // 括弧の《》は数える
+  })
+
   test("ひらがなを1文字ずつ数える", () => {
     assert.equal(countWords("あいうえお"), 5)
   })

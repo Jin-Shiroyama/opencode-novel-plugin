@@ -15,6 +15,7 @@ import { createNovelPlannerAgent } from "./agents/novel-planner.js"
 import { createNovelWriterAgent } from "./agents/novel-writer.js"
 import { createNovelEditorAgent } from "./agents/novel-editor.js"
 import { mergeAgentConfig } from "./agent-config.js"
+import { RUBY_NOTATIONS } from "./ruby.js"
 import { loadCommands } from "./commands.js"
 
 const z = tool.schema
@@ -142,7 +143,7 @@ ${FORESHADOW_EXAMPLE}`,
 
       "novel_check": tool({
         description: `本文の表記を点検し、規約から外れた箇所を行と字の位置つきで返す。規約の正本は novel-writing skill。
-見るもの: 括弧の対応（「」の中で改行しない）、会話文末の句点、三点リーダ（……・偶数個）、ダッシュ（――・偶数個、— や ーー で代用しない）、三点リーダ・ダッシュのあとの空白、半角の ! ?、感嘆符・疑問符のあとの全角スペース（閉じ括弧の直前・行末・約物の連続では空けない。！？ などの組み合わせは可）、段落頭の字下げ（地の文は全角1字、会話行は字下げしない）、全角の算用数字、地の文の算用数字（確認）、日本語と英数字のあいだの半角スペース（確認）。
+見るもの: ルビ・傍点の記法（｜親文字《ルビ》・《《傍点》》が行の中で閉じているか、ルビが空でないか）、括弧の対応（「」の中で改行しない）、会話文末の句点、三点リーダ（……・偶数個）、ダッシュ（――・偶数個、— や ーー で代用しない）、三点リーダ・ダッシュのあとの空白、半角の ! ?、感嘆符・疑問符のあとの全角スペース（閉じ括弧の直前・行末・約物の連続では空けない。！？ などの組み合わせは可）、段落頭の字下げ（地の文は全角1字、会話行は字下げしない）、全角の算用数字、地の文の算用数字（確認）、日本語と英数字のあいだの半角スペース（確認）。
 ❌ は規約違反、⚠️ は確かめてほしい箇所。
 使う場面: 章を保存したあと（保存の報告にも件数が出る）、原稿の点検で表記を見るとき、書き出しの前。`,
         args: {
@@ -158,11 +159,13 @@ ${FORESHADOW_EXAMPLE}`,
         description: `書いた章を章番号順に繋ぎ、原稿を1ファイルに書き出す。本文は書き換えない。
 format: text（既定。投稿サイトや縦書きエディタに貼る形。見出しは「第一章　タイトル」、Markdown の記号なし）／markdown（作品タイトルを #、章を ## にする）。
 numerals: 章見出しの数字。text は既定で漢数字、markdown は既定で算用数字。
+ruby: ルビ・傍点の書き出し先の記法。kakuyomu（｜親文字《ルビ》・《《傍点》》。text の既定）／narou（傍点は「・」のルビ）／aozora（青空文庫の注記）／pixiv（[[rb:親文字 > ルビ]]）／html（<ruby>。markdown の既定）／paren（親文字（ルビ）。応募原稿向け）／none（ルビを外す）。
 書き出し先は既定で .novel/export/{作品タイトル}.txt（.md）。outputPath で作品のディレクトリ内の別の場所を指定できる。
 使う場面: 書き上げた原稿をまとめて読みたい、投稿したい、人に渡したいとき。`,
         args: {
           format: z.enum(["text", "markdown"]).optional().describe("書き出す形式。既定 text"),
           numerals: z.enum(["kanji", "arabic"]).optional().describe("章見出しの数字。既定は text なら kanji、markdown なら arabic"),
+          ruby: z.enum(RUBY_NOTATIONS).optional().describe("ルビ・傍点の記法。既定は text なら kakuyomu、markdown なら html"),
           fromChapter: z.number().int().positive().optional().describe("この章から書き出す。既定 1"),
           toChapter: z.number().int().positive().optional().describe("この章まで書き出す。既定は最後の章"),
           outputPath: z.string().optional().describe("書き出し先（作品のディレクトリからの相対パス）"),

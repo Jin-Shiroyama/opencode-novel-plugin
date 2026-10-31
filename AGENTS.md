@@ -24,6 +24,7 @@ opencode-novel-plugin/
 │   ├── utils.ts              # パス／ファイル／文書解析／進行判定／文字数
 │   ├── records.ts            # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
 │   ├── typography.ts         # 表記の点検（表記規約のうち機械で見られるもの）
+│   ├── ruby.ts               # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
 │   ├── prompts.ts            # 15のRTCOプロンプト
 │   ├── templates.ts          # 15の文書雛形（Markdown 12 + JSON 3）
 │   ├── agents/
@@ -262,8 +263,9 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   埋めると見出しが2行以上になり、`stripChapterHeading` は先頭の1行しか
   外さないため、2行目以降が本文として数えられる。
   本文の行を余分に削るのではなく、見出しを作る側で条件を保証する。
-  仮名・漢字・約物・英数字を区別せず1文字として数え、コードポイント単位で走査する
-  （原稿用紙400字詰めの換算と一致する）
+  仮名・漢字・約物・英数字を区別せず1文字として数え、コードポイント単位で走査する。
+  ルビと傍点は記法を外して親文字だけを数える（`｜十七《じゅうしち》` は2文字）。
+  原稿用紙の枚数とは一致しない（改行で余るマスや字下げを数えないため）
 - **記録ファイルは更新の前に厳密に読み直す**（`readForeshadowRecord` / `readCharacterStateRecord` /
   `readTextRecord`）。「無い」「読み込めない」「構文エラー」「形の異常」を区別し、後ろ3つでは元のファイルに
   触れず更新を断る。共通の `safeReadJson` は無いときも壊れているときも null を返すので、更新処理では使わない
@@ -302,6 +304,10 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   感嘆符・疑問符の重ねや組み合わせ（`！！` `！？` `？！`）は許し、続けたものを1つの約物として扱う。
   会話行（「『で始まる行）は字下げしない。`novel_save_chapter` は保存したファイルをそのまま点検して
   件数を報告に添える（行番号が保存ファイルと一致するように）
+- **ルビと傍点はカクヨムの記法で持つ**（`｜親文字《ルビ》`・`漢字《ルビ》`・`《《傍点》》`・`｜《` で《そのもの）。
+  読み取りは `src/ruby.ts` の `parseRubyLine` だけで行い、文字数（`countWords` は記法を外して親文字だけを数える）、
+  表記の点検（記法の崩れは元の行で拾い、ほかの規則は `stripRubyLine` で記法を外した行で見て、字の位置を元の行に戻す）、
+  書き出し（`convertRuby`）が同じ解釈を共有する。漢字の続かない《…》は括弧として残す
 - `novel_export` は本文を書き換えない。保存ファイルの見出しは算用数字のままにし、書き出すときに
   漢数字へ直す。書き出し先は作品のディレクトリの中に限り、`.novel/chapters/` には書かない。
   パスの文字列だけで判定せず、書き出し先がリンクなら断り、親ディレクトリは実体（realpath）で判定する
@@ -330,7 +336,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、424件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、449件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

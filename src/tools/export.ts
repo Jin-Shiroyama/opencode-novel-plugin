@@ -7,11 +7,14 @@ import {
 import type { NovelConfig } from "../utils.js"
 import { formatChapterRanges } from "../records.js"
 import { checkTypography } from "../typography.js"
+import { convertRuby, countRubyMarks } from "../ruby.js"
+import type { RubyNotation } from "../ruby.js"
 import type { ToolContext } from "../index.js"
 
 interface ExportArgs {
   format?: "text" | "markdown"
   numerals?: "kanji" | "arabic"
+  ruby?: RubyNotation
   fromChapter?: number
   toChapter?: number
   outputPath?: string
@@ -27,6 +30,10 @@ interface ExportArgs {
  * 章見出しの数字は、text は既定で漢数字、markdown は既定で算用数字。
  * 保存ファイルは見出しを算用数字で持つ（機械で章番号を読むため）ので、ここで直す。
  *
+ * ルビと傍点は、ruby で指定した書き出し先の記法に直す（ruby.ts の RubyNotation）。
+ * 既定は text ならカクヨム形式（原稿の記法のまま）、markdown なら HTML の <ruby>
+ * （Markdown の表示では《》の記法が読まれないため）。
+ *
  * 本文は保存されたものをそのまま使い、書き換えない。表記の点検はしないが、
  * 規約から外れた箇所の件数を報告に添える。
  */
@@ -34,6 +41,7 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
   const dir = ctx.directory
   const format = args.format ?? "text"
   const numerals = args.numerals ?? (format === "text" ? "kanji" : "arabic")
+  const ruby: RubyNotation = args.ruby ?? (format === "text" ? "kakuyomu" : "html")
   const from = args.fromChapter ?? 1
   const to = args.toChapter ?? Number.MAX_SAFE_INTEGER
   if (from > to) return `❌ fromChapter（${from}）が toChapter（${to}）より後ろです。`
@@ -68,12 +76,17 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
   const parts: string[] = []
   let totalChars = 0
   let typographyErrors = 0
+  const marks = { ruby: 0, emphasis: 0 }
   for (const [i, f] of files.entries()) {
     const text = texts[i]
-    const title = chapterTitleFromHeading(text)
-    const body = stripChapterHeading(text).replace(/\s+$/, "")
-    totalChars += countWords(body)
+    const rawBody = stripChapterHeading(text).replace(/\s+$/, "")
+    totalChars += countWords(rawBody)
     typographyErrors += checkTypography(text).filter((i) => i.severity === "error").length
+    const counted = countRubyMarks(text)
+    marks.ruby += counted.ruby
+    marks.emphasis += counted.emphasis
+    const title = convertRuby(chapterTitleFromHeading(text), ruby)
+    const body = convertRuby(rawBody, ruby)
 
     const no = numerals === "kanji" ? toKanjiNumber(f.chapter) : String(f.chapter)
     const heading =
@@ -101,6 +114,9 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
 📚 章: ${range}（${files.length}章）
 📊 文字数: ${totalChars.toLocaleString("ja-JP")}文字（本文のみ。見出しは含まない）
 `
+  if (marks.ruby + marks.emphasis > 0) {
+    report += `🔤 ルビ ${marks.ruby}箇所・傍点 ${marks.emphasis}箇所を ${RUBY_NOTATION_LABELS[ruby]} で書き出しました\n`
+  }
   if (missing.length > 0) {
     report += `⚠️ 本文の無い章を飛ばしました: ${formatChapterRanges(missing)}\n`
   }
@@ -108,6 +124,16 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
     report += `⚠️ 表記の規約違反が ${typographyErrors}件あります（書き出しでは直していません）。novel_check で確かめられます\n`
   }
   return report
+}
+
+const RUBY_NOTATION_LABELS: Record<RubyNotation, string> = {
+  kakuyomu: "カクヨム形式（｜親文字《ルビ》・《《傍点》》）",
+  narou: "小説家になろう形式（｜親文字《ルビ》。傍点は「・」のルビ）",
+  aozora: "青空文庫形式（｜親文字《ルビ》・［＃「…」に傍点］）",
+  pixiv: "pixiv 形式（[[rb:親文字 > ルビ]]。傍点は「・」のルビ）",
+  html: "HTML の <ruby>（傍点は「・」のルビ）",
+  paren: "括弧書き（親文字（ルビ）。傍点は外す）",
+  none: "ルビなし（親文字だけ。傍点は外す）",
 }
 
 /**

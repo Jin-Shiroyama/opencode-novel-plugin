@@ -89,6 +89,21 @@ describe("規約から外れた文を拾う", () => {
     )
   })
 
+  test("ルビ・傍点の記法の崩れを、元の行の位置で拾う", () => {
+    const [issue] = checkTypography("　｜漢字《かんじ")
+    assert.equal(issue.rule, "ruby")
+    assert.equal(issue.column, 5)
+  })
+
+  test("ルビの中は地の文として見ず、ほかの規則の位置は元の行に戻す", () => {
+    // 読みの中の「…」や算用数字は拾わない
+    assert.deepEqual(checkTypography("　｜十七《17》の夏。｜間《…》が空いた。"), [])
+    // 傍点の《《 は約物ではないので、感嘆符の直後には空白が要る
+    const [issue] = checkTypography("　何だ｜一体《いったい》！《《本当》》か")
+    assert.equal(issue.rule, "exclamation-space")
+    assert.equal(issue.column, 16) // 傍点の「本」
+  })
+
   test("行と字の位置はファイルのものを返す", () => {
     const [issue] = checkTypography("# 第1章 畑\n\n　花が――畑に…\n")
     assert.equal(issue.line, 3)

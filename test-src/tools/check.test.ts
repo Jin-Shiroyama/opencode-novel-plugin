@@ -119,6 +119,27 @@ describe("novel_export", () => {
     assert.doesNotMatch(text, /第10章/)
   })
 
+  test("ルビと傍点を書き出し先の記法に直す。既定は text ならカクヨム、markdown なら HTML", async () => {
+    const body = "# 第1章 ｜白《しろ》の都\n\n　｜十七《じゅうしち》の夏、彼は《《本当に》》来た。\n"
+    const dir = makeProject({ "config.json": CONFIG, "chapters/chapter-001.md": body })
+
+    const out = await novelExportExecute({}, ctx(dir))
+    assert.match(out, /ルビ 2箇所・傍点 1箇所を カクヨム形式/)
+    const text = readFileSync(join(dir, ".novel", "export", "勇者の冒険.txt"), "utf-8")
+    assert.match(text, /第一章　｜白《しろ》の都/)
+    assert.match(text, /《《本当に》》/)
+
+    await novelExportExecute({ format: "markdown" }, ctx(dir))
+    const md = readFileSync(join(dir, ".novel", "export", "勇者の冒険.md"), "utf-8")
+    assert.match(md, /<ruby>十七<rt>じゅうしち<\/rt><\/ruby>/)
+
+    await novelExportExecute({ ruby: "pixiv", outputPath: "pixiv.txt" }, ctx(dir))
+    assert.match(readFileSync(join(dir, "pixiv.txt"), "utf-8"), /\[\[rb:十七 > じゅうしち\]\]/)
+
+    // 文字数は親文字だけ（「十七の夏、彼は本当に来た。」）
+    assert.match(out, /文字数: 13文字/)
+  })
+
   test("本文は書き換えず、規約違反の件数を知らせる", async () => {
     const dir = makeProject({ "config.json": CONFIG, "chapters/chapter-002.md": BAD })
     const out = await novelExportExecute({}, ctx(dir))

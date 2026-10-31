@@ -9,6 +9,8 @@
  * 保存のたびに機械で拾う。
  */
 
+import { parseRubyLine, stripRubyLine } from "./ruby.js"
+
 export type TypographySeverity = "error" | "warning"
 
 export interface TypographyIssue {
@@ -35,6 +37,7 @@ export type TypographyRule =
   | "fullwidth-digit"
   | "arabic-digit"
   | "ascii-space"
+  | "ruby"
 
 /** 規則の名前（一覧の見出しに使う） */
 export const TYPOGRAPHY_RULE_LABELS: Record<TypographyRule, string> = {
@@ -49,6 +52,7 @@ export const TYPOGRAPHY_RULE_LABELS: Record<TypographyRule, string> = {
   "fullwidth-digit": "全角の算用数字",
   "arabic-digit": "地の文の算用数字",
   "ascii-space": "日本語と英数字のあいだの空白",
+  ruby: "ルビ・傍点の記法",
 }
 
 const OPEN_BRACKETS: Record<string, string> = { "「": "」", "『": "』" }
@@ -83,14 +87,28 @@ export function checkTypography(text: string): TypographyIssue[] {
   const lines = text.replace(/\r\n/g, "\n").split("\n")
   lines.forEach((line, i) => {
     if (line.trim().length === 0 || /^#/.test(line)) return
-    checkLine([...line], i + 1, issues)
+    const original = [...line]
+    // ルビの記法の崩れは元の行で拾う
+    for (const issue of parseRubyLine(line).issues) {
+      issues.push({
+        line: i + 1, column: issue.column + 1, rule: "ruby", severity: "error",
+        message: issue.message, excerpt: excerptAt(original, issue.column),
+      })
+    }
+    // ほかの規則は、ルビの記法を外した行で見る（ルビの中の文字を地の文として見ない。
+    // 「｜十七《じゅうしち》」の読みや、傍点の《《》》を約物として扱わないため）。
+    // 字の位置は元の行に戻して返す
+    const { chars, columns } = stripRubyLine(line)
+    checkLine(chars, columns, original, i + 1, issues)
   })
   return issues
 }
 
-function checkLine(chars: string[], lineNo: number, issues: TypographyIssue[]): void {
+function checkLine(chars: string[], columns: number[], original: string[], lineNo: number, issues: TypographyIssue[]): void {
   const add = (column: number, rule: TypographyRule, severity: TypographySeverity, message: string) => {
-    issues.push({ line: lineNo, column: column + 1, rule, severity, message, excerpt: excerptAt(chars, column) })
+    // 行末の位置（column === chars.length）は、元の行の行末に当てる
+    const at = column < columns.length ? columns[column] : original.length
+    issues.push({ line: lineNo, column: at + 1, rule, severity, message, excerpt: excerptAt(original, at) })
   }
 
   checkIndent(chars, add)
