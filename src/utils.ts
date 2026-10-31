@@ -240,6 +240,7 @@ export async function readDocParts(
  *
  * 先頭と末尾を固定しているので `backup-chapter-002.md` や
  * `chapter-002.md.bak` は章ファイルとみなさない。
+ * 本文の章以外の節（prologue.md など）は sections.ts の sectionFromFileName が定める。
  */
 const CHAPTER_FILE_PATTERN = /^chapter-(\d+)\.md$/
 
@@ -942,6 +943,11 @@ export interface NovelConfig {
    * 原稿用紙換算の枚数を出す。無ければ枚数は出さない（manuscript.ts）
    */
   manuscript?: string
+  /**
+   * 部の構成（「第一部」「第二部」）。部の最初の章を fromChapter で示す。章番号は部をまたいで通し。
+   * 書き出しの見出し、進行状況、執筆用の資料に使う（sections.ts の parseParts）
+   */
+  parts?: Array<{ title: string; fromChapter: number }>
   createdAt: string
   updatedAt: string
   currentPhase: Phase
@@ -995,8 +1001,10 @@ export function countWords(text: string): number {
 /**
  * 章見出しの行。novel_save_chapter が本文の先頭に付ける形に合わせる。
  * 章番号は算用数字・全角数字・漢数字のいずれでも認める。
+ * 章以外の節（`# プロローグ` `# 幕間` `# エピローグ`。sections.ts）の見出しも同じに扱う。
  */
-const CHAPTER_HEADING_LINE = /^#{1,6}\s*第\s*[0-9０-９〇零一二三四五六七八九十百千]+\s*章/
+const CHAPTER_HEADING_LINE =
+  /^#{1,6}\s*(?:第\s*[0-9０-９〇零一二三四五六七八九十百千]+\s*章|(?:プロローグ|エピローグ|幕間)(?=[\s　]|$))/
 
 /**
  * 章タイトルを見出しに書ける1行に直す。
@@ -1254,9 +1262,11 @@ export async function listChapterFiles(projectDir: string): Promise<Array<{ chap
     .sort((a, b) => a.chapter - b.chapter)
 }
 
-/** 保存ファイルの見出し（`# 第N章 タイトル`）からタイトルを読む。無ければ空文字 */
+/** 保存ファイルの見出し（`# 第N章 タイトル`、`# プロローグ タイトル` など）からタイトルを読む。無ければ空文字 */
 export function chapterTitleFromHeading(text: string): string {
   const firstLine = text.replace(/\r\n/g, "\n").split("\n").find((l) => l.trim().length > 0) ?? ""
-  const m = firstLine.match(/^#[ \t]*第[ \t]*[0-9０-９〇零一二三四五六七八九十百千]+[ \t]*章[ \t　]+(\S.*)$/)
+  const m = firstLine.match(
+    /^#[ \t]*(?:第[ \t]*[0-9０-９〇零一二三四五六七八九十百千]+[ \t]*章|プロローグ|エピローグ|幕間)[ \t　]+(\S.*)$/,
+  )
   return m ? m[1].trim() : ""
 }

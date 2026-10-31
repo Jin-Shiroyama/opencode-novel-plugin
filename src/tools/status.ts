@@ -6,16 +6,20 @@ import {
   countWords, progressBar,
   determinePhase, usesMartialArtsSetting, isDocFilled,
   hasOutlineDetailed, hasSceneList, collectScenes, stripChapterHeading,
-  sceneChapterNumber, listChapterFiles,
+  sceneChapterNumber, toKanjiNumber,
 } from "../utils.js"
 import type { NovelConfig, DocType, Phase } from "../utils.js"
 import {
-  splitForeshadowEntries, summaryChapters, formatChapterRanges,
+  splitForeshadowEntries, summaryChapters, summarySections, formatChapterRanges,
   readForeshadowRecord, readCharacterStateRecord, readTextRecord, describeBrokenRecord,
 } from "../records.js"
 import {
   resolveManuscriptFormat, countManuscriptLines, linesToPages, linesToPagesDecimal, formatManuscriptLabel,
 } from "../manuscript.js"
+import {
+  listManuscriptFiles, describeExtraSections, sectionLabel, sameSection, parseParts, partName, partRange,
+} from "../sections.js"
+import type { ManuscriptSection } from "../sections.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
@@ -139,64 +143,78 @@ export async function novelStatusExecute(
     }
   }
 
-  // 本文の集計。章ファイル（chapters/chapter-NNN.md）の一覧を一度だけ取り、
+  // 本文の集計。本文のファイル（章と、プロローグ・幕間・エピローグの節）の一覧を一度だけ取り、
   // 返された実際のパスを読んで数える。章数・累計・平均・分量の不足表示は、
   // すべてこの1つの集計値を使う。
   //
   // 以前は累計を chapters/ の .md すべてで、段階の判定や分量の不足を章ファイルだけで
   // 数えていたため、推敲メモなどを置くと同じ画面の中で数字が食い違っていた。
+  //
+  // 章の数と1章平均は章だけで出す（段階の判定と同じ数）。累計の文字数と原稿用紙の枚数は
+  // 原稿全体の分量なので節も含める。
   const chaptersDir = getChaptersDir(dir)
-  const chapterFiles = await listChapterFiles(dir)
-  const writtenChapters = chapterFiles.map((f) => f.chapter)
+  const manuscriptFiles = await listManuscriptFiles(dir)
+  const chapterFiles = manuscriptFiles.filter((f) => f.section.kind === "chapter")
+  const extraFiles = manuscriptFiles.filter((f) => f.section.kind !== "chapter")
+  const writtenChapters = chapterFiles.flatMap((f) => (f.section.kind === "chapter" ? [f.section.chapter] : []))
   // 原稿用紙の書式は、指定があるときだけ使う（無ければ枚数を出さず、出力は変わらない）
   const manuscript = resolveManuscriptFormat(args.manuscript, config?.manuscript)
   const format = manuscript && "format" in manuscript ? manuscript.format : null
-  const counted: Array<{ chapter: number; file: string; words: number; lines: number }> = []
-  const unreadableChapters: number[] = []
-  for (const f of chapterFiles) {
+  const counted: Array<{ section: ManuscriptSection; file: string; words: number; lines: number }> = []
+  const unreadable: ManuscriptSection[] = []
+  for (const f of manuscriptFiles) {
     const content = await safeReadFile(f.path)
     if (content === null) {
-      unreadableChapters.push(f.chapter)
+      unreadable.push(f.section)
       continue
     }
     // 保存ツールが付けた章見出しは数えない。本文だけを数える規則に、保存時の報告と揃える
     const body = stripChapterHeading(content)
     counted.push({
-      chapter: f.chapter,
+      section: f.section,
       file: basename(f.path),
       words: countWords(body),
       lines: format ? countManuscriptLines(body, format.columns) : 0,
     })
   }
+  const countedChapters = counted.filter((c) => c.section.kind === "chapter")
+  const unreadableChapters = unreadable.flatMap((s) => (s.kind === "chapter" ? [s.chapter] : []))
+  const unreadableExtras = unreadable.filter((s) => s.kind !== "chapter").map(sectionLabel)
   const totalWords = counted.reduce((sum, c) => sum + c.words, 0)
-  // chapters/ にある章ファイル以外の .md（推敲メモなど）は数えない。数えないことを示す
-  const chapterFileNames = new Set(chapterFiles.map((f) => basename(f.path)))
-  const otherFiles = (await listMarkdownFiles(chaptersDir)).filter((f) => !chapterFileNames.has(f))
+  // chapters/ にある本文以外の .md（推敲メモなど）は数えない。数えないことを示す
+  const manuscriptFileNames = new Set(manuscriptFiles.map((f) => basename(f.path)))
+  const otherFiles = (await listMarkdownFiles(chaptersDir)).filter((f) => !manuscriptFileNames.has(f))
 
-  if (chapterFiles.length > 0) {
+  if (manuscriptFiles.length > 0) {
     // 章ファイルの数（段階の判定と同じ数）と、累計・平均の元になった章の数を分けて示す。
     // 読めない章があると両者が食い違うため、そのときは並べて書く
+    const extras = describeExtraSections(extraFiles.map((f) => f.section))
+    const extrasNote = extras ? `（ほかに${extras}）` : ""
     report +=
       unreadableChapters.length > 0
-        ? `\n✍️ 執筆済み: 章ファイル ${chapterFiles.length}章 ／ 集計できた本文 ${counted.length}章\n`
-        : `\n✍️ 執筆済み: ${chapterFiles.length}章\n`
+        ? `\n✍️ 執筆済み: 章ファイル ${chapterFiles.length}章 ／ 集計できた本文 ${countedChapters.length}章${extrasNote}\n`
+        : `\n✍️ 執筆済み: ${chapterFiles.length}章${extrasNote}\n`
     if (detailed) {
       for (const c of counted) {
         const pages = format ? `（原稿用紙 ${linesToPagesDecimal(c.lines, format)}枚）` : ""
-        report += `  📄 ${c.file}: ${c.words.toLocaleString("ja-JP")}文字${pages}\n`
+        const name = c.section.kind === "chapter" ? "" : `（${sectionLabel(c.section)}）`
+        report += `  📄 ${c.file}${name}: ${c.words.toLocaleString("ja-JP")}文字${pages}\n`
       }
     }
-    if (unreadableChapters.length > 0) {
-      report += `  ⚠️ 読み込めず数えていない章: ${formatChapterRanges(unreadableChapters)}\n`
+    if (unreadable.length > 0) {
+      const names = [...(unreadableChapters.length > 0 ? [formatChapterRanges(unreadableChapters)] : []), ...unreadableExtras]
+      report += `  ⚠️ 読み込めず数えていない章: ${names.join("、")}\n`
     }
     report += `\n📊 累計: ${totalWords.toLocaleString("ja-JP")}文字`
     if (config?.targetWords) {
       const percent = Math.round((totalWords / config.targetWords) * 100)
       report += ` / ${config.targetWords.toLocaleString("ja-JP")}文字 (${percent}%)`
     }
+    if (counted.some((c) => c.section.kind !== "chapter")) report += `（${extras}を含む）`
     report += "\n"
-    if (counted.length > 0) {
-      const perChapter = Math.round(totalWords / counted.length)
+    if (countedChapters.length > 0) {
+      const chapterWords = countedChapters.reduce((sum, c) => sum + c.words, 0)
+      const perChapter = Math.round(chapterWords / countedChapters.length)
       report += `📐 1章平均: ${perChapter.toLocaleString("ja-JP")}文字\n`
     }
     if (format) {
@@ -205,8 +223,21 @@ export async function novelStatusExecute(
     }
   }
   if (manuscript && "error" in manuscript) report += `⚠️ ${manuscript.error}\n`
+
+  // 部ごとの進み具合（config.json に parts があるときだけ）
+  const parts = parseParts(config?.parts)
+  if (parts && "parts" in parts) {
+    const planned = config?.chapterCount ?? undefined
+    report += `\n📚 部の進み具合:\n`
+    for (const part of parts.parts) {
+      const to = part.toChapter ?? planned ?? Math.max(part.fromChapter, ...writtenChapters)
+      const total = Math.max(0, to - part.fromChapter + 1)
+      const done = writtenChapters.filter((n) => n >= part.fromChapter && n <= to).length
+      report += `  ${partName(part, "kanji", toKanjiNumber)}「${part.title}」（${partRange(part, to)}）: ${done}/${total}章\n`
+    }
+  }
   if (otherFiles.length > 0) {
-    report += `ℹ️ chapters/ にある章以外のファイルは数えていません: ${otherFiles.join("、")}\n`
+    report += `ℹ️ chapters/ にある本文以外のファイルは数えていません: ${otherFiles.join("、")}\n`
   }
 
   // 記録ファイルそのものが壊れているとき（構文エラーなど）は、空の記録と区別して示す。
@@ -265,11 +296,23 @@ export async function novelStatusExecute(
       issues.push(`本文はあるが、完了になっていないシーンが残っている章: ${parts.join("、")}（書いたシーンはシーン一覧の状態を [x] に）`)
     }
   }
+  // プロローグ・幕間・エピローグも、本文があればあらすじの節を持つ
+  if (extraFiles.length > 0 && summaryRecord.kind !== "broken") {
+    const recorded = summaryRecord.kind === "ok" ? summarySections(summaryRecord.value) : []
+    const missing = extraFiles.filter((f) => !recorded.some((r) => sameSection(r, f.section)))
+    if (missing.length > 0) {
+      issues.push(`あらすじの記録が無い節: ${missing.map((f) => sectionLabel(f.section)).join("、")}`)
+    }
+  }
   for (const x of brokenForeshadow) {
     issues.push(`伏線 ${x.id} の記録の形が崩れています: ${x.problems.join("、")}`)
   }
   if (unreadableChapters.length > 0) {
     issues.push(`読み込めない章があります: ${formatChapterRanges(unreadableChapters)}（累計と平均には含めていません。章ファイルとしては数えるので、段階の判定には入ります）`)
+  }
+  if (parts && "error" in parts) issues.push(parts.error)
+  if (unreadableExtras.length > 0) {
+    issues.push(`読み込めない節があります: ${unreadableExtras.join("、")}（累計には含めていません）`)
   }
   if (config?.targetWords && phase === "completed" && totalWords < config.targetWords) {
     // 分量は章数とは別に示す。数は上の累計と同じ集計値を使う

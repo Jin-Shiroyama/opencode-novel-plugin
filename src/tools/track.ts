@@ -3,19 +3,26 @@ import {
   safeReadFile, safeReadJson, safeWriteJson, getDocPath, safeWriteFile, getConfigPath, getChaptersDir,
   listMarkdownFiles, chapterNumberFromFileName, chapterTitleFromHeading,
 } from "../utils.js"
-import type { ForeshadowEntry, CharacterState } from "../utils.js"
+import type { ForeshadowEntry, CharacterState, NovelConfig } from "../utils.js"
+import { DEFAULTS } from "../constants.js"
+import { sectionFromArgs, recordChapterOf, sectionFileName, sectionLabel } from "../sections.js"
+import type { ManuscriptSection, SectionKind } from "../sections.js"
 import {
   parseCharacterUpdates, parseForeshadowUpdates, parseSummaryInput, upsertSummarySections,
-  summaryChapters, splitForeshadowEntries, formatChapterRanges,
+  summaryChapters, summarySections, splitForeshadowEntries, formatChapterRanges,
 } from "../records.js"
 import { readCharacterStateRecord, readForeshadowRecord, readTextRecord, describeBrokenRecord } from "../records.js"
+import { summaryEntryOf } from "../records.js"
 import type { CharacterChanges, SummarySection, RecordFile } from "../records.js"
 import type { ToolContext } from "../index.js"
 
 interface UpdateArgs {
   action: "character-state" | "summary" | "foreshadow" | "prompt"
   content: string
+  /** プロローグ・幕間・エピローグの記録のとき（sections.ts）。省くと章 */
+  section?: SectionKind
   chapterNumber?: number
+  interludeIndex?: number
 }
 
 export async function novelUpdateExecute(
@@ -30,15 +37,31 @@ export async function novelUpdateExecute(
     return `❌ chapterNumber は1以上の整数で渡してください（受け取ったのは ${args.chapterNumber}）。記録は更新していません。`
   }
 
+  // プロローグ・幕間・エピローグを指されたとき。あらすじはその節に書き、
+  // 伏線と人物の状態には記録用の章番号（プロローグは 0、幕間は直前の章、エピローグは最後の章）を使う
+  let target: ManuscriptSection | undefined
+  if (args.section !== undefined || args.interludeIndex !== undefined) {
+    const resolved = sectionFromArgs(args)
+    if ("error" in resolved) return `❌ ${resolved.error}。記録は更新していません。`
+    target = resolved.section
+  } else if (args.chapterNumber !== undefined) {
+    target = { kind: "chapter", chapter: args.chapterNumber }
+  }
+  let chapterNumber = args.chapterNumber
+  if (target && target.kind !== "chapter") {
+    const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
+    chapterNumber = recordChapterOf(target, config?.chapterCount ?? DEFAULTS.chapterCount)
+  }
+
   switch (args.action) {
     case "character-state":
-      return updateCharacterState(dir, args.content, args.chapterNumber)
+      return updateCharacterState(dir, args.content, chapterNumber)
     case "summary":
-      return updateSummary(dir, args.content, args.chapterNumber)
+      return updateSummary(dir, args.content, target)
     case "foreshadow":
-      return updateForeshadow(dir, args.content, args.chapterNumber)
+      return updateForeshadow(dir, args.content, chapterNumber)
     case "prompt":
-      return getUpdatePrompt(dir, args.content, args.chapterNumber)
+      return getUpdatePrompt(dir, args.content, chapterNumber)
     default:
       return `❌ 対応していない更新種別です: ${args.action}`
   }
@@ -168,16 +191,18 @@ function applyCharacterChanges(target: CharacterState, changes: CharacterChanges
  * 以前は渡された内容でファイルを丸ごと置き換えていたため、
  * その章の分だけが渡されると、前の章のあらすじがすべて消えていた。
  */
-async function updateSummary(dir: string, content: string, chapterNumber?: number): Promise<string> {
-  const parsed = parseSummaryInput(content, chapterNumber)
+async function updateSummary(dir: string, content: string, target?: ManuscriptSection): Promise<string> {
+  const parsed = parseSummaryInput(content, target)
   if (!parsed.ok) return parsed.message
 
   // 見出しの無い本文には、本文ファイルの章タイトルを添える
   const sections: SummarySection[] = []
   for (const s of parsed.value) {
-    if (s.chapter !== null && s.heading === `## 第${s.chapter}章`) {
-      const title = await chapterTitle(dir, s.chapter)
-      sections.push(title ? { ...s, heading: `## 第${s.chapter}章 ${title}` } : s)
+    const at: ManuscriptSection | null = s.section ?? (s.chapter !== null ? { kind: "chapter", chapter: s.chapter } : null)
+    const bare = at ? summaryEntryOf(at).heading : null
+    if (at && s.heading === bare) {
+      const title = await chapterTitle(dir, at)
+      sections.push(title ? { ...s, heading: `${bare} ${title}` } : s)
     } else {
       sections.push(s)
     }
@@ -199,15 +224,18 @@ async function updateSummary(dir: string, content: string, chapterNumber?: numbe
   const next = upsertSummarySections(current, sections, legacyCoverage)
   await safeWriteFile(filePath, next)
 
-  const touched = sections.map((s) => (s.chapter !== null ? `第${s.chapter}章` : "全体の流れ")).join("、")
+  const touched = sections
+    .map((s) => (s.section ? sectionLabel(s.section) : s.chapter !== null ? `第${s.chapter}章` : "全体の流れ"))
+    .join("、")
   const recorded = summaryChapters(next)
+  const recordedExtras = summarySections(next).map(sectionLabel)
   return `✅ あらすじを更新しました（${touched}）
-   記録のある章: ${recorded.length > 0 ? formatChapterRanges(recorded) : "なし"}`
+   記録のある章: ${recorded.length > 0 ? formatChapterRanges(recorded) : "なし"}${recordedExtras.length > 0 ? `（ほかに ${recordedExtras.join("、")}）` : ""}`
 }
 
-/** 保存済みの本文から章タイトルを読む（`# 第N章 タイトル`） */
-async function chapterTitle(dir: string, chapter: number): Promise<string | null> {
-  const file = join(getChaptersDir(dir), `chapter-${String(chapter).padStart(3, "0")}.md`)
+/** 保存済みの本文から章・節のタイトルを読む（`# 第N章 タイトル`、`# プロローグ タイトル`） */
+async function chapterTitle(dir: string, section: ManuscriptSection): Promise<string | null> {
+  const file = join(getChaptersDir(dir), sectionFileName(section))
   const text = await safeReadFile(file)
   return (text && chapterTitleFromHeading(text)) || null
 }

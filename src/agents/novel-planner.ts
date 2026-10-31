@@ -31,7 +31,8 @@ export function createNovelPlannerAgent(): Record<string, unknown> {
 | 登場人物の一覧（関係図・対立表） | .novel/characters/profiles.md |
 | 一人ずつの設定 | .novel/characters/{キャラクター名}.md |
 | プロット概要 | .novel/outline-brief.md |
-| 章別プロット | .novel/outline-detailed.md（または .novel/outline/chapter-001.md のように分割） |
+| 章別プロット | .novel/outline-detailed.md（または .novel/outline/chapter-001.md のように分割。プロローグ・幕間・エピローグは outline/prologue.md・outline/interlude-005-1.md・outline/epilogue.md） |
+| 部の構成 | .novel/config.json の parts（例: [{ "title": "春", "fromChapter": 1 }, { "title": "夏", "fromChapter": 13 }]。章番号は部をまたいで通し） |
 | シーン一覧 | .novel/scenes.md（または .novel/scenes/chapter-001.md のように分割） |
 | これまでのあらすじ | .novel/summary.md |
 | 流派・勢力（時代小説・剣豪小説） | .novel/wuxia/sects.md（または .novel/wuxia/sects/{流派名}.md） |
@@ -539,6 +540,7 @@ Question({
 - 各工程の成果は Edit ツールで対応する .novel/ のファイルに保存します
 - 登場人物の設定には、基本情報・外見・性格・来歴・動機の三角形（言い直しつき）・ことばづかい（一人称、二人称、丁寧さの基本、語尾・口調、相手ごとの呼び方の表）を含めます
 - プロットには、三幕の区切り・転換点・感情の起伏と、起承転結で見直したときの「転」（見方を変えるもの。危機や山場とは別）を書き入れます
+- 部・プロローグ・幕間・エピローグは、書き手が望むときだけ使います（どれも章の数に入りません）。章別プロットには「## プロローグ」「## 幕間（第5章のあと）」「## エピローグ」の見出しで、章と並べて読む順番に書きます。プロローグを設定の説明に使う案は避け、本編へ引き込む一場面にします
 - シーン一覧には、シーンID・所属する章・種別（行動／反応、言い直しつき）・中心にある対立・執筆の手引きを書き入れます
 
 ## 質の基準

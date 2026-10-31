@@ -13,6 +13,8 @@
 import { readFile } from "node:fs/promises"
 import { z } from "zod"
 import { parseChapterNumber } from "./utils.js"
+import { parseSectionLabel, sectionLabel, compareSections } from "./sections.js"
+import type { ManuscriptSection } from "./sections.js"
 import type { ForeshadowEntry, CharacterState } from "./utils.js"
 
 // ============================================================
@@ -54,6 +56,11 @@ export const CHARACTER_STATUSES = ["active", "deceased", "missing", "retired"] a
 export const CHARACTER_ROLES = ["protagonist", "supporting", "antagonist", "minor"] as const
 
 const chapterNo = z.number().int().positive()
+/**
+ * 出来事のあった章。0 はプロローグ（sections.ts の recordChapterOf）。
+ * 回収の予定（targetChapter）は 0 にしない（プロローグで回収する予定は立てない）
+ */
+const eventChapterNo = z.number().int().nonnegative()
 const addRemove = z
   .object({ added: z.array(z.string()).optional(), removed: z.array(z.string()).optional() })
   .strict()
@@ -70,7 +77,7 @@ const characterChangesSchema = z
     firstPerson: z.string().min(1).optional(),
     addressTerms: z.record(z.string().min(1)).optional(),
     events: z.array(z.string()).optional(),
-    lastUpdatedChapter: chapterNo.optional(),
+    lastUpdatedChapter: eventChapterNo.optional(),
   })
   .strict()
 
@@ -106,7 +113,7 @@ export const CHARACTER_STATE_KEYS =
   "status（active / deceased / missing / retired）, role（protagonist / supporting / antagonist / minor）, " +
   "physicalState, mentalState, items（{ added, removed }）, abilities（{ added, removed }）, " +
   "relationships（{ 相手: 変化 }）, firstPerson（いまの一人称）, addressTerms（{ 相手: いまの呼び方 }）, " +
-  "events（文字列の配列）, lastUpdatedChapter"
+  "events（文字列の配列）, lastUpdatedChapter（プロローグは 0）"
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; message: string }
 
@@ -144,6 +151,7 @@ ${CHARACTER_STATE_EXAMPLE}`
 export const FORESHADOW_STATUSES = ["pending", "planted", "resolved", "abandoned"] as const
 
 const nullableChapter = chapterNo.nullable().optional()
+const nullableEventChapter = eventChapterNo.nullable().optional()
 
 const foreshadowFields = z.object({
   id: z.string().min(1).optional(),
@@ -151,9 +159,9 @@ const foreshadowFields = z.object({
   content: z.string().min(1).optional(),
   category: z.string().optional(),
   status: z.enum(FORESHADOW_STATUSES).optional(),
-  plantChapter: nullableChapter,
+  plantChapter: nullableEventChapter,
   targetChapter: nullableChapter,
-  resolvedChapter: nullableChapter,
+  resolvedChapter: nullableEventChapter,
   notes: z.string().optional(),
 })
 
@@ -197,7 +205,7 @@ export const FORESHADOW_EXAMPLE = `{
 
 export const FORESHADOW_KEYS =
   "id, title, content, category, status（pending / planted / resolved / abandoned）, " +
-  "plantChapter, targetChapter, resolvedChapter, notes"
+  "plantChapter（プロローグは 0）, targetChapter, resolvedChapter（エピローグは最後の章の番号）, notes"
 
 /**
  * 日本語で書かれがちな状態と、近い値の手がかり。
@@ -343,6 +351,8 @@ const SECTION_HEADING = /^##\s+(.*)$/
 export interface SummarySection {
   /** 章の節なら章番号。それ以外は null */
   chapter: number | null
+  /** プロローグ・幕間・エピローグの節なら、その節（sections.ts）。章の節には付けない */
+  section?: ManuscriptSection
   /** 見出しの行（`## …`） */
   heading: string
   /** 見出しを除いた本文 */
@@ -359,19 +369,25 @@ export function parseSummary(text: string): ParsedSummary {
   const lines = text.replace(/\r\n/g, "\n").split("\n")
   const headLines: string[] = []
   const sections: SummarySection[] = []
-  let current: { chapter: number | null; heading: string; lines: string[] } | null = null
+  let current: { chapter: number | null; section?: ManuscriptSection; heading: string; lines: string[] } | null = null
 
   const flush = () => {
     if (current) {
-      sections.push({ chapter: current.chapter, heading: current.heading, body: current.lines.join("\n").trim() })
+      const { lines: body, ...rest } = current
+      sections.push({ ...rest, body: body.join("\n").trim() })
     }
   }
 
   for (const line of lines) {
-    if (SECTION_HEADING.test(line)) {
+    const heading = line.match(SECTION_HEADING)
+    if (heading) {
       flush()
       const m = line.match(SUMMARY_CHAPTER_HEADING)
-      current = { chapter: m ? parseChapterNumber(m[1]) : null, heading: line.trim(), lines: [] }
+      // 章以外の節（「## プロローグ」「## 幕間（第5章のあと）」「## エピローグ」）
+      const section = m ? null : parseSectionLabel(heading[1], parseChapterNumber)
+      current = section
+        ? { chapter: null, section, heading: line.trim(), lines: [] }
+        : { chapter: m ? parseChapterNumber(m[1]) : null, heading: line.trim(), lines: [] }
       continue
     }
     if (current) current.lines.push(line)
@@ -385,8 +401,34 @@ export function parseSummary(text: string): ParsedSummary {
 const OVERVIEW_PATTERN =
   /^全体の流れ(?:\s*[（(]\s*第\s*([0-9０-９〇零一二三四五六七八九十百千]+)\s*章まで\s*[）)])?$/
 
+/** 章か、章以外の節（プロローグ・幕間・エピローグ）のあらすじか */
+function isEntry(section: SummarySection): boolean {
+  return section.chapter !== null || section.section !== undefined
+}
+
+/** 節が指す章・節。章の節なら章として返す */
+function entrySection(s: SummarySection): ManuscriptSection | null {
+  if (s.section) return s.section
+  return s.chapter !== null ? { kind: "chapter", chapter: s.chapter } : null
+}
+
+/** 「全体の流れ（第N章まで）」や旧形式の範囲 N が、target より前だけを要約しているか */
+function coverageBefore(coverage: number, target: ManuscriptSection): boolean {
+  switch (target.kind) {
+    case "prologue":
+      return false
+    case "chapter":
+      return coverage < target.chapter
+    case "interlude":
+      // 第N章までの要約は、第N章のあとの幕間も含むとみなす
+      return coverage < target.chapter
+    case "epilogue":
+      return true
+  }
+}
+
 function isOverview(section: SummarySection): boolean {
-  return section.chapter === null && OVERVIEW_PATTERN.test(section.heading.replace(/^##\s+/, "").trim())
+  return !isEntry(section) && OVERVIEW_PATTERN.test(section.heading.replace(/^##\s+/, "").trim())
 }
 
 /** 「全体の流れ」が何章までの要約か。見出しに書かれていなければ null */
@@ -412,7 +454,7 @@ export const LEGACY_HEADING = "以前の形式のあらすじ"
 const LEGACY_PATTERN = /^以前の形式のあらすじ(?:\s*[（(]\s*第\s*(\d+)\s*章まで\s*[）)])?$/
 
 function isLegacyBlock(section: SummarySection): boolean {
-  return section.chapter === null && LEGACY_PATTERN.test(section.heading.replace(/^##\s+/, "").trim())
+  return !isEntry(section) && LEGACY_PATTERN.test(section.heading.replace(/^##\s+/, "").trim())
 }
 
 /** 旧形式の節が何章までの要約か。範囲が書かれていなければ 0（本文より前の記述とみなす） */
@@ -435,7 +477,7 @@ function unmarkedLegacyText(parsed: ParsedSummary): string {
   return [
     headBody(parsed.head),
     ...parsed.sections
-      .filter((s) => s.chapter === null && !isOverview(s) && !isLegacyBlock(s) && s.body && !isPlaceholderOnly(s.body))
+      .filter((s) => !isEntry(s) && !isOverview(s) && !isLegacyBlock(s) && s.body && !isPlaceholderOnly(s.body))
       .map((s) => `${s.heading.replace(/^##/, "###")}\n\n${s.body}`),
   ]
     .filter((t) => t.length > 0)
@@ -461,22 +503,25 @@ export function isPlaceholderOnly(body: string): boolean {
  * 渡されたあらすじを節に分ける。
  *
  *   - `## 第N章` の見出しがあれば、その節ごとに扱う（複数章をまとめて渡せる）
- *   - 見出しが無く chapterNumber があれば、その章の節として扱う
+ *   - `## プロローグ` `## 幕間（第5章のあと）` `## エピローグ` も節として扱う
+ *   - 見出しが無く target（章番号か節）があれば、その章・節の節として扱う
  *   - `## 全体の流れ` の節があれば、全体の要約として扱う
  *
  * 見出しの前に地の文があると、どの章のものか決められない。黙って捨てずに断る。
  */
 export function parseSummaryInput(
   content: string,
-  chapterNumber: number | undefined,
+  target: number | ManuscriptSection | undefined,
 ): ParseResult<SummarySection[]> {
   const { head, sections } = parseSummary(content)
+  const targetSection: ManuscriptSection | undefined =
+    typeof target === "number" ? { kind: "chapter", chapter: target } : target
   // `# これまでのあらすじ` のような題の行は捨ててよい
   const strayHead = headBody(head)
 
   if (sections.length === 0) {
     if (!strayHead) return { ok: false, message: summaryError("あらすじが空です") }
-    if (chapterNumber === undefined) {
+    if (targetSection === undefined) {
       return {
         ok: false,
         message: summaryError(
@@ -484,7 +529,7 @@ export function parseSummaryInput(
         ),
       }
     }
-    return { ok: true, value: [{ chapter: chapterNumber, heading: `## 第${chapterNumber}章`, body: strayHead }] }
+    return { ok: true, value: [{ ...summaryEntryOf(targetSection), body: strayHead }] }
   }
 
   if (strayHead) {
@@ -499,7 +544,7 @@ export function parseSummaryInput(
     return { ok: false, message: summaryError(`章番号は1以上にしてください: ${zero.map((s) => s.heading).join(" / ")}`) }
   }
 
-  const unknown = sections.filter((s) => s.chapter === null && !isOverview(s))
+  const unknown = sections.filter((s) => !isEntry(s) && !isOverview(s))
   if (unknown.length > 0) {
     return {
       ok: false,
@@ -509,12 +554,17 @@ export function parseSummaryInput(
     }
   }
 
-  const chapterSections = sections.filter((s) => s.chapter !== null)
-  if (chapterNumber !== undefined && chapterSections.some((s) => s.chapter !== chapterNumber)) {
-    const found = chapterSections.map((s) => `第${s.chapter}章`).join("、")
-    return {
-      ok: false,
-      message: summaryError(`chapterNumber は ${chapterNumber} ですが、見出しは ${found} です。どちらかに揃えてください`),
+  const entries = sections.filter(isEntry)
+  if (targetSection !== undefined) {
+    const expected = sectionLabel(targetSection)
+    const mismatched = entries.filter((s) => sectionLabel(entrySection(s)!) !== expected)
+    if (mismatched.length > 0) {
+      const found = entries.map((s) => sectionLabel(entrySection(s)!)).join("、")
+      const given = targetSection.kind === "chapter" ? `chapterNumber は ${targetSection.chapter}` : `指定は${expected}`
+      return {
+        ok: false,
+        message: summaryError(`${given}ですが、見出しは ${found} です。どちらかに揃えてください`),
+      }
     }
   }
 
@@ -524,14 +574,17 @@ export function parseSummaryInput(
   }
 
   // 全体の流れは、何章までの要約かを見出しに残す。
-  // 残さないと、前の章を書き直すときに先の出来事が資料へ混ざる
+  // 残さないと、前の章を書き直すときに先の出来事が資料へ混ざる。
+  // 幕間を指したときは、直前の章までの要約とみなす
+  const targetChapter =
+    targetSection?.kind === "chapter" || targetSection?.kind === "interlude" ? targetSection.chapter : null
   const value: SummarySection[] = []
   for (const s of sections) {
-    if (s.chapter !== null) {
+    if (isEntry(s)) {
       value.push(s)
       continue
     }
-    const coverage = overviewCoverage(s) ?? chapterNumber ?? null
+    const coverage = overviewCoverage(s) ?? targetChapter
     if (coverage === null) {
       return {
         ok: false,
@@ -545,12 +598,21 @@ export function parseSummaryInput(
   return { ok: true, value }
 }
 
+/** 見出しだけの節（本文はあとで入れる）。章なら `## 第N章`、節なら `## プロローグ` など */
+export function summaryEntryOf(target: ManuscriptSection): Omit<SummarySection, "body"> {
+  return target.kind === "chapter"
+    ? { chapter: target.chapter, heading: `## 第${target.chapter}章` }
+    : { chapter: null, section: target, heading: `## ${sectionLabel(target)}` }
+}
+
 function summaryError(problem: string): string {
   return `❌ あらすじは更新していません。
   - ${problem}
 
 あらすじは章ごとの節で残します。渡すのは**この章の分だけ**で、前の章の節はそのまま残ります。
   novel_update(action: "summary", chapterNumber: 12, content: "峠を下りた三人は…（この章のあらすじ）")
+プロローグ・幕間・エピローグは section で指します（幕間は chapterNumber に直前の章）。
+  novel_update(action: "summary", section: "prologue", content: "…")
 全体の要約を書き直すときは、content を「## ${OVERVIEW_HEADING}」の見出しで始め、
 chapterNumber に何章までの要約かを渡してください。`
 }
@@ -558,7 +620,7 @@ chapterNumber に何章までの要約かを渡してください。`
 /**
  * あらすじに節を差し込む。同じ章・同じ「全体の流れ」があれば置き換える。
  *
- * 並びは 題 → 全体の流れ → 旧形式の節 → 章の節（章番号順）に整える。
+ * 並びは 題 → 全体の流れ → 旧形式の節 → 章と節（読む順番。プロローグ・幕間・エピローグも含む）に整える。
  * 雛形の角括弧だけが残った節（旧形式の雛形）は捨てる。
  *
  * 旧形式の記述が残っていれば「以前の形式のあらすじ（第N章まで）」の節へ移し、
@@ -577,11 +639,16 @@ export function upsertSummarySections(
   const parsed = parseSummary(current)
   let overview = parsed.sections.find(isOverview) ?? null
   let legacy = parsed.sections.find(isLegacyBlock) ?? null
-  const chapters = new Map<number, SummarySection>()
-  for (const s of parsed.sections) if (s.chapter !== null) chapters.set(s.chapter, s)
+  // 章と節は呼び名（「第3章」「幕間（第5章のあと）」）で同じものを判定する
+  const entries = new Map<string, { at: ManuscriptSection; section: SummarySection }>()
+  const put = (s: SummarySection) => {
+    const at = entrySection(s)!
+    entries.set(sectionLabel(at), { at, section: s })
+  }
+  for (const s of parsed.sections) if (isEntry(s)) put(s)
 
   for (const s of incoming) {
-    if (s.chapter !== null) chapters.set(s.chapter, s)
+    if (isEntry(s)) put(s)
     else overview = s
   }
 
@@ -613,11 +680,17 @@ export function upsertSummarySections(
   if (head) blocks.push(head)
   if (overview) blocks.push(`${overview.heading}\n\n${overview.body}`.trim())
   if (legacy) blocks.push(`${legacy.heading}\n\n${legacy.body}`.trim())
-  for (const n of [...chapters.keys()].sort((a, b) => a - b)) {
-    const s = chapters.get(n)!
+  for (const { section: s } of [...entries.values()].sort((a, b) => compareSections(a.at, b.at))) {
     blocks.push(`${s.heading}\n\n${s.body}`.trim())
   }
   return blocks.join("\n\n") + "\n"
+}
+
+/** あらすじに節がある、章以外の節（プロローグ・幕間・エピローグ。読む順番） */
+export function summarySections(text: string): ManuscriptSection[] {
+  return parseSummary(text)
+    .sections.flatMap((s) => (s.section ? [s.section] : []))
+    .sort(compareSections)
 }
 
 /** あらすじに節がある章の番号（昇順） */
@@ -637,17 +710,27 @@ export function summaryChapters(text: string): number[] {
  * 「全体の流れ」と旧形式の記述には枠の3分の1までを先に取っておき、章の節で余った分も回す。
  *
  * 書こうとしている章以降の内容は載せない（前の章を書き直すときに先の筋が混ざらないように）。
- *   - 章の節: 書く章より前のものだけ
+ * 「前」は読む順番で判定する（target には章番号か節を渡す。sections.ts）。
+ *   - 章と節: 書く章・節より前のものだけ（第5章のあとの幕間を書くなら、第5章までと、その前の幕間）
  *   - 全体の流れ: 見出しの「第N章まで」が書く章より前のときだけ。見出しに無ければ、
  *     記録のある最後の章までの要約とみなす
  *   - 旧形式の記述（章の節にする前の「## 物語の進み」など）: 章の節より前に書かれたものなので、
  *     最初の章の節の直前までの要約とみなす
  * 章の節も「全体の流れ」も無い古い形式のファイルは、従来どおり先頭から切って載せる。
+ *
+ * lastChapter は、記録の無い章を知らせるときにどの章まで見るか（エピローグを書くときに使う。
+ * 省くと記録のある最後の章まで）。
  */
-export function buildSummaryContext(text: string, chapterNum: number, limit: number): string {
+export function buildSummaryContext(
+  text: string,
+  target: number | ManuscriptSection,
+  limit: number,
+  lastChapter?: number,
+): string {
+  const at: ManuscriptSection = typeof target === "number" ? { kind: "chapter", chapter: target } : target
   const parsed = parseSummary(text)
   const overview = parsed.sections.find(isOverview)
-  const chapterSections = parsed.sections.filter((s) => s.chapter !== null)
+  const chapterSections = parsed.sections.filter(isEntry)
   const legacyBlock = parsed.sections.find(isLegacyBlock)
   const unmarked = unmarkedLegacyText(parsed)
 
@@ -656,7 +739,7 @@ export function buildSummaryContext(text: string, chapterNum: number, limit: num
     return clipHead(unmarked, limit)
   }
 
-  const recordedChapters = chapterSections.map((s) => s.chapter as number)
+  const recordedChapters = chapterSections.flatMap((s) => (s.chapter !== null ? [s.chapter] : []))
   const lastRecorded = recordedChapters.length > 0 ? Math.max(...recordedChapters) : 0
 
   // 全体の流れと旧形式の記述。書く章より先を含むものは載せず、その旨を残す
@@ -664,7 +747,7 @@ export function buildSummaryContext(text: string, chapterNum: number, limit: num
   const lead: string[] = []
   if (overview && overview.body && !isPlaceholderOnly(overview.body)) {
     const coverage = overviewCoverage(overview) ?? lastRecorded
-    if (coverage < chapterNum) {
+    if (coverageBefore(coverage, at)) {
       lead.push(`### ${OVERVIEW_HEADING}（第${coverage}章まで）\n${overview.body}`)
     } else {
       notes.push(`（${OVERVIEW_HEADING}は第${coverage}章までの要約で、この章より先を含むため載せていません）`)
@@ -679,7 +762,7 @@ export function buildSummaryContext(text: string, chapterNum: number, limit: num
   }
   if (unmarked) legacyParts.push({ body: unmarked, coverage: lastRecorded })
   for (const part of legacyParts) {
-    if (part.coverage < chapterNum) {
+    if (coverageBefore(part.coverage, at)) {
       const range = part.coverage > 0 ? `（第${part.coverage}章まで）` : ""
       lead.push(`### ${LEGACY_HEADING}${range}\n${part.body}`)
     } else {
@@ -689,8 +772,8 @@ export function buildSummaryContext(text: string, chapterNum: number, limit: num
   const leadText = lead.join("\n\n")
 
   const past = chapterSections
-    .filter((s) => (s.chapter as number) < chapterNum)
-    .sort((a, b) => (a.chapter as number) - (b.chapter as number))
+    .filter((s) => compareSections(entrySection(s)!, at) < 0)
+    .sort((a, b) => compareSections(entrySection(a)!, entrySection(b)!))
 
   const len = (s: string) => [...s].length
   const reserve = Math.min(len(leadText), Math.floor(limit / 3))
@@ -717,19 +800,30 @@ export function buildSummaryContext(text: string, chapterNum: number, limit: num
   if (leadText) out.push(clipHead(leadText, reserve + budget))
   out.push(...notes)
 
-  const pickedChapters = new Set(picked.map((s) => s.chapter))
-  const dropped = past.filter((s) => !pickedChapters.has(s.chapter))
+  const pickedSet = new Set(picked.map((s) => s.heading))
+  const dropped = past.filter((s) => !pickedSet.has(s.heading))
   if (dropped.length > 0) {
-    const first = dropped[0].chapter
-    const last = dropped[dropped.length - 1].chapter
-    const range = first === last ? `第${first}章` : `第${first}〜${last}章`
+    const first = dropped[0]
+    const last = dropped[dropped.length - 1]
+    const range =
+      first === last
+        ? sectionLabel(entrySection(first)!)
+        : first.chapter !== null && last.chapter !== null
+          ? `第${first.chapter}〜${last.chapter}章`
+          : `${sectionLabel(entrySection(first)!)}〜${sectionLabel(entrySection(last)!)}`
     out.push(`（${range}のあらすじは枠に収まらないため省略。全文は .novel/summary.md を参照）`)
   }
   for (const s of picked) out.push(`${s.heading.replace(/^##/, "###")}\n${s.body}`)
 
+  // 記録の無い章（この章・節より前の章だけを見る）
   const recorded = new Set(past.map((s) => s.chapter))
+  const lastBefore =
+    at.kind === "chapter" ? at.chapter - 1
+      : at.kind === "interlude" ? at.chapter
+        : at.kind === "epilogue" ? (lastChapter ?? lastRecorded)
+          : 0
   const missing: number[] = []
-  for (let n = 1; n < chapterNum; n++) if (!recorded.has(n)) missing.push(n)
+  for (let n = 1; n <= lastBefore; n++) if (!recorded.has(n)) missing.push(n)
   if (missing.length > 0) {
     out.push(`⚠️ あらすじの記録が無い章: ${missing.map((n) => `第${n}章`).join("、")}`)
   }

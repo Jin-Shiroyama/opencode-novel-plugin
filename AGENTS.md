@@ -26,6 +26,7 @@ opencode-novel-plugin/
 │   ├── typography.ts         # 表記の点検（表記規約のうち機械で見られるもの）
 │   ├── ruby.ts               # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
 │   ├── manuscript.ts         # 原稿用紙の枚数換算（書式を指定したときだけ使う）
+│   ├── sections.ts           # 本文の節（プロローグ・幕間・エピローグ）と部
 │   ├── prompts.ts            # 15のRTCOプロンプト
 │   ├── templates.ts          # 15の文書雛形（Markdown 12 + JSON 3）
 │   ├── agents/
@@ -82,9 +83,12 @@ opencode-novel-plugin/
 │   └── weapons.md           # 刀剣（weapons/{刀剣名}.md に分割も可）
 ├── reality-source.md        # 取材メモ（reality/events/ などに分割も可）
 ├── chapters/                # 本文
+│   ├── prologue.md          # プロローグ（置くときだけ）
 │   ├── chapter-001.md
+│   ├── interlude-001-1.md   # 第1章のあとの1つ目の幕間（置くときだけ）
 │   ├── chapter-002.md
-│   └── ...
+│   ├── ...
+│   └── epilogue.md          # エピローグ（置くときだけ）
 └── drafts/                  # 旧稿（保存し直したときに前の原稿を残す）
     └── chapter-001-20261031-153012.md
 ```
@@ -98,11 +102,11 @@ opencode-novel-plugin/
 |---|---|---|
 | `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting |
 | `novel_status` | 進行状況 | detailed |
-| `novel_save_chapter` | 章の保存 | chapterNumber, title, content |
-| `novel_context` | 執筆用の資料 | chapterNumber, sceneId, includePrompts |
+| `novel_save_chapter` | 章の保存 | section, chapterNumber, interludeIndex, title, content |
+| `novel_context` | 執筆用の資料 | section, chapterNumber, interludeIndex, sceneId, includePrompts |
 | `novel_guide` | 進め方の手引き | section |
-| `novel_update` | 記録の更新 | action, content, chapterNumber |
-| `novel_check` | 表記の点検 | chapterNumber, maxIssues |
+| `novel_update` | 記録の更新 | action, content, section, chapterNumber, interludeIndex |
+| `novel_check` | 表記の点検 | section, chapterNumber, interludeIndex, maxIssues |
 | `novel_export` | 原稿の書き出し | format, numerals, fromChapter, toChapter, outputPath |
 
 > コンセプト・世界観・登場人物・プロット・シーンなどの文書は、opencode 内蔵の Edit / Write ツールで編集します。
@@ -222,9 +226,10 @@ opencode-novel-plugin/
 使い、同じ章が統合ファイルと分割の両方にあるときは分割側だけを数えます
 （単純に連結すると、分割へ移したあとも統合側に残る古い記述を二重に数える）。
 
-`novel_status` の本文の集計も `listChapterFiles`（同じ定義）で章ファイルの一覧を一度だけ取り、
-返されたパスを読んだ1つの集計値を、章数・累計・平均・分量の不足表示に使う。`chapters/` の
-章ファイル以外の `.md` は数えない（以前は累計だけ全 `.md` を数え、同じ画面で数字が食い違っていた）。
+`novel_status` の本文の集計は `listManuscriptFiles`（下の「本文の節」）で本文のファイルの一覧を一度だけ取り、
+返されたパスを読んだ1つの集計値を、章数・累計・平均・分量の不足表示に使う。章数と1章平均は章だけ、
+累計と原稿用紙換算は節も含める。`chapters/` の本文以外の `.md` は数えない
+（以前は累計だけ全 `.md` を数え、同じ画面で数字が食い違っていた）。
 読み込めない章があるときは、章数を「章ファイル N章 ／ 集計できた本文 M章」と分けて示す
 （章ファイルの数は `determinePhase` と同じ。累計と平均は読めた M 章から出す）。
 
@@ -235,6 +240,36 @@ opencode-novel-plugin/
 存在判定（`hasChapterDocs`）、集計の除外判定（`collectScenes` / `chapterDocNumber`）が
 すべてこの定義を共有します。条件がずれると、読まないファイルを根拠に統合ファイルを
 集計から外し、執筆資料と進捗が食い違います。
+
+## 本文の節（プロローグ・幕間・エピローグ）と部
+
+`src/sections.ts`。章のほかに、章の数に入らない「節」を3種類置けます。
+
+| 節 | ファイル | 読む順番 | 記録の章番号（`recordChapterOf`） |
+|---|---|---|---|
+| プロローグ | `chapters/prologue.md` | 第1章の前 | 0 |
+| 幕間 | `chapters/interlude-005-1.md`（第5章のあとの1つ目） | 第5章のあと（同じ章のあとは番号順） | 直前の章（5） |
+| エピローグ | `chapters/epilogue.md` | 最後の章のあと | `chapterCount` |
+
+- **節は章の数に入れない**。`determinePhase` / `countWrittenChapters` / `listChapterFiles` / シーンIDは章だけで動く。
+  原稿全体を扱うところ（累計・原稿用紙換算・`novel_check`・`novel_export`・前の本文の末尾）だけが
+  `listManuscriptFiles` で章と節を読む順番（`compareSections`）に並べて使う
+- 正式な本文ファイルは `CHAPTER_FILE_PATTERN` と `sectionFromFileName`（`prologue.md` / `epilogue.md` /
+  `interlude-<数字>-<数字>.md`）の2つで決まる。先頭と末尾を固定し、`chapters/` の直下だけを見る
+- ツールは `section`（chapter / prologue / interlude / epilogue）・`chapterNumber`・`interludeIndex` で節を指す
+  （`sectionFromArgs`）。章と幕間では `chapterNumber` が要る
+- 保存する見出しは `# プロローグ タイトル` / `# 幕間 タイトル` / `# エピローグ タイトル`。幕間の位置はファイル名が持つ。
+  `stripChapterHeading` / `chapterTitleFromHeading` はこれらも見出しとして扱う
+- 呼び名は `sectionLabel`（「幕間（第5章のあと）」、2つ目からは「幕間（第5章のあと・2）」）。章別プロットの見出しと
+  あらすじの見出しはこの形で、`parseSectionLabel` で読み戻す。位置の無い「幕間」だけの見出しは読まない
+- 前の本文の末尾は `previousManuscriptFile`。読む順番ですぐ前の本文を選び、間が欠けていれば載せない
+- **あらすじは節も持つ**（`## プロローグ …` など。`SummarySection.section`）。資料には読む順番で前のものだけを載せる。
+  「全体の流れ（第N章まで）」は第N章のあとの幕間まで含むとみなす
+- **伏線と人物の状態は章番号のまま**。`plantChapter` / `resolvedChapter` / `lastUpdatedChapter` は 0（プロローグ）を
+  受け付ける。`targetChapter` は1以上のまま。`novel_update` に `section` を渡すと `recordChapterOf` の章番号で記録する
+- **部は `config.json` の `parts`**（`[{ title, fromChapter }]`。章番号は部をまたいで通し）。`parseParts` で読み、
+  昇順でない・題が空などの形の誤りは `novel_status` で ⚠️、`novel_export` は書き出さずに断る。
+  書き出しでは部の最初の章の前に部の見出しを置き（幕間は直前の章の部に残る）、markdown では部を `##`、章と節を `###` にする
 
 ## プロンプト
 
@@ -252,7 +287,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 - データファイルはすべて UTF-8
 - 人が読む内容は Markdown（コンセプト、世界観、登場人物など）
 - プログラムが読み書きする内容は JSON（設定、状態、伏線）
-- 本文のファイル名は自動の連番（chapter-001.md、chapter-002.md、…）
+- 本文のファイル名は自動の連番（chapter-001.md、chapter-002.md、…）。節は prologue.md / interlude-NNN-M.md / epilogue.md
 - 本文の章見出しは算用数字で保存する（`# 第1章 タイトル`）。
   プロットの解析側は算用数字・全角数字・漢数字のいずれも読み取る
 - **文字数は本文だけを、空白（半角・全角）と改行を除いた全文字数で数える**。
@@ -342,7 +377,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、465件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、497件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

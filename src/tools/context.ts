@@ -1,6 +1,6 @@
 import {
-  safeReadFile, safeReadJson, getDocPath, getChaptersDir, getConfigPath,
-  resolveLimit, takeTailChars, parseChapterNumber, truncateChars,
+  safeReadFile, safeReadJson, getDocPath, getConfigPath,
+  resolveLimit, takeTailChars, parseChapterNumber, truncateChars, toKanjiNumber,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
   clipDocParts, selectForeshadowReminders, extractSpeechProfile,
 } from "../utils.js"
@@ -16,12 +16,20 @@ import {
   isUntouchedTemplate, REALITY_SOURCE_TEMPLATE,
   WUXIA_SECTS_TEMPLATE, WUXIA_MARTIAL_ARTS_TEMPLATE, WUXIA_WEAPONS_TEMPLATE,
 } from "../templates.js"
+import {
+  sectionFromArgs, sectionLabel, sectionFileName, parseSectionLabel, readSectionDoc, listManuscriptFiles,
+  previousManuscriptFile, recordChapterOf, sameSection, parseParts, partOfChapter, partName, partRange,
+} from "../sections.js"
+import type { ManuscriptSection, SectionKind } from "../sections.js"
 import type { LimitKey } from "../constants.js"
 import type { ToolContext } from "../index.js"
-import { join } from "node:path"
 
 interface ContextArgs {
-  chapterNumber: number
+  /** 章（既定）・プロローグ・幕間・エピローグ（sections.ts） */
+  section?: SectionKind
+  /** 章番号。幕間では、幕間を置く位置（直前の章の番号） */
+  chapterNumber?: number
+  interludeIndex?: number
   sceneId?: string
   includePrompts?: boolean
 }
@@ -31,10 +39,16 @@ export async function novelContextExecute(
   ctx: ToolContext,
 ): Promise<string> {
   const dir = ctx.directory
-  const chapterNum = args.chapterNumber
+  const resolved = sectionFromArgs(args)
+  if ("error" in resolved) return `❌ ${resolved.error}。`
+  const section = resolved.section
+  const label = sectionLabel(section)
   const includePrompts = args.includePrompts !== false
 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
+  const chapterCount = config?.chapterCount ?? DEFAULTS.chapterCount
+  // 伏線の期限や記録に使う章番号（プロローグは 0、幕間は直前の章、エピローグは最後の章）
+  const chapterNum = recordChapterOf(section, chapterCount)
 
   /**
    * 複数の文書に枠を配分して切り出す。
@@ -43,38 +57,58 @@ export async function novelContextExecute(
   const clipParts = (parts: DocPart[], key: LimitKey): string =>
     clipDocParts(parts, resolveLimit(config, key))
 
-  let context = `📝 執筆用の資料 — 第${chapterNum}章\n${"=".repeat(50)}\n\n`
+  let context = `📝 執筆用の資料 — ${label}\n${"=".repeat(50)}\n\n`
 
   if (config) {
     const targetWords = config.targetWords ?? DEFAULTS.targetWords
-    const chapterCount = config.chapterCount ?? DEFAULTS.chapterCount
     context += `## 📖 作品情報\n`
     context += `タイトル: ${config.title}\n`
     context += `ジャンル: ${config.genre}\n`
     if (config.theme) context += `テーマ: ${config.theme}\n`
     context += `視点: ${config.narrativePerspective ?? DEFAULTS.narrativePerspective}\n`
+    // 部に分けた作品では、この章がどの部の何章目かを示す（幕間は直前の章の部）
+    const parts = parseParts(config.parts)
+    if (parts && "parts" in parts && (section.kind === "chapter" || section.kind === "interlude")) {
+      const part = partOfChapter(parts.parts, section.chapter)
+      if (part) {
+        const nth = section.kind === "chapter" ? `の${section.chapter - part.fromChapter + 1}章目` : ""
+        context += `部: ${partName(part, "kanji", toKanjiNumber)}「${part.title}」（${partRange(part, chapterCount)}）${nth}\n`
+      }
+    } else if (parts && "error" in parts) {
+      context += `⚠️ ${parts.error}\n`
+    }
     context += `目標文字数: ${targetWords.toLocaleString("ja-JP")}文字（全${chapterCount}章）\n`
-    context += `この章の目安: ${Math.round(targetWords / chapterCount).toLocaleString("ja-JP")}文字 ±${Math.round(CHAPTER_WORD_TOLERANCE * 100)}%\n\n`
+    const perChapter = Math.round(targetWords / chapterCount).toLocaleString("ja-JP")
+    context +=
+      section.kind === "chapter"
+        ? `この章の目安: ${perChapter}文字 ±${Math.round(CHAPTER_WORD_TOLERANCE * 100)}%\n\n`
+        : `分量の目安: プロットに従う（章の目安は ${perChapter}文字。${label}は章の数に入りません）\n\n`
   }
 
   // --- この章のプロット（P0） ---
-  // 章ごとに分割された outline/chapter-NNN.md を優先し、
-  // 無ければ統合ファイル outline-detailed.md から該当章を抜き出す。
-  let chapterOutline = await readChapterDoc(dir, "outline", chapterNum)
+  // 章ごとに分割された outline/chapter-NNN.md（節なら outline/prologue.md など）を優先し、
+  // 無ければ統合ファイル outline-detailed.md から該当する節を抜き出す。
+  let chapterOutline = await readSectionDoc(dir, "outline", section)
   if (!chapterOutline) {
     const outline = await safeReadFile(getDocPath(dir, "outline-detailed"))
-    if (outline) chapterOutline = extractChapterSection(outline, chapterNum)
+    if (outline) chapterOutline = extractOutlineSection(outline, section)
   }
   if (chapterOutline) {
-    context += `## 📋 この章のプロット (P0 — 必ず従う)\n${chapterOutline.trim()}\n\n`
+    context += `## 📋 この${section.kind === "chapter" ? "章" : "節"}のプロット (P0 — 必ず従う)\n${chapterOutline.trim()}\n\n`
+  } else if (section.kind !== "chapter") {
+    context += `## 📋 この節のプロット (P0 — 必ず従う)\n`
+    context += `⚠️ ${label}のプロットが見つかりません。outline-detailed.md に「## ${label}」の節を書くか、outline/${sectionFileName(section)} を作ってください\n\n`
   }
 
   // --- この章のシーン（P0） ---
   // scenes/chapter-NNN.md を優先し、無ければ scenes.md から該当章のシーンを抜き出す。
+  // 章以外の節にはシーンIDを振らない（流れはプロットに書く）
   const sceneSource =
-    (await readChapterDoc(dir, "scenes", chapterNum)) ??
-    (await safeReadFile(getDocPath(dir, "scenes")))
-  const sceneParts = sceneSource ? extractChapterScenes(sceneSource, chapterNum, args.sceneId) : []
+    section.kind !== "chapter"
+      ? null
+      : ((await readChapterDoc(dir, "scenes", section.chapter)) ?? (await safeReadFile(getDocPath(dir, "scenes"))))
+  const sceneParts =
+    sceneSource && section.kind === "chapter" ? extractChapterScenes(sceneSource, section.chapter, args.sceneId) : []
   if (sceneParts.length > 0) {
     context += `## 🎬 この章のシーン (P0 — 執筆の手引き)\n`
     if (args.sceneId) context += `今回書くシーン: ${args.sceneId}\n\n`
@@ -140,26 +174,31 @@ export async function novelContextExecute(
     context += "\n"
   }
 
-  if (chapterNum > 1) {
+  // あらすじは、読む順番でこの章・節より前のものを載せる（プロローグには載せない）
+  const manuscriptFiles = await listManuscriptFiles(dir)
+  const lastWritten = Math.max(0, ...manuscriptFiles.flatMap((f) => (f.section.kind === "chapter" ? [f.section.chapter] : [])))
+  let summaryText = ""
+  if (section.kind !== "prologue" && !(section.kind === "chapter" && section.chapter === 1 && !manuscriptFiles.some((f) => f.section.kind === "prologue"))) {
     const summary = await readTextRecord(getDocPath(dir, "summary"))
-    const summaryText =
+    summaryText =
       summary.kind === "broken"
         ? `⚠️ ${describeBrokenRecord(".novel/summary.md", summary)}。直すまであらすじは載せられず、更新もできません`
         : summary.kind === "ok"
-          ? buildSummaryContext(summary.value, chapterNum, resolveLimit(config, "summary"))
+          ? buildSummaryContext(summary.value, section, resolveLimit(config, "summary"), lastWritten)
           : ""
     if (summaryText) {
       context += `## 📚 これまでのあらすじ (P2 — 参考)\n${summaryText}\n\n`
     }
+  }
 
-    const prevPadded = String(chapterNum - 1).padStart(3, "0")
-    const prevChapterPath = join(getChaptersDir(dir), `chapter-${prevPadded}.md`)
-    const prevChapter = await safeReadFile(prevChapterPath)
-    if (prevChapter) {
-      const limit = resolveLimit(config, "previousChapterTail")
-      const tail = takeTailChars(prevChapter, limit)
-      context += `## 📖 前章の末尾${limit.toLocaleString("ja-JP")}文字 (P1 — つなぎ)\n${tail}\n\n`
-    }
+  // 前の本文の末尾。読む順番ですぐ前の本文（幕間をはさむなら幕間、第1章ならプロローグ）
+  const prev = previousManuscriptFile(manuscriptFiles, section)
+  const prevText = prev ? await safeReadFile(prev.path) : null
+  if (prev && prevText) {
+    const limit = resolveLimit(config, "previousChapterTail")
+    const tail = takeTailChars(prevText, limit)
+    const prevName = prev.section.kind === "chapter" ? "前章" : `前の${sectionLabel(prev.section)}`
+    context += `## 📖 ${prevName}の末尾${limit.toLocaleString("ja-JP")}文字 (P1 — つなぎ)\n${tail}\n\n`
   }
 
   const foreshadowRecord = await readForeshadowRecord(getDocPath(dir, "foreshadow"))
@@ -178,7 +217,7 @@ export async function novelContextExecute(
       context += `## 🎯 伏線の確認 (P2 — 参考)\n`
       for (const r of reminders) {
         context += `${foreshadowIcon(r)} [${r.item.id}] ${r.item.title}: ${r.item.content}\n`
-        context += `   ${foreshadowNote(r, chapterNum)}\n`
+        context += `   ${foreshadowNote(r, label)}\n`
       }
       for (const x of invalid) {
         const raw = foreshadow.items.find((f) => (f as { id?: unknown })?.id === x.id) as Record<string, unknown> | undefined
@@ -238,25 +277,26 @@ export async function novelContextExecute(
 
   if (includePrompts) {
     const { getPromptTemplate, fillPrompt } = await import("../prompts.js")
-    const templateKey = chapterNum === 1 ? "chapter-write" : "chapter-continue"
+    // 物語の最初に来る本文（プロローグ、プロローグの無い作品の第1章）は書き出しのプロンプト
+    const isOpening = prev === null && (section.kind === "prologue" || (section.kind === "chapter" && section.chapter === 1))
+    const templateKey = isOpening ? "chapter-write" : "chapter-continue"
     const template = getPromptTemplate(templateKey)
     if (template && config) {
       const targetWords = config.targetWords ?? DEFAULTS.targetWords
-      const chapterCount = config.chapterCount ?? DEFAULTS.chapterCount
       const prompt = fillPrompt(template, {
         projectTitle: config.title,
         genre: config.genre,
-        chapterNumber: String(chapterNum),
-        chapterTitle: `第${chapterNum}章`,
+        chapterNumber: section.kind === "chapter" ? String(section.chapter) : label,
+        chapterTitle: label,
         targetWordCount: String(Math.round(targetWords / chapterCount)),
         narrativePerspective: config.narrativePerspective ?? DEFAULTS.narrativePerspective,
         chapterOutline: "［上の「この章のプロット」から書き写してください］",
         charactersInfo: "［上の「登場人物」から該当者を抜き出してください］",
-        previousContext: chapterNum > 1 ? "［上の「これまでのあらすじ」を参照］" : "",
+        previousContext: summaryText ? "［上の「これまでのあらすじ」を参照］" : "",
         foreshadowReminders: "［上の「伏線の確認」を参照］",
         globalSummary: "［上の「これまでのあらすじ」を参照］",
-        previousChapterSummary: chapterNum > 1 ? "［あらすじから前章の要点を抜き出してください］" : "",
-        previousChapterTail: chapterNum > 1 ? "［上の「前章の末尾」を参照］" : "",
+        previousChapterSummary: summaryText ? "［あらすじから前章の要点を抜き出してください］" : "",
+        previousChapterTail: prev ? "［上の「前章の末尾」を参照］" : "",
       })
       context += `## ✍️ 執筆プロンプト\n\`\`\`\n${prompt}\n\`\`\`\n`
     }
@@ -296,7 +336,8 @@ function buildSpeechContext(
 
   const blocks: string[] = []
   for (const { name, profile, state } of entries) {
-    const changed = state?.lastUpdatedChapter ? `（第${state.lastUpdatedChapter}章で変更）` : "（記録で変更）"
+    const at = state?.lastUpdatedChapter
+    const changed = at === undefined ? "（記録で変更）" : at === 0 ? "（プロローグで変更）" : `（第${at}章で変更）`
     const fields: string[] = []
     const firstPerson = state?.firstPerson ?? profile.firstPerson
     if (firstPerson) {
@@ -324,29 +365,39 @@ function buildSpeechContext(
 }
 
 /**
- * 章別プロットから該当章の記述を抜き出す。
+ * 章別プロットから該当する章・節の記述を抜き出す。
  *
  * 見出しの章番号は算用数字・全角数字・漢数字のいずれでも読み取る
  * （「## 第一章」と書かれていても拾えるようにするため）。
+ * 章以外の節は「## プロローグ」「## 幕間（第5章のあと）」「## エピローグ」の見出しで探す。
+ * 次の章か節の見出しで止める（第5章のプロットに、あとに続く幕間を混ぜないため）。
  */
-function extractChapterSection(outline: string, chapterNum: number): string | null {
+function extractOutlineSection(outline: string, target: ManuscriptSection): string | null {
   const lines = outline.split("\n")
   let collecting = false
   const collected: string[] = []
 
   for (const line of lines) {
-    const chapterHeader = line.match(/^##\s+第\s*([0-9０-９〇零一二三四五六七八九十百千]+)\s*章/)
-    if (chapterHeader) {
+    const heading = outlineHeadingSection(line)
+    if (heading) {
       if (collecting) break
-      const num = parseChapterNumber(chapterHeader[1])
-      if (num === chapterNum) {
-        collecting = true
-      }
+      if (sameSection(heading, target)) collecting = true
     }
     if (collecting) collected.push(line)
   }
 
   return collected.length > 0 ? collected.join("\n") : null
+}
+
+/** 章別プロットの `## ` 見出しが指す章・節。章や節の見出しでなければ null */
+function outlineHeadingSection(line: string): ManuscriptSection | null {
+  const chapterHeader = line.match(/^##\s+第\s*([0-9０-９〇零一二三四五六七八九十百千]+)\s*章/)
+  if (chapterHeader) {
+    const num = parseChapterNumber(chapterHeader[1])
+    return num === null ? null : { kind: "chapter", chapter: num }
+  }
+  const m = line.match(/^##\s+(.*)$/)
+  return m ? parseSectionLabel(m[1], parseChapterNumber) : null
 }
 
 /**
@@ -405,12 +456,12 @@ function foreshadowIcon(r: ForeshadowReminder): string {
  * 予定を過ぎたものを「第N章で回収予定」と書くと、まだ先のことのように
  * 読めてしまうため、過ぎたことがはっきり分かる書き方にする。
  */
-function foreshadowNote(r: ForeshadowReminder, chapterNum: number): string {
+function foreshadowNote(r: ForeshadowReminder, currentLabel: string): string {
   const planted = r.item.status === "planted" ? "張り済み" : "まだ張っていません"
   const target = r.item.targetChapter
   switch (r.timing) {
     case "overdue":
-      return `${planted}／回収予定の第${target}章を過ぎています（現在は第${chapterNum}章）`
+      return `${planted}／回収予定の第${target}章を過ぎています（現在は${currentLabel}）`
     case "due":
       return `${planted}／← この章で回収`
     case "upcoming":

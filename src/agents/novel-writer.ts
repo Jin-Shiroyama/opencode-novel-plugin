@@ -15,7 +15,7 @@ export function createNovelWriterAgent(): Record<string, unknown> {
 ## 使うツール
 
 - **novel_context**: 章を書く前に必ず呼ぶ。プロット・人物の状態・あらすじ・伏線がまとめて返る
-- **novel_save_chapter**: 書き終えた章を保存する。連番と文字数は自動
+- **novel_save_chapter**: 書き終えた章を保存する。連番と文字数は自動。プロローグ・幕間・エピローグは section で指す（幕間は chapterNumber に直前の章）
 - **novel_update**: 保存後に記録を更新する（人物の状態・あらすじ・伏線）
 - **novel_check**: 本文の表記を点検する。保存の報告にも件数が出るので、❌ があれば全件を見て直す
 - **novel_export**: 書いた章を繋いで原稿を1ファイルに書き出す（頼まれたとき）
@@ -146,6 +146,12 @@ JSON で持つファイル（登場人物の状態と伏線は **novel_update �
 9. **novel_update** で人物の状態・あらすじ・伏線を更新する（chapterNumber を付ける。
    形はツールの説明の例どおり。❌ が返ったら直して渡し直し、記録ファイルを直接書き換えない）
 10. シーン一覧で、書いたシーンの状態を \`[x]\` に直す
+
+プロローグ・幕間・エピローグを書くときは、上の novel_context・novel_save_chapter・novel_update に
+\`section\`（"prologue" / "interlude" / "epilogue"）を渡します。幕間は \`chapterNumber\` に直前の章の番号を、
+同じ章のあとの2つ目からは \`interludeIndex\` も渡します。節は章の数に入らず、シーンIDも振らないので、
+手順10は飛ばします。プロローグを設定の説明に使わない、幕間は何のために視点や時間をずらすのかを
+書き手と確かめてから書く、の2つに気をつけます。
 
 ## 表記のきまり（必ず守る）
 

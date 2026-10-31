@@ -1,6 +1,6 @@
 ---
 description: 1章の本文を書き、資料をそろえて保存する
-argument-hint: "<章番号>"
+argument-hint: "<章番号 | prologue | interlude <章番号> [何番目] | epilogue>"
 agent: novel-writer
 ---
 
@@ -13,6 +13,23 @@ agent: novel-writer
 **章番号の指定が必要です。** 渡されていなければ尋ねます。
 
 > 「書く章の番号を教えてください（例：1、3、12）」
+
+プロローグ・幕間・エピローグは章の数に入らない「節」です。引数を次のように読み替え、
+以下の手順のツール呼び出しで `chapterNumber: {N}` の代わりに使います。
+
+| 引数 | 書くもの | ツールに渡す引数 |
+|---|---|---|
+| `3` | 第3章 | `chapterNumber: 3` |
+| `prologue`／`プロローグ` | プロローグ | `section: "prologue"` |
+| `interlude 5`／`幕間 5` | 第5章のあとの幕間 | `section: "interlude", chapterNumber: 5` |
+| `interlude 5 2`／`幕間 5 2` | 第5章のあとの2つ目の幕間 | `section: "interlude", chapterNumber: 5, interludeIndex: 2` |
+| `epilogue`／`エピローグ` | エピローグ | `section: "epilogue"` |
+
+節を書くときの違い：
+- プロットは章別プロットの「## プロローグ」「## 幕間（第5章のあと）」「## エピローグ」の節（または `outline/prologue.md` など）から読まれます。シーンIDは振りません
+- 分量は章の目安に縛られません。プロットに従います
+- 記録（人物の状態・伏線）は、プロローグは第0章、幕間は直前の章、エピローグは最後の章として残ります（`section` を渡せば自動でそうなります）
+- シーンの状態を直す手順（六の二）は飛ばします
 
 ## 進めかた
 
@@ -36,6 +53,8 @@ novel_context(chapterNumber: {N}, includePrompts: true)
 - これまでのあらすじと前章の末尾（P1／P2）
 - 伏線の確認（P2）
 - 執筆プロンプト
+
+前の本文の末尾は、読む順番ですぐ前のもの（前に幕間があれば幕間、第1章ならプロローグ）が載ります。
 
 特定のシーンだけを書くときは `sceneId` を渡します。そのシーンに印が付きます。
 
@@ -106,6 +125,7 @@ novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id"
 - この章で一人称や呼び方が変わったら（苗字から名前へ、敬語からため口へ）、`firstPerson` や `addressTerms`（`{ "相手": "いまの呼び方" }`）で残す
 - 伏線の status は `pending` / `planted` / `resolved` / `abandoned` だけ。補強しただけなら status は変えず `notes` に書く
 - 新しい伏線は `title` と `content` を付けて渡す（id は省略できる）
+- 節のときは3つとも `section`（と幕間の `chapterNumber`）を渡す。あらすじは「## プロローグ」などの節として残る
 
 ### 六の二、シーンの状態を直す
 
@@ -122,7 +142,7 @@ novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id"
 🎯 伏線：張った {N} / 回収した {N}
 👤 状態を更新した人物：{N}人
 
-💡 次にやること：/write-chapter {N+1}
+💡 次にやること：/write-chapter {N+1}（プロットで次に幕間やエピローグが来るならそちら）
 ```
 
 </write-flow>

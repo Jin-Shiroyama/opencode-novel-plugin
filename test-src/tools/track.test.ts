@@ -566,7 +566,7 @@ describe("novel_status の本文の集計", () => {
     assert.match(out, /📐 1章平均: 7文字/)
     assert.match(out, /分量が目標に届いていません: 20 \/ 40,000文字/)
     assert.doesNotMatch(out, /📄 推敲メモ\.md/)
-    assert.match(out, /chapters\/ にある章以外のファイルは数えていません: backup-chapter-002\.md、推敲メモ\.md/)
+    assert.match(out, /chapters\/ にある本文以外のファイルは数えていません: backup-chapter-002\.md、推敲メモ\.md/)
   })
 
   test("読み込めない章は数えず、そのことを示す", async () => {

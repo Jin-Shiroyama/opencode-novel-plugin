@@ -1,15 +1,22 @@
 import {
   safeReadFile, safeReadJson, safeWriteFile, getChaptersDir, getNovelDir, getConfigPath, countWords,
-  stripChapterHeading, normalizeChapterTitle, existsSync,
+  stripChapterHeading, normalizeChapterTitle, existsSync, chapterFileName,
 } from "../utils.js"
 import type { NovelConfig } from "../utils.js"
 import { resolveManuscriptFormat, countManuscriptLines, linesToPagesDecimal, formatManuscriptLabel } from "../manuscript.js"
+import { sectionFromArgs, sectionFileName, sectionLabel, SECTION_NAMES } from "../sections.js"
+import type { SectionKind } from "../sections.js"
 import { summarizeForSave } from "./check.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
 
 interface SaveChapterArgs {
-  chapterNumber: number
+  /** 章（既定）・プロローグ・幕間・エピローグ（sections.ts） */
+  section?: SectionKind
+  /** 章番号。幕間では、幕間を置く位置（直前の章の番号） */
+  chapterNumber?: number
+  /** 同じ章のあとの何番目の幕間か。既定 1 */
+  interludeIndex?: number
   title: string
   content: string
   updateState?: boolean
@@ -20,9 +27,11 @@ export async function novelSaveChapterExecute(
   ctx: ToolContext,
 ): Promise<string> {
   const dir = ctx.directory
-  const num = args.chapterNumber
-  const padded = String(num).padStart(3, "0")
-  const fileName = `chapter-${padded}.md`
+  const resolved = sectionFromArgs(args)
+  if ("error" in resolved) return `❌ 保存していません。${resolved.error}。`
+  const section = resolved.section
+  const label = sectionLabel(section)
+  const fileName = sectionFileName(section)
   const chaptersDir = getChaptersDir(dir)
   const filePath = join(chaptersDir, fileName)
 
@@ -37,7 +46,9 @@ export async function novelSaveChapterExecute(
 
   // 保存ファイルの見出しは算用数字で統一する（機械的に章番号を取り出せるようにするため）。
   // 縦組みの原稿として書き出すときに漢数字へ直せばよい。
-  const header = title.length > 0 ? `# 第${num}章 ${title}\n\n` : `# 第${num}章\n\n`
+  // 章以外の節は「# プロローグ」「# 幕間」「# エピローグ」。幕間の位置はファイル名が持つ
+  const name = section.kind === "chapter" ? `第${section.chapter}章` : SECTION_NAMES[section.kind]
+  const header = title.length > 0 ? `# ${name} ${title}\n\n` : `# ${name}\n\n`
   const saved = header + body
 
   // 書き直しで前の原稿が消えないよう、内容が変わるときは旧稿を drafts/ に残してから上書きする。
@@ -46,7 +57,7 @@ export async function novelSaveChapterExecute(
   if (existsSync(filePath)) {
     const previous = await safeReadFile(filePath)
     if (previous === null) {
-      return `❌ 第${num}章は保存していません。いまの ${fileName} を読み込めず、前の原稿を残せないためです。
+      return `❌ ${label}は保存していません。いまの ${fileName} を読み込めず、前の原稿を残せないためです。
    ファイルの権限や中身（ディレクトリになっていないか）を確かめてください。`
     }
     if (previous === saved) {
@@ -61,13 +72,17 @@ export async function novelSaveChapterExecute(
   const wordCount = countWords(body)
 
   let report = title.length > 0
-    ? `✅ 第${num}章「${title}」を保存しました\n`
-    : `✅ 第${num}章を保存しました\n`
+    ? `✅ ${label}「${title}」を保存しました\n`
+    : `✅ ${label}を保存しました\n`
   if (title !== args.title.trim()) {
     report += `ℹ️ タイトルに改行などが含まれていたため、1行に直しました\n`
   }
   report += `📄 ファイル: ${filePath}\n`
   report += previousNote
+  // 幕間の位置の章がまだ無ければ知らせる（保存は断らない。章を先に書かない進め方もあるため）
+  if (section.kind === "interlude" && !existsSync(join(chaptersDir, chapterFileName(section.chapter)))) {
+    report += `⚠️ 第${section.chapter}章の本文はまだありません（この幕間は第${section.chapter}章のあとに置かれます）\n`
+  }
   report += `📊 文字数: ${wordCount.toLocaleString("ja-JP")}文字\n`
   // 原稿用紙の書式が config.json にあるときだけ枚数を添える
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
@@ -79,7 +94,7 @@ export async function novelSaveChapterExecute(
     report += `⚠️ ${manuscript.error}\n`
   }
   // 保存したものをそのまま点検する（行番号が保存ファイルと一致するように）
-  report += summarizeForSave(saved, num)
+  report += summarizeForSave(saved, section)
 
   if (args.updateState !== false) {
     report += `\n💡 novel_update で次の記録を更新しておくと、後の章でつじつまが合わせやすくなります:\n`

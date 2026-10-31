@@ -16,6 +16,7 @@ import { createNovelWriterAgent } from "./agents/novel-writer.js"
 import { createNovelEditorAgent } from "./agents/novel-editor.js"
 import { mergeAgentConfig } from "./agent-config.js"
 import { RUBY_NOTATIONS } from "./ruby.js"
+import { SECTION_KINDS } from "./sections.js"
 import { loadCommands } from "./commands.js"
 
 const z = tool.schema
@@ -27,6 +28,21 @@ const commandsDir = join(pluginRoot, "commands")
 const skillsDir = join(pluginRoot, "skills")
 
 const cachedCommands = loadCommands(commandsDir)
+
+/**
+ * 章・節を指す引数（sections.ts の sectionFromArgs で読む）。
+ * chapterNumber は章と幕間で要るが、プロローグ・エピローグでは要らないので省けるようにしてある。
+ */
+function sectionArgs(verb: string) {
+  return {
+    section: z.enum(SECTION_KINDS).optional()
+      .describe(`${verb}もの。chapter（既定）/ prologue（プロローグ）/ interlude（幕間）/ epilogue（エピローグ）`),
+    chapterNumber: z.number().int().positive().optional()
+      .describe("章番号（1から数える）。章では必須。幕間では幕間を置く位置（直前の章の番号）。プロローグ・エピローグでは要らない"),
+    interludeIndex: z.number().int().positive().optional()
+      .describe("幕間のとき、同じ章のあとの何番目か（1から）。既定 1"),
+  }
+}
 
 export type ToolContext = {
   sessionID: string
@@ -74,9 +90,10 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       "novel_save_chapter": tool({
         description: `書き上げた1章を chapters ディレクトリに保存する。ファイル名の連番付けと文字数の計算を自動で行う。
 すでにある章を保存し直すと、前の原稿を .novel/drafts/ に残してから上書きする。
-使う場面: 1章を書き終えたとき（例「第3章が書けたので保存して」）。`,
+プロローグ・幕間・エピローグは section で指定する（章の数には入らない）。幕間は chapterNumber に直前の章の番号を渡す。
+使う場面: 1章を書き終えたとき（例「第3章が書けたので保存して」「プロローグを保存して」）。`,
         args: {
-          chapterNumber: z.number().int().positive().describe("章番号（1から数える）"),
+          ...sectionArgs("保存する"),
           title: z.string().describe("章タイトル"),
           content: z.string().describe("本文。章見出しの行は含めない"),
           updateState: z.boolean().optional().describe("保存後に記録更新の案内を出すかどうか。既定 true"),
@@ -88,9 +105,10 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
 
       "novel_context": tool({
         description: `指定した章を書くための資料を一式そろえる。この章のプロットとシーン、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、執筆プロンプトを返す。章ごとに分割保存された資料（outline/chapter-002.md など）も読む。
+プロローグ・幕間・エピローグは section で指定する（プロットは outline-detailed.md の「## プロローグ」「## 幕間（第5章のあと）」などの節か、outline/prologue.md から読む）。
 使う場面: ある章の執筆にとりかかる直前。優先度は P0(プロット) > P1(人物・前章とのつなぎ) > P2(伏線・あらすじ) の順。`,
         args: {
-          chapterNumber: z.number().int().positive().describe("これから書く章の番号"),
+          ...sectionArgs("これから書く"),
           sceneId: z.string().optional().describe("シーンID（例 1.1、2.3）。渡すとそのシーンに印が付く"),
           includePrompts: z.boolean().optional().describe("執筆プロンプトを含めるかどうか。既定 true"),
         },
@@ -125,6 +143,10 @@ ${CHARACTER_STATE_EXAMPLE}
 ■ summary（content は**この章だけ**のあらすじ。chapterNumber を必ず渡す）
 章ごとの節として残り、前の章の節は消えない。content を「## 全体の流れ」で始めると全体の要約を差し替える
 （そのときの chapterNumber は「何章までの要約か」。それより前の章を書くときは資料に載らない）。
+プロローグ・幕間・エピローグのあらすじは section で指す（幕間は chapterNumber に直前の章、2つ目からは interludeIndex も）。
+
+■ プロローグ・幕間・エピローグの出来事を character-state / foreshadow に記録するときも section を渡す。
+記録の章番号は、プロローグは 0、幕間は直前の章、エピローグは予定の最後の章になる。
 
 ■ foreshadow（content は JSON。既存の伏線は id で指し、変える項目だけを渡す）
 使えるキー: ${FORESHADOW_KEYS}
@@ -136,7 +158,9 @@ ${FORESHADOW_EXAMPLE}`,
           content: z
             .string()
             .describe("更新内容。character-state / foreshadow は説明にある形の JSON 文字列、summary はこの章のあらすじ、prompt はプロンプト名"),
-          chapterNumber: z.number().int().positive().optional().describe("対象の章番号（1以上の整数）。summary では必須"),
+          section: z.enum(SECTION_KINDS).optional().describe("プロローグ・幕間・エピローグの記録のとき: prologue / interlude / epilogue。省くと章"),
+          chapterNumber: z.number().int().positive().optional().describe("対象の章番号（1以上の整数）。summary では必須（プロローグ・エピローグを除く）。幕間では直前の章"),
+          interludeIndex: z.number().int().positive().optional().describe("幕間のとき、同じ章のあとの何番目か。既定 1"),
         },
         async execute(args, context) {
           return novelUpdateExecute(args as any, context as ToolContext)
@@ -149,7 +173,9 @@ ${FORESHADOW_EXAMPLE}`,
 ❌ は規約違反、⚠️ は確かめてほしい箇所。
 使う場面: 章を保存したあと（保存の報告にも件数が出る）、原稿の点検で表記を見るとき、書き出しの前。`,
         args: {
-          chapterNumber: z.number().int().positive().optional().describe("点検する章。省くと書いた章すべて"),
+          section: z.enum(SECTION_KINDS).optional().describe("点検する節の種類（chapter / prologue / interlude / epilogue）。省くと chapterNumber の章、どちらも省くと全部"),
+          chapterNumber: z.number().int().positive().optional().describe("点検する章（幕間なら直前の章）。section も省くと書いた章と節すべて"),
+          interludeIndex: z.number().int().positive().optional().describe("幕間のとき、同じ章のあとの何番目か。既定 1"),
           maxIssues: z.number().int().positive().optional().describe("1章あたりに並べる箇所の上限。既定 30（件数は上限に関わらずすべて数える）"),
         },
         async execute(args, context) {
@@ -158,7 +184,8 @@ ${FORESHADOW_EXAMPLE}`,
       }),
 
       "novel_export": tool({
-        description: `書いた章を章番号順に繋ぎ、原稿を1ファイルに書き出す。本文は書き換えない。
+        description: `書いた章を読む順番に繋ぎ、原稿を1ファイルに書き出す。プロローグ・幕間・エピローグも置かれた位置に繋ぐ。本文は書き換えない。
+範囲を指定したとき、プロローグは fromChapter が1のとき、幕間は直前の章が範囲にあるとき、エピローグは toChapter を省いたときに含める。
 format: text（既定。投稿サイトや縦書きエディタに貼る形。見出しは「第一章　タイトル」、Markdown の記号なし）／markdown（作品タイトルを #、章を ## にする）。
 numerals: 章見出しの数字。text は既定で漢数字、markdown は既定で算用数字。
 ruby: ルビ・傍点の書き出し先の記法。kakuyomu（｜親文字《ルビ》・《《傍点》》。text の既定）／narou（傍点は「・」のルビ）／aozora（青空文庫の注記）／pixiv（[[rb:親文字 > ルビ]]）／html（<ruby>。markdown の既定）／paren（親文字（ルビ）。応募原稿向け）／none（ルビを外す）。
