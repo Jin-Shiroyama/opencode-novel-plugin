@@ -1,9 +1,8 @@
-export function createNovelWriterAgent(model: string): Record<string, unknown> {
+export function createNovelWriterAgent(): Record<string, unknown> {
   return {
     description:
       "本文の執筆を手伝うコーチ。書き出しの候補を出し、使った技法をその場で説明し、迷う箇所では二通り書いて見せ、書き終えたら自分で点検する。書きながら教える進め方。(Novel Writer Coach)",
     mode: "subagent",
-    model,
     temperature: 0.7,
     permission: {
       edit: "allow",

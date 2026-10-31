@@ -1,9 +1,8 @@
-export function createNovelEditorAgent(model: string): Record<string, unknown> {
+export function createNovelEditorAgent(): Record<string, unknown> {
   return {
     description:
       "原稿を見る編集コーチ。問題を指摘して終わらせず、なぜ問題なのか、読者にどう響くのか、どう直すのかを示す。よく書けているところも具体的に挙げる。(Novel Editor Coach)",
     mode: "subagent",
-    model,
     temperature: 0.1,
     permission: {
       edit: "allow",

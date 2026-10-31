@@ -14,7 +14,6 @@ import { CHARACTER_STATE_EXAMPLE, CHARACTER_STATE_KEYS, FORESHADOW_EXAMPLE, FORE
 import { createNovelPlannerAgent } from "./agents/novel-planner.js"
 import { createNovelWriterAgent } from "./agents/novel-writer.js"
 import { createNovelEditorAgent } from "./agents/novel-editor.js"
-import { DEFAULT_MODEL } from "./constants.js"
 import { mergeAgentConfig } from "./agent-config.js"
 import { loadCommands } from "./commands.js"
 
@@ -173,10 +172,12 @@ numerals: 章見出しの数字。text は既定で漢数字、markdown は既�
       }),
     },
     config: async (config) => {
-      const model = config.model ?? DEFAULT_MODEL
-      const planner = createNovelPlannerAgent(model)
-      const writer = createNovelWriterAgent(model)
-      const editor = createNovelEditorAgent(model)
+      // agent に model を書かない。書くと、その agent に切り替えた時点で OpenCode の画面で
+      // 選んだモデルから書いたモデルへ切り替わってしまう。書かなければ選んだモデルをそのまま使う。
+      // agent ごとに変えたいときは、利用者が opencode.json の agent.<名前>.model に書く
+      const planner = createNovelPlannerAgent()
+      const writer = createNovelWriterAgent()
+      const editor = createNovelEditorAgent()
       // 3つの agent はいずれも主 agent セレクタに出す。
       // 各ファクトリは mode: "subagent" を返すのでここで上書きする。
       planner.mode = "primary"

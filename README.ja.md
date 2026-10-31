@@ -77,12 +77,22 @@ OpenCode プロジェクトの `opencode.json` に書きます。
 
 ### 1. モデルを決める
 
-既定では OpenCode のモデル設定をそのまま使います。指定する場合は `opencode.json` に書きます。
+プラグインはモデルを決めません。3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）は、
+OpenCode の画面で選んでいるモデルをそのまま使います。途中でモデルを切り替えれば、切り替えたモデルで動きます。
 
 ```json
 {
-  "model": "anthropic/claude-sonnet-5",
   "plugin": ["file:///path/to/opencode-novel-plugin"]
+}
+```
+
+agent ごとにモデルを固定したいときだけ、`opencode.json` の `agent` に書きます。書いた agent に切り替えると、そのモデルに切り替わります。
+
+```json
+{
+  "agent": {
+    "novel-writer": { "model": "プロバイダ/モデル名" }
+  }
 }
 ```
 

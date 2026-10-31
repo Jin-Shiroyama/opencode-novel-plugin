@@ -115,6 +115,11 @@ opencode-novel-plugin/
 > 各ファクトリは `mode: "subagent"` を返しますが、`src/index.ts` の `config` フックで
 > `primary` に上書きしています。3つとも主 agent セレクタに出ます。
 >
+> プラグインは agent に `model` を書きません（既定のモデルを持たない）。書くと、その agent に
+> 切り替えた時点で OpenCode の画面で選んだモデルから書いたモデルへ切り替わるためです。
+> `opencode.json` 全体の `model` も agent に写しません。agent ごとに固定したいときは、
+> 利用者が `agent.<名前>.model` に書きます。
+>
 > `opencode.json` の `agent` に同じ名前で設定を書けば、そちらが**キー単位で**勝ちます
 > （`model` だけ書いてもプロンプトや温度は残ります）。`permission` / `options` / `tools` は
 > **中身ごと重ねます**（`src/agent-config.ts` の `mergeAgentConfig`）。利用者が書いたキーだけが勝ち、
@@ -319,7 +324,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、417件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、418件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

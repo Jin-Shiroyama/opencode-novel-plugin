@@ -1,9 +1,8 @@
-export function createNovelPlannerAgent(model: string): Record<string, unknown> {
+export function createNovelPlannerAgent(): Record<string, unknown> {
   return {
     description:
       "長編小説の企画を手伝うコーチ。書いたことのない人でも進められるように、まず例を見せ、穴埋めではなく選択肢で決めてもらい、迷ったら案を出し、専門用語には必ずかみくだいた説明を添える。(Novel Planner Coach)",
     mode: "subagent",
-    model,
     temperature: 0.3,
     permission: {
       edit: "allow",

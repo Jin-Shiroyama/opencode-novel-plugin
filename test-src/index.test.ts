@@ -1,6 +1,5 @@
 import { test, describe, before } from "node:test"
 import assert from "node:assert/strict"
-import { DEFAULT_MODEL } from "../src/constants.js"
 
 /**
  * config フックの結合テスト。
@@ -114,10 +113,18 @@ describe("opencode.json 側の agent 設定の優先", () => {
     assert.equal(c.agent["novel-writer"].mode, "primary")
   })
 
-  test("指定していない agent は既定のまま", async () => {
+  test("指定していない agent には model を書かない（OpenCode で選んだモデルを使う）", async () => {
     const c = await applyConfig({ agent: { "novel-writer": { model: "x" } } })
-    assert.equal(c.agent["novel-planner"].model, DEFAULT_MODEL)
-    assert.equal(c.agent["novel-editor"].model, DEFAULT_MODEL)
+    assert.equal("model" in c.agent["novel-planner"], false)
+    assert.equal("model" in c.agent["novel-editor"], false)
+  })
+
+  test("opencode.json 全体の model を agent に写さない", async () => {
+    // 写すと、画面でモデルを切り替えても novel 系の agent に切り替えた時点で戻される
+    const c = await applyConfig({ model: "anthropic/claude-opus-5" })
+    for (const name of ["novel-planner", "novel-writer", "novel-editor"]) {
+      assert.equal("model" in c.agent[name], false, `${name} に model が書かれている`)
+    }
   })
 
   test("利用者の他の agent を消さない", async () => {
@@ -135,7 +142,7 @@ describe("opencode.json 側の agent 設定の優先", () => {
   test("agent 設定が無くても落ちない", async () => {
     for (const userConfig of [{}, { agent: undefined }, { agent: {} }]) {
       const c = await applyConfig(userConfig)
-      assert.equal(c.agent["novel-writer"].model, DEFAULT_MODEL)
+      assert.equal("model" in c.agent["novel-writer"], false)
     }
   })
 
