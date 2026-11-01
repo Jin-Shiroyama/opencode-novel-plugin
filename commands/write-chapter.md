@@ -11,6 +11,7 @@ agent: novel-writer
 ## 必ず守ること：章番号
 
 **章番号の指定が必要です。** 渡されていなければ尋ねます。
+ただし章を分けない短編（`.novel/config.json` の `form` が `"short"` で `chapterCount` が1）では、番号を省けば本文（第1章）を書きます。
 
 > 「書く章の番号を教えてください（例：1、3、12）」
 
@@ -20,6 +21,7 @@ agent: novel-writer
 | 引数 | 書くもの | ツールに渡す引数 |
 |---|---|---|
 | `3` | 第3章 | `chapterNumber: 3` |
+| （なし） | 章を分けない短編の本文（`form` が `"short"` で `chapterCount` が1のときだけ） | `chapterNumber: 1` |
 | `prologue`／`プロローグ` | プロローグ | `section: "prologue"` |
 | `interlude 5`／`幕間 5` | 第5章のあとの幕間 | `section: "interlude", chapterNumber: 5` |
 | `interlude 5 2`／`幕間 5 2` | 第5章のあとの2つ目の幕間 | `section: "interlude", chapterNumber: 5, interludeIndex: 2` |
@@ -142,7 +144,7 @@ novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id"
 🎯 伏線：張った {N} / 回収した {N}
 👤 状態を更新した人物：{N}人
 
-💡 次にやること：/write-chapter {N+1}（プロットで次に幕間やエピローグが来るならそちら）
+💡 次にやること：/write-chapter {N+1}（プロットで次に幕間やエピローグが来るならそちら。連載で次の章のプロットがまだなら /novel-outline）
 ```
 
 </write-flow>
@@ -153,6 +155,7 @@ novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id"
 |---|---|
 | プロジェクトが未作成 | `/novel-init` を先に実行してもらう |
 | プロットが未作成 | `/novel-outline` を先に実行してもらう |
+| 連載で、この章の章別プロットがまだ | `/novel-outline` でこの章のプロットを足してもらう（`novel_context` に ⚠️ が出ます） |
 | 登場人物が未記入 | `/novel-characters` を先に実行してもらう |
 | 前の章がまだ | 知らせたうえで続行してよい（第1章を除く） |
 

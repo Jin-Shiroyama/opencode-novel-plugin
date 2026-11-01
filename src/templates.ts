@@ -22,7 +22,7 @@ export const CONCEPT_TEMPLATE = `# 『{title}』作品コンセプト
 2. [日常を壊す出来事]
 3. [最初のジレンマと事態の上昇]
 4. [危機の深まりと最も暗い時]
-5. [最後の対決と結末]
+5. [最後の対決と結末（連載で結末を決めていなければ、目指す方向だけ）]
 
 ## 中心にある対立
 ### 外からの対立
@@ -362,6 +362,58 @@ export const OUTLINE_BRIEF_TEMPLATE = `# 『{title}』プロット概要
 | F2 | | | | |
 `
 
+/**
+ * 短編（form: "short"）のプロット概要。三幕ではなく序破急で組む。
+ * 短編は章別プロットを作らず、この文書からシーン一覧へ直接割る。
+ */
+export const SHORT_OUTLINE_BRIEF_TEMPLATE = `# 『{title}』プロット概要（短編・序破急）
+
+## 基本情報
+- **目標文字数**：{targetWords}文字
+- **ジャンル**：{genre}
+
+## ログライン
+> [コンセプト文書から転記]
+
+## ひとつの出来事・ひとつの変化
+- **出来事**：[この短編で起きる、ただ一つのこと]
+- **変化**：[主人公（または読者の見方）が、始めと終わりでどう変わるか]
+
+## 序破急
+
+> 序破急は雅楽に始まり、世阿弥が能に取り入れた緩急の原理です。
+> **序**は平明にゆるやかに始め、**破**は序を破って細部を重ね変化を尽くし、**急**は速く短く勢いよく終えます。
+> 速さが少しずつ上がっていく組み立てです。割合の目安は 序2：破6：急2 ですが、決まりではありません。
+> **「破」は山場ではありません**。山場と決着は「急」の中で、速く短く来ます。
+
+### 序（約2割）
+- **すること**：[人物と状況を平明に置く。問いを一つ、静かに置く]
+- **主な場面**：[1〜2場面]
+
+### 破（約6割）
+- **すること**：[序の平らかさを破るもの。細部を重ねて、ずれを広げていく]
+- **主な場面**：[2〜4場面。後ろほど短く、速く]
+
+### 急（約2割）
+- **すること**：[山場と決着。主人公の選択]
+- **主な場面**：[1〜2場面。余韻は短く切る]
+
+## 主人公の選択
+[急の中で、何と何のあいだで選ぶか。選んだ結果、何を失うか]
+
+## 三幕構成との対応
+| 序破急 | 三幕構成 | 気をつけること |
+|---|---|---|
+| 序 | 第一幕（導入・きっかけ） | 説明を長くしない |
+| 破 | 第二幕（試練・悪化） | 山場ではない。山場へ向かって速さを上げるところ |
+| 急 | 第三幕（山場・決着） | 山場と決着を短く、続けて置く |
+
+## 伏線
+| 番号 | 内容 | 張る場面 | 回収する場面 |
+|---|---|---|---|
+| F1 | | 序／破 | 急 |
+`
+
 // ============================================================
 // シーン一覧
 // ============================================================
@@ -486,6 +538,7 @@ export const CONFIG_TEMPLATE = {
     realitySource: 6000,
     scenes: 4000,
     speech: 1500,
+    outlineBrief: 4000,
   },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -647,6 +700,7 @@ export type TemplateName =
   | "characters"
   | "character-profile"
   | "outline-brief"
+  | "outline-brief-short"
   | "outline-detailed"
   | "scenes"
   | "summary"
@@ -667,6 +721,8 @@ export function getTemplate(name: TemplateName): string {
       return CHARACTER_PROFILE_TEMPLATE
     case "outline-brief":
       return OUTLINE_BRIEF_TEMPLATE
+    case "outline-brief-short":
+      return SHORT_OUTLINE_BRIEF_TEMPLATE
     case "outline-detailed":
       return OUTLINE_DETAILED_TEMPLATE
     case "scenes":

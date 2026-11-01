@@ -2,7 +2,7 @@ import {
   safeReadFile, safeReadJson, getDocPath, getConfigPath,
   resolveLimit, takeTailChars, parseChapterNumber, truncateChars, toKanjiNumber,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
-  clipDocParts, selectForeshadowReminders, extractSpeechProfile,
+  clipDocParts, selectForeshadowReminders, extractSpeechProfile, isShortForm, isSerial,
 } from "../utils.js"
 import type {
   NovelConfig, DocPart, ForeshadowReminder, CharacterDoc, CharacterState, SpeechProfile,
@@ -19,6 +19,7 @@ import {
 import {
   sectionFromArgs, sectionLabel, sectionFileName, parseSectionLabel, readSectionDoc, listManuscriptFiles,
   previousManuscriptFile, recordChapterOf, sameSection, parseParts, partOfChapter, partName, partRange,
+  lastChapterForRecords, lastWrittenChapter,
 } from "../sections.js"
 import type { ManuscriptSection, SectionKind } from "../sections.js"
 import type { LimitKey } from "../constants.js"
@@ -42,13 +43,19 @@ export async function novelContextExecute(
   const resolved = sectionFromArgs(args)
   if ("error" in resolved) return `❌ ${resolved.error}。`
   const section = resolved.section
-  const label = sectionLabel(section)
+  let label = sectionLabel(section)
   const includePrompts = args.includePrompts !== false
 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
   const chapterCount = config?.chapterCount ?? DEFAULTS.chapterCount
-  // 伏線の期限や記録に使う章番号（プロローグは 0、幕間は直前の章、エピローグは最後の章）
-  const chapterNum = recordChapterOf(section, chapterCount)
+  const manuscriptFiles = await listManuscriptFiles(dir)
+  const lastWritten = lastWrittenChapter(manuscriptFiles)
+  // 伏線の期限や記録に使う章番号（プロローグは 0、幕間は直前の章、エピローグは本文のある最後の章）
+  const chapterNum = recordChapterOf(section, lastChapterForRecords(manuscriptFiles, chapterCount))
+  // 短編で章を分けない作品では、第1章が本文そのもの
+  const short = isShortForm(config)
+  const singleBody = short && chapterCount === 1 && section.kind === "chapter" && section.chapter === 1
+  if (singleBody) label = "本文"
 
   /**
    * 複数の文書に枠を配分して切り出す。
@@ -72,15 +79,20 @@ export async function novelContextExecute(
       const part = partOfChapter(parts.parts, section.chapter)
       if (part) {
         const nth = section.kind === "chapter" ? `の${section.chapter - part.fromChapter + 1}章目` : ""
-        context += `部: ${partName(part, "kanji", toKanjiNumber)}「${part.title}」（${partRange(part, chapterCount)}）${nth}\n`
+        context += `部: ${partName(part, "kanji", toKanjiNumber)}「${part.title}」（${partRange(part, Math.max(chapterCount, lastWritten))}）${nth}\n`
       }
     } else if (parts && "error" in parts) {
       context += `⚠️ ${parts.error}\n`
     }
-    context += `目標文字数: ${targetWords.toLocaleString("ja-JP")}文字（全${chapterCount}章）\n`
+    context += singleBody
+      ? `形: 短編（章なし）\n`
+      : isSerial(config)
+        ? `目標文字数: ${targetWords.toLocaleString("ja-JP")}文字（${short ? "短編・" : ""}連載。章数の目安 全${chapterCount}章${lastWritten > 0 ? `、本文は第${lastWritten}章まで` : ""}）\n`
+        : `目標文字数: ${targetWords.toLocaleString("ja-JP")}文字（${short ? "短編・" : ""}全${chapterCount}章）\n`
     const perChapter = Math.round(targetWords / chapterCount).toLocaleString("ja-JP")
-    context +=
-      section.kind === "chapter"
+    context += singleBody
+      ? `本文の目安: ${perChapter}文字 ±${Math.round(CHAPTER_WORD_TOLERANCE * 100)}%\n\n`
+      : section.kind === "chapter"
         ? `この章の目安: ${perChapter}文字 ±${Math.round(CHAPTER_WORD_TOLERANCE * 100)}%\n\n`
         : `分量の目安: プロットに従う（章の目安は ${perChapter}文字。${label}は章の数に入りません）\n\n`
   }
@@ -95,7 +107,26 @@ export async function novelContextExecute(
   }
   if (chapterOutline) {
     context += `## 📋 この${section.kind === "chapter" ? "章" : "節"}のプロット (P0 — 必ず従う)\n${chapterOutline.trim()}\n\n`
-  } else if (section.kind !== "chapter") {
+  }
+  // 短編は章別プロットを作らないので、プロット概要（序破急）を載せる
+  let shortBrief: string | null = null
+  if (!chapterOutline && short && section.kind === "chapter") {
+    shortBrief = await safeReadFile(getDocPath(dir, "outline-brief"))
+    if (shortBrief && shortBrief.trim()) {
+      const [brief, truncated] = truncateChars(shortBrief.trim(), resolveLimit(config, "outlineBrief"))
+      context += `## 📋 作品のプロット（序破急） (P0 — 必ず従う)\n`
+      if (!singleBody) context += `（第${section.chapter}章が序・破・急のどこに当たるかを確かめてから書きます）\n`
+      context += brief
+      if (truncated) context += `\n…（以下省略。limits.outlineBrief で枠を広げられます）`
+      context += "\n\n"
+    }
+  }
+  // 章のプロットが無いとき。連載では章別プロットを章ごとに足していくので、足りない章を書く前に気づけるようにする
+  if (!chapterOutline && section.kind === "chapter" && isSerial(config) && !(shortBrief && shortBrief.trim())) {
+    context += `## 📋 この章のプロット (P0 — 必ず従う)\n`
+    context += `⚠️ 第${section.chapter}章のプロットが見つかりません。連載では、書く前に \`/novel-outline\` でこの章の章別プロット（outline/${sectionFileName(section)}）を足します\n\n`
+  }
+  if (!chapterOutline && section.kind !== "chapter") {
     context += `## 📋 この節のプロット (P0 — 必ず従う)\n`
     context += `⚠️ ${label}のプロットが見つかりません。outline-detailed.md に「## ${label}」の節を書くか、outline/${sectionFileName(section)} を作ってください\n\n`
   }
@@ -117,7 +148,7 @@ export async function novelContextExecute(
 
   // 人物の絞り込みに使う手がかり（この章のプロットとシーン）。
   // 枠で切る前の全文を使う（切られた部分に出る人物を取りこぼさないため）
-  const chapterText = [chapterOutline ?? "", ...sceneParts.map((p) => p.content)].join("\n")
+  const chapterText = [chapterOutline ?? "", shortBrief ?? "", ...sceneParts.map((p) => p.content)].join("\n")
 
   // --- 登場人物（P1） ---
   // 一覧（profiles.md）と、この章に出る人物の個別ファイルを合わせる。
@@ -175,8 +206,6 @@ export async function novelContextExecute(
   }
 
   // あらすじは、読む順番でこの章・節より前のものを載せる（プロローグには載せない）
-  const manuscriptFiles = await listManuscriptFiles(dir)
-  const lastWritten = Math.max(0, ...manuscriptFiles.flatMap((f) => (f.section.kind === "chapter" ? [f.section.chapter] : [])))
   let summaryText = ""
   if (section.kind !== "prologue" && !(section.kind === "chapter" && section.chapter === 1 && !manuscriptFiles.some((f) => f.section.kind === "prologue"))) {
     const summary = await readTextRecord(getDocPath(dir, "summary"))

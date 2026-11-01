@@ -5,7 +5,7 @@
 OpenCode のサーバープラグインです。日本語の長編小説を書くために、
 8つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update` / `novel_check` / `novel_export`）、
 3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
-15のRTCOプロンプト、15の文書雛形、5つの skill、11のコマンド、
+16のRTCOプロンプト、16の文書雛形、5つの skill、11のコマンド、
 そしてファイルで持つ作品データの管理を提供します。
 
 本リポジトリは [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin) の fork で、
@@ -27,8 +27,8 @@ opencode-novel-plugin/
 │   ├── ruby.ts               # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
 │   ├── manuscript.ts         # 原稿用紙の枚数換算（書式を指定したときだけ使う）
 │   ├── sections.ts           # 本文の節（プロローグ・幕間・エピローグ）と部
-│   ├── prompts.ts            # 15のRTCOプロンプト
-│   ├── templates.ts          # 15の文書雛形（Markdown 12 + JSON 3）
+│   ├── prompts.ts            # 16のRTCOプロンプト
+│   ├── templates.ts          # 16の文書雛形（Markdown 13 + JSON 3）
 │   ├── agents/
 │   │   ├── novel-planner.ts  # 企画を手伝うコーチ
 │   │   ├── novel-writer.ts   # 本文を手伝うコーチ
@@ -100,7 +100,7 @@ opencode-novel-plugin/
 
 | ツール | 用途 | 主な引数 |
 |---|---|---|
-| `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting |
+| `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting, form, serial |
 | `novel_status` | 進行状況 | detailed |
 | `novel_save_chapter` | 章の保存 | section, chapterNumber, interludeIndex, title, content |
 | `novel_context` | 執筆用の資料 | section, chapterNumber, interludeIndex, sceneId, includePrompts |
@@ -160,7 +160,7 @@ opencode-novel-plugin/
 | `/novel-outline` | プロットを作る | なし |
 | `/novel-scenes` | 各章をシーンに割る | なし |
 | `/novel-reality` | 現実から題材を取る | なし |
-| `/write-chapter` | 1章の本文を書く | `<章番号>` |
+| `/write-chapter` | 1章の本文を書く | `<章番号 \| prologue \| interlude <章番号> [何番目] \| epilogue>`（章を分けない短編は省ける） |
 | `/novel-status` | 進行状況を見る | なし |
 | `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|full` |
 
@@ -188,6 +188,13 @@ opencode-novel-plugin/
 章別プロットとシーン一覧は、統合ファイル（`outline-detailed.md` / `scenes.md`）でも
 章ごとの分割（`outline/chapter-*.md` / `scenes/chapter-*.md`）でも可とします。
 本文の数が `chapterCount` に達すると `completed` を返します。
+
+**短編**（`config.json` の `form` が `"short"`）は世界観と章別プロットの判定を飛ばし、
+concept → characters → outline（`outline-brief.md` があるか）→ scenes → writing と進みます。
+`Phase` の型は変えず、world-building という段階が短編では出てこないだけです。
+
+**連載**（`config.json` の `serial` が `true`）は、章数で `completed` にしません。
+`chapters/epilogue.md` があれば `completed`、無ければ `writing` です（`chapterCount` は目安）。
 
 ## 分割保存
 
@@ -249,7 +256,7 @@ opencode-novel-plugin/
 |---|---|---|---|
 | プロローグ | `chapters/prologue.md` | 第1章の前 | 0 |
 | 幕間 | `chapters/interlude-005-1.md`（第5章のあとの1つ目） | 第5章のあと（同じ章のあとは番号順） | 直前の章（5） |
-| エピローグ | `chapters/epilogue.md` | 最後の章のあと | `chapterCount` |
+| エピローグ | `chapters/epilogue.md` | 最後の章のあと | 本文のある最後の章（`lastChapterForRecords`。1章も無ければ `chapterCount`） |
 
 - **節は章の数に入れない**。`determinePhase` / `countWrittenChapters` / `listChapterFiles` / シーンIDは章だけで動く。
   原稿全体を扱うところ（累計・原稿用紙換算・`novel_check`・`novel_export`・前の本文の末尾）だけが
@@ -273,9 +280,9 @@ opencode-novel-plugin/
 
 ## プロンプト
 
-RTCO（Role-Task-Context-Output）の枠組みで書いた15本です。
+RTCO（Role-Task-Context-Output）の枠組みで書いた16本です。
 
-concept, world-building, characters, outline-brief, outline-detailed, scenes,
+concept, world-building, characters, outline-brief, outline-short（短編・序破急）, outline-detailed, scenes,
 chapter-write, chapter-continue, consistency-check, character-state-update, summary-update
 
 流派・武芸設定: wuxia-martial-arts, wuxia-combat
@@ -364,6 +371,21 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   `novel_context` が `firstPerson` / `addressTerms` を上に重ねて「🗣️ ことばづかい」として載せる。
   人物設定の全文とは別に載せ、`clipDocParts` に入れない（人物設定が長いと切られて、ぶれやすい部分が落ちるため）。
   枠は `limits.speech`。雛形の項目名に「呼称」「別名」などを使わない（`extractNameAliases` に別名として拾われる）
+- **短編は `config.json` の `form: "short"`**（未指定は長編。既存の作品はそのまま動く）。既定値は `SHORT_DEFAULTS`
+  （20,000文字・1章＝章なし）。`novel_init` は短編では `world-building.md` を作らない。プロット概要は三幕ではなく
+  序破急で組み（`outline-short` / `SHORT_OUTLINE_BRIEF_TEMPLATE`）、章別プロットを作らないので、`novel_context` は
+  章別プロットが無ければプロット概要を載せる（`limits.outlineBrief`）。`novel_export` は、作品に章が1つしか無ければ
+  章見出しを付けず、2つ以上なら「一」「二」にする（保存ファイルの見出しは `# 第1章 …` のまま）
+- **序破急は緩急（速さ）の原理として扱う**。序＝ゆるやかに短く、破＝細部を重ねて速さを上げる（いちばん長い）、
+  急＝山場と決着を速く短く。**「破」を山場と取り違えない**（山場は急の中）。起承転結の「転」を危機と取り違えるのと
+  同じ型のずれ。三幕との対応は 序＝第一幕、破＝第二幕、急＝第三幕。長編の骨組みは三幕のままで、序破急は
+  場面や章の緩急を見直す物差しとして案内する
+- **連載（結末未定）は `config.json` の `serial: true`**。`chapterCount` と `targetWords` は目安で、超えて書いても崩れない。
+  完結はエピローグがあるかで判定し、`novel_status` は分量の不足を知らせず、次の章の章別プロットを足すよう案内する。
+  `novel_context` は章別プロットの無い章で ⚠️ を出す（連載では章別プロットを章ごとに足していくため）
+- **エピローグの記録の章番号は、本文のある最後の章**（`lastChapterForRecords`。1章も無ければ `chapterCount`）。
+  予定章数を使うと、予定を超えて書いた作品でエピローグの回収章が張った章より前になり、伏線の期限も予定章数で切れる。
+  あらすじの基準（`lastWritten`）とも揃う。部の最後の範囲も `max(chapterCount, 書いた最後の章)` で示す。これは連載でなくても同じ
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
   目標文字数 120,000／章数 40／視点「三人称一元視点」
 - 資料読み込みの上限は `src/constants.ts` の `LIMITS` が既定値。
@@ -377,7 +399,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、497件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、520件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

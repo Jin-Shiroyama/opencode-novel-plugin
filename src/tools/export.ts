@@ -2,7 +2,7 @@ import { lstat, realpath } from "node:fs/promises"
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import {
   safeReadFile, safeReadJson, safeWriteFile, getConfigPath, getNovelDir, getChaptersDir,
-  chapterTitleFromHeading, stripChapterHeading, countWords, toKanjiNumber,
+  chapterTitleFromHeading, isShortForm, stripChapterHeading, countWords, toKanjiNumber,
 } from "../utils.js"
 import type { NovelConfig } from "../utils.js"
 import { formatChapterRanges } from "../records.js"
@@ -36,6 +36,9 @@ interface ExportArgs {
  *   プロローグ  fromChapter が1以下なら含める
  *   幕間        直前の章（第N章のあとなら第N章）が範囲にあれば含める
  *   エピローグ  toChapter を省いたときだけ含める
+ *
+ * 短編（config.json の form が "short"）では章見出しを「第一章」にしない。作品に章が1つしか無ければ
+ * 章見出しを付けず、2つ以上なら「一」「二」（タイトルがあれば「一　タイトル」）にする。
  *
  * config.json に parts（部の構成）があれば、部の最初の章の前に部の見出し（「第一部　春」）を置く。
  * markdown では部を ##、章と節を ### にする。
@@ -80,6 +83,10 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
   const files = (await listManuscriptFiles(dir)).filter((f) => inRange(f, from, to, args.toChapter === undefined))
   if (files.length === 0) return `❌ 書き出す章がありません（.novel/chapters/chapter-NNN.md）。`
   const chapters = files.flatMap((f) => (f.section.kind === "chapter" ? [f.section.chapter] : []))
+  // 短編で章を分けていなければ（作品全体で章が1つ）、章見出しを付けない
+  const short = isShortForm(config)
+  const allChapters = (await listManuscriptFiles(dir)).filter((f) => f.section.kind === "chapter").length
+  const bareChapter = short && allChapters <= 1
 
   // 先にすべて読む。読めない章があれば何も書かない
   // （空の本文として繋ぐと、章が欠けたまま「書き出しました」と返してしまう）
@@ -128,10 +135,13 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
     const title = convertRuby(chapterTitleFromHeading(text), ruby)
     const body = convertRuby(rawBody, ruby)
 
+    if (f.section.kind === "chapter" && bareChapter) {
+      parts.push(body)
+      continue
+    }
+    const no = f.section.kind === "chapter" ? (numerals === "kanji" ? toKanjiNumber(f.section.chapter) : String(f.section.chapter)) : ""
     const name =
-      f.section.kind === "chapter"
-        ? `第${numerals === "kanji" ? toKanjiNumber(f.section.chapter) : String(f.section.chapter)}章`
-        : SECTION_NAMES[f.section.kind]
+      f.section.kind === "chapter" ? (short ? no : `第${no}章`) : SECTION_NAMES[f.section.kind]
     const heading =
       format === "text"
         ? `${name}${title ? `　${title}` : ""}`
@@ -153,7 +163,9 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
 
   const extras = describeExtraSections(files.map((f) => f.section))
   const range = [
-    ...(chapters.length > 0 ? [`${formatChapterRanges(chapters)}（${chapters.length}章）`] : []),
+    ...(bareChapter && chapters.length > 0
+      ? ["本文（短編・章なし）"]
+      : chapters.length > 0 ? [`${formatChapterRanges(chapters)}（${chapters.length}章）`] : []),
     ...(extras ? [extras] : []),
   ].join("＋")
   let report = `✅ 原稿を書き出しました（${format === "text" ? "テキスト" : "Markdown"}）

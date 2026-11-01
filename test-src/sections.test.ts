@@ -87,7 +87,7 @@ describe("読む順番と呼び名", () => {
     assert.equal(parseSectionLabel("プロローグ的な話", parseChapterNumber), null)
   })
 
-  test("記録の章番号: プロローグは 0、幕間は直前の章、エピローグは予定の最後の章", () => {
+  test("記録の章番号: プロローグは 0、幕間は直前の章、エピローグは渡した最後の章", () => {
     assert.equal(recordChapterOf(PROLOGUE, 40), 0)
     assert.equal(recordChapterOf(il(5, 2), 40), 5)
     assert.equal(recordChapterOf(EPILOGUE, 40), 40)
@@ -405,7 +405,8 @@ describe("あらすじの節", () => {
       ctx(dir),
     )
     const items = JSON.parse(readFileSync(join(dir, ".novel", "foreshadow.json"), "utf-8")).items
-    assert.equal(items[0].resolvedChapter, 3)
+    // 予定は全3章でも、本文は第2章まで。エピローグは本文のある最後の章として記録する
+    assert.equal(items[0].resolvedChapter, 2)
     await novelUpdateExecute(
       { action: "character-state", section: "prologue", content: JSON.stringify({ updates: [{ name: "佐和", changes: { mentalState: "眠い" } }] }) },
       ctx(dir),

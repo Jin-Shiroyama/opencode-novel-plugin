@@ -17,6 +17,15 @@ export const DEFAULTS = {
 } as const
 
 /**
+ * 短編（config.json の form が "short"）の既定値。
+ * 2万文字は400字詰め原稿用紙でおよそ50〜60枚。章は分けない（1本の本文。内部では第1章1つ）
+ */
+export const SHORT_DEFAULTS = {
+  targetWords: 20000,
+  chapterCount: 1,
+} as const
+
+/**
  * novel_context が各資料から読み込む文字数の上限。
  * 単位はコードポイント数（絵文字・サロゲートペアも1文字）。
  * 日本語は仮名を含むため同じ情報量でも中国語より文字数が増える。
@@ -41,6 +50,8 @@ export const LIMITS = {
   scenes: 4000,
   /** ことばづかいの一覧（一人称・二人称・相手ごとの呼び方） */
   speech: 1500,
+  /** プロット概要（短編で章別プロットが無いとき、序破急の骨組みとして載せる） */
+  outlineBrief: 4000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

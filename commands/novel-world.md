@@ -12,6 +12,8 @@ agent: novel-planner
 1. `novel_status(detailed: true)` で前の工程が済んでいるか確かめる
 2. コンセプトが未記入なら `/novel-concept` を先に実行してもらう
 3. 世界観が書き終わっていれば、作り直すか尋ねる
+4. `.novel/config.json` の `form` が `"short"`（短編）なら、世界観の工程は省ける（コンセプトに舞台を数行書けば足りる）と伝え、それでも作るかを尋ねる。
+   作るときは `.novel/world-building.md` を Write ツールで新しく作る（短編では雛形を作っていない）
 
 ## 進めかた
 

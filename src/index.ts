@@ -58,15 +58,17 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
   return {
     tool: {
       "novel_init": tool({
-        description: `日本語の長編小説プロジェクトを新規に作る。.novel ディレクトリと、コンセプト・世界観・登場人物などの雛形ファイルを一式用意する。
+        description: `日本語の小説プロジェクト（長編・中編、または form: "short" で短編）を新規に作る。.novel ディレクトリと、コンセプト・世界観・登場人物などの雛形ファイルを一式用意する。
 使う場面: これから新しい作品を書きはじめるとき。`,
         args: {
           title: z.string().describe("作品タイトル"),
           genre: z.string().describe("ジャンル（例: 現代ドラマ、ミステリ、異世界ファンタジー、時代小説、SF、ホラー、恋愛、青春、ライト文芸）"),
-          targetWords: z.number().optional().describe("目標総文字数。既定 120000（文庫1冊相当）"),
-          chapterCount: z.number().optional().describe("予定章数。既定 40"),
+          targetWords: z.number().optional().describe("目標総文字数。既定 120000（文庫1冊相当）。短編の既定は 20000"),
+          chapterCount: z.number().optional().describe("予定章数。既定 40。短編の既定は 1（章なし）"),
           theme: z.string().optional().describe("作品テーマ（例: 成長、復讐、赦し、喪失と再生）"),
           narrativePerspective: z.string().optional().describe("視点。既定「三人称一元視点」"),
+          form: z.enum(["long", "short"]).optional().describe("作品の形。short（短編）は世界観と章別プロットの工程を省き、プロット概要を序破急で組む。既定は 2万文字・章なし。省くと long（中編・長編）"),
+          serial: z.boolean().optional().describe("連載（結末を決めずに書き進める）なら true。chapterCount は目安になり、章数がそろっても完結にしない（エピローグを書いたら完結）。省くと予定章数で完結とみなす"),
           martialArtsSetting: z.boolean().optional().describe("流派・刀剣・剣術の設定ファイルを作るかどうか。省略時はジャンルから判断する（剣豪・剣客・武侠・チャンバラ・時代活劇・剣戟を含む場合のみ有効）"),
         },
         async execute(args, context) {
@@ -146,7 +148,7 @@ ${CHARACTER_STATE_EXAMPLE}
 プロローグ・幕間・エピローグのあらすじは section で指す（幕間は chapterNumber に直前の章、2つ目からは interludeIndex も）。
 
 ■ プロローグ・幕間・エピローグの出来事を character-state / foreshadow に記録するときも section を渡す。
-記録の章番号は、プロローグは 0、幕間は直前の章、エピローグは予定の最後の章になる。
+記録の章番号は、プロローグは 0、幕間は直前の章、エピローグは本文のある最後の章（予定章数を超えて書いていればその章）になる。
 
 ■ foreshadow（content は JSON。既存の伏線は id で指し、変える項目だけを渡す）
 使えるキー: ${FORESHADOW_KEYS}

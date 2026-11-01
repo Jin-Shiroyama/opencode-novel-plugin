@@ -1,6 +1,6 @@
 import {
   safeReadFile, safeReadJson, safeWriteFile, getChaptersDir, getNovelDir, getConfigPath, countWords,
-  stripChapterHeading, normalizeChapterTitle, existsSync, chapterFileName,
+  stripChapterHeading, normalizeChapterTitle, existsSync, chapterFileName, isShortForm,
 } from "../utils.js"
 import type { NovelConfig } from "../utils.js"
 import { resolveManuscriptFormat, countManuscriptLines, linesToPagesDecimal, formatManuscriptLabel } from "../manuscript.js"
@@ -30,7 +30,11 @@ export async function novelSaveChapterExecute(
   const resolved = sectionFromArgs(args)
   if ("error" in resolved) return `❌ 保存していません。${resolved.error}。`
   const section = resolved.section
-  const label = sectionLabel(section)
+  const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
+  // 章を分けない短編では、第1章が本文そのもの
+  const singleBody =
+    isShortForm(config) && (config?.chapterCount ?? 1) === 1 && section.kind === "chapter" && section.chapter === 1
+  const label = singleBody ? "本文" : sectionLabel(section)
   const fileName = sectionFileName(section)
   const chaptersDir = getChaptersDir(dir)
   const filePath = join(chaptersDir, fileName)
@@ -85,7 +89,6 @@ export async function novelSaveChapterExecute(
   }
   report += `📊 文字数: ${wordCount.toLocaleString("ja-JP")}文字\n`
   // 原稿用紙の書式が config.json にあるときだけ枚数を添える
-  const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
   const manuscript = resolveManuscriptFormat(undefined, config?.manuscript)
   if (manuscript && "format" in manuscript) {
     const lines = countManuscriptLines(body, manuscript.format.columns)

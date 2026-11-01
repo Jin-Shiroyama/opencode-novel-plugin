@@ -948,6 +948,16 @@ export interface NovelConfig {
    * 書き出しの見出し、進行状況、執筆用の資料に使う（sections.ts の parseParts）
    */
   parts?: Array<{ title: string; fromChapter: number }>
+  /**
+   * 作品の形。"short"（短編）は世界観と章別プロットの工程を省き、プロット概要を序破急で組む。
+   * 未指定は "long"（中編・長編。三幕構成と6工程）
+   */
+  form?: "long" | "short"
+  /**
+   * 連載（結末を決めずに書き進める）。true なら chapterCount は目安で、章数がそろっても完結にしない。
+   * chapters/epilogue.md を書いたら完結とみなす。エピローグなしで閉じるなら外す
+   */
+  serial?: boolean
   createdAt: string
   updatedAt: string
   currentPhase: Phase
@@ -1100,6 +1110,16 @@ export function isMartialArtsGenre(genre: string | undefined | null): boolean {
   return MARTIAL_ARTS_GENRE_KEYWORDS.some((keyword) => normalized.includes(keyword))
 }
 
+/** 短編か（config.json の form が "short"） */
+export function isShortForm(config: Pick<NovelConfig, "form"> | null | undefined): boolean {
+  return config?.form === "short"
+}
+
+/** 連載（結末未定）か。chapterCount は目安として扱う */
+export function isSerial(config: Pick<NovelConfig, "serial"> | null | undefined): boolean {
+  return config?.serial === true
+}
+
 /** 設定の明示指定を優先し、なければジャンルから推定する */
 export function usesMartialArtsSetting(config: Pick<NovelConfig, "genre" | "martialArtsSetting">): boolean {
   if (typeof config.martialArtsSetting === "boolean") return config.martialArtsSetting
@@ -1152,17 +1172,24 @@ export function countWrittenChapters(projectDir: string): number {
  * 雛形として先に作られる 3 文書は記入済みかどうかで、
  * プロット・シーン一覧はファイルの有無で判定する。
  * 予定章数に達していれば completed を返す。
+ * 連載（serial）では予定章数は目安なので章数では完結にせず、エピローグがあれば completed を返す。
  */
 export function determinePhase(projectDir: string, config?: NovelConfig | null): Phase {
+  // 短編は世界観と章別プロットの工程を省く（世界観はコンセプトに数行で足りる。
+  // プロットはプロット概要の序破急からシーン一覧へ直接割る）
+  const short = isShortForm(config)
   if (!isDocFilled(getDocPath(projectDir, "concept"))) return "concept"
-  if (!isDocFilled(getDocPath(projectDir, "world-building"))) return "world-building"
+  if (!short && !isDocFilled(getDocPath(projectDir, "world-building"))) return "world-building"
   if (!isDocFilled(getDocPath(projectDir, "characters"))) return "characters"
   if (!existsSync(getDocPath(projectDir, "outline-brief"))) return "outline"
 
   // 章別プロットとシーン一覧は、統合ファイルでも章ごとの分割でもよい。
-  if (!hasOutlineDetailed(projectDir)) return "outline"
+  if (!short && !hasOutlineDetailed(projectDir)) return "outline"
   if (!hasSceneList(projectDir)) return "scenes"
 
+  if (isSerial(config)) {
+    return existsSync(join(getChaptersDir(projectDir), "epilogue.md")) ? "completed" : "writing"
+  }
   const written = countWrittenChapters(projectDir)
   const planned = config?.chapterCount ?? DEFAULTS.chapterCount
   if (written > 0 && written >= planned) return "completed"

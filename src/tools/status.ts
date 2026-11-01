@@ -4,7 +4,7 @@ import {
   getNovelDir, getDocPath, getChaptersDir, getConfigPath,
   safeReadFile, safeReadJson, listMarkdownFiles,
   countWords, progressBar,
-  determinePhase, usesMartialArtsSetting, isDocFilled,
+  determinePhase, usesMartialArtsSetting, isDocFilled, isShortForm, isSerial,
   hasOutlineDetailed, hasSceneList, collectScenes, stripChapterHeading,
   sceneChapterNumber, toKanjiNumber,
 } from "../utils.js"
@@ -49,6 +49,11 @@ const PHASE_HINTS: Record<Phase, string> = {
   completed: "全章そろいました。`/novel-review all` で通し読みの推敲へ。",
 }
 
+/** 連載で書き進めるときの次の一手。章別プロットは章ごとに足していくので、先に確かめるよう添える */
+function serialHint(next: number): string {
+  return `\`/write-chapter ${next}\` で続きを書きましょう（第${next}章の章別プロットがまだなら、先に \`/novel-outline\` で足します。結末を決めたら \`/write-chapter epilogue\`）。`
+}
+
 export async function novelStatusExecute(
   args: StatusArgs,
   ctx: ToolContext,
@@ -63,6 +68,8 @@ export async function novelStatusExecute(
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
   const phase = determinePhase(dir, config)
   const detailed = args.detailed ?? false
+  const short = isShortForm(config)
+  const serial = isSerial(config)
 
   let report = `📊 作品の進行状況\n${"=".repeat(40)}\n\n`
 
@@ -70,7 +77,14 @@ export async function novelStatusExecute(
     report += `📖 タイトル: ${config.title}\n`
     report += `🏷️  ジャンル: ${config.genre}\n`
     report += `🎯 目標文字数: ${config.targetWords?.toLocaleString("ja-JP") ?? "未設定"}文字\n`
-    report += `📋 予定章数: ${config.chapterCount ? `全${config.chapterCount}章` : "未設定"}\n`
+    if (short) {
+      report += `📋 形: 短編（${config.chapterCount && config.chapterCount > 1 ? `全${config.chapterCount}章` : "章なし。1本の本文"}）\n`
+    } else if (serial) {
+      // 連載では章数は目安。超えて書いても崩れない（完結はエピローグで判断する）
+      report += `📋 連載（結末未定）／章数の目安: ${config.chapterCount ? `全${config.chapterCount}章` : "未設定"}\n`
+    } else {
+      report += `📋 予定章数: ${config.chapterCount ? `全${config.chapterCount}章` : "未設定"}\n`
+    }
     report += `👁️  視点: ${config.narrativePerspective ?? "未設定"}\n`
     if (usesMartialArtsSetting(config)) {
       report += `🗡️  流派・武芸設定: 使用中\n`
@@ -80,8 +94,10 @@ export async function novelStatusExecute(
 
   report += `📍 現在の段階: ${PHASE_LABELS[phase] ?? phase}\n`
   if (phase === "completed") {
-    // 完結は「予定の章数がそろった」という意味でしかない。分量と記録は下で別に示す
-    report += `   （予定の章数がそろった状態です。分量と記録の点検は下を参照）\n`
+    // 完結は「予定の章数がそろった」（連載ならエピローグを書いた）という意味でしかない。分量と記録は下で別に示す
+    report += serial
+      ? `   （連載で、エピローグを書いた状態です。記録の点検は下を参照）\n`
+      : `   （予定の章数がそろった状態です。分量と記録の点検は下を参照）\n`
   }
   report += `\n`
 
@@ -113,7 +129,7 @@ export async function novelStatusExecute(
     { label: "プロット概要", done: existsSync(getDocPath(dir, "outline-brief")) },
     { label: "章別プロット", done: hasOutlineDetailed(dir) },
     { label: "シーン一覧", done: hasSceneList(dir) },
-  ]
+  ].filter((stage) => !(short && (stage.label === "世界観" || stage.label === "章別プロット")))
 
   report += `📋 工程の進み具合:\n`
   for (const stage of stages) {
@@ -123,6 +139,7 @@ export async function novelStatusExecute(
     report += `  ${mark} ${stage.label}\n`
   }
   report += `  （✅ 記入済み / 📝 雛形あり・未記入 / ⬜ 未作成）\n`
+  if (short) report += `  （短編では世界観と章別プロットの工程を省きます。プロットはプロット概要の序破急からシーンに割ります）\n`
 
   // シーンは統合ファイルと章ごとの分割の両方から集める。
   // 同じ章が両方にあるときは分割側だけを数える（collectScenes が面倒を見る）
@@ -208,7 +225,7 @@ export async function novelStatusExecute(
     report += `\n📊 累計: ${totalWords.toLocaleString("ja-JP")}文字`
     if (config?.targetWords) {
       const percent = Math.round((totalWords / config.targetWords) * 100)
-      report += ` / ${config.targetWords.toLocaleString("ja-JP")}文字 (${percent}%)`
+      report += ` / ${config.targetWords.toLocaleString("ja-JP")}文字 (${percent}%${serial ? "。連載なので目安" : ""})`
     }
     if (counted.some((c) => c.section.kind !== "chapter")) report += `（${extras}を含む）`
     report += "\n"
@@ -230,7 +247,8 @@ export async function novelStatusExecute(
     const planned = config?.chapterCount ?? undefined
     report += `\n📚 部の進み具合:\n`
     for (const part of parts.parts) {
-      const to = part.toChapter ?? planned ?? Math.max(part.fromChapter, ...writtenChapters)
+      // 最後の部は、予定章数を超えて書いていればその章まで（連載で予定を延ばしたとき）
+      const to = part.toChapter ?? Math.max(planned ?? part.fromChapter, part.fromChapter, ...writtenChapters)
       const total = Math.max(0, to - part.fromChapter + 1)
       const done = writtenChapters.filter((n) => n >= part.fromChapter && n <= to).length
       report += `  ${partName(part, "kanji", toKanjiNumber)}「${part.title}」（${partRange(part, to)}）: ${done}/${total}章\n`
@@ -314,7 +332,8 @@ export async function novelStatusExecute(
   if (unreadableExtras.length > 0) {
     issues.push(`読み込めない節があります: ${unreadableExtras.join("、")}（累計には含めていません）`)
   }
-  if (config?.targetWords && phase === "completed" && totalWords < config.targetWords) {
+  // 連載の目標文字数は目安なので、届かなくても知らせない
+  if (config?.targetWords && phase === "completed" && !serial && totalWords < config.targetWords) {
     // 分量は章数とは別に示す。数は上の累計と同じ集計値を使う
     issues.push(`分量が目標に届いていません: ${totalWords.toLocaleString("ja-JP")} / ${config.targetWords.toLocaleString("ja-JP")}文字（${Math.round((totalWords / config.targetWords) * 100)}%）`)
   }
@@ -323,7 +342,15 @@ export async function novelStatusExecute(
     for (const issue of issues) report += `  ⚠️ ${issue}\n`
   }
 
-  report += `\n💡 次の一手: ${PHASE_HINTS[phase] ?? ""}\n`
+  const hint =
+    short && phase === "writing" && (config?.chapterCount ?? 1) === 1
+      ? "`/write-chapter` で本文を書きましょう。"
+      : short && phase === "outline"
+        ? "`/novel-outline` で序破急のプロット概要を作りましょう。"
+        : serial && phase === "writing"
+          ? serialHint(Math.max(0, ...writtenChapters) + 1)
+          : (PHASE_HINTS[phase] ?? "")
+  report += `\n💡 次の一手: ${hint}\n`
 
   return report
 }

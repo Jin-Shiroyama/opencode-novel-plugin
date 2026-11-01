@@ -205,7 +205,7 @@ export const FORESHADOW_EXAMPLE = `{
 
 export const FORESHADOW_KEYS =
   "id, title, content, category, status（pending / planted / resolved / abandoned）, " +
-  "plantChapter（プロローグは 0）, targetChapter, resolvedChapter（エピローグは最後の章の番号）, notes"
+  "plantChapter（プロローグは 0）, targetChapter, resolvedChapter（エピローグは本文のある最後の章の番号）, notes"
 
 /**
  * 日本語で書かれがちな状態と、近い値の手がかり。

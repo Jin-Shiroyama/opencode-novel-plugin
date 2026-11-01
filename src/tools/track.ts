@@ -5,7 +5,7 @@ import {
 } from "../utils.js"
 import type { ForeshadowEntry, CharacterState, NovelConfig } from "../utils.js"
 import { DEFAULTS } from "../constants.js"
-import { sectionFromArgs, recordChapterOf, sectionFileName, sectionLabel } from "../sections.js"
+import { sectionFromArgs, recordChapterOf, sectionFileName, sectionLabel, listManuscriptFiles, lastChapterForRecords } from "../sections.js"
 import type { ManuscriptSection, SectionKind } from "../sections.js"
 import {
   parseCharacterUpdates, parseForeshadowUpdates, parseSummaryInput, upsertSummarySections,
@@ -38,7 +38,7 @@ export async function novelUpdateExecute(
   }
 
   // プロローグ・幕間・エピローグを指されたとき。あらすじはその節に書き、
-  // 伏線と人物の状態には記録用の章番号（プロローグは 0、幕間は直前の章、エピローグは最後の章）を使う
+  // 伏線と人物の状態には記録用の章番号（プロローグは 0、幕間は直前の章、エピローグは本文のある最後の章）を使う
   let target: ManuscriptSection | undefined
   if (args.section !== undefined || args.interludeIndex !== undefined) {
     const resolved = sectionFromArgs(args)
@@ -50,7 +50,8 @@ export async function novelUpdateExecute(
   let chapterNumber = args.chapterNumber
   if (target && target.kind !== "chapter") {
     const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
-    chapterNumber = recordChapterOf(target, config?.chapterCount ?? DEFAULTS.chapterCount)
+    const files = await listManuscriptFiles(dir)
+    chapterNumber = recordChapterOf(target, lastChapterForRecords(files, config?.chapterCount ?? DEFAULTS.chapterCount))
   }
 
   switch (args.action) {

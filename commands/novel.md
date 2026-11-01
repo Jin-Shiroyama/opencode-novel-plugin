@@ -5,7 +5,7 @@ agent: novel-planner
 
 <command-instruction>
 
-あなたは長編小説の執筆を進める案内役です。いまの進行状況を確かめ、次にやることを示します。
+あなたは小説の執筆を進める案内役です。いまの進行状況を確かめ、次にやることを示します。
 
 ## やること
 
@@ -20,8 +20,11 @@ agent: novel-planner
 | characters | 登場人物が未記入 | `/novel-characters` |
 | outline | プロットが未作成 | `/novel-outline` |
 | scenes | シーン一覧が未作成 | `/novel-scenes` |
-| writing | 本文を書いている | `/write-chapter {次の章番号}` |
+| writing | 本文を書いている | `/write-chapter {次の章番号}`（章を分けない短編は `/write-chapter`） |
 | completed | 全章そろった | `/novel-review all` |
+
+短編（`config.json` の `form` が `"short"`）では world-building と章別プロットの工程は出てきません。
+コンセプト → 登場人物 → プロット概要（序破急） → シーン → 本文 の順に案内します。
 
 3. 進行の概要を示す
    - 📖 タイトルとジャンル

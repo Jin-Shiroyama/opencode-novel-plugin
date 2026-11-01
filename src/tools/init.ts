@@ -21,7 +21,7 @@ import {
   WUXIA_WEAPONS_TEMPLATE,
   REALITY_SOURCE_TEMPLATE,
 } from "../templates.js"
-import { DEFAULTS } from "../constants.js"
+import { DEFAULTS, SHORT_DEFAULTS } from "../constants.js"
 import type { ToolContext } from "../index.js"
 
 interface InitArgs {
@@ -32,6 +32,10 @@ interface InitArgs {
   theme?: string
   narrativePerspective?: string
   martialArtsSetting?: boolean
+  /** 作品の形。"short"（短編）は世界観と章別プロットを省き、既定値も短編のものにする */
+  form?: "long" | "short"
+  /** 連載（結末を決めずに書き進める）。chapterCount は目安になり、章数がそろっても完結にしない */
+  serial?: boolean
 }
 
 export async function novelInitExecute(
@@ -48,8 +52,10 @@ export async function novelInitExecute(
 
   const title = args.title
   const genre = args.genre
-  const targetWords = args.targetWords ?? DEFAULTS.targetWords
-  const chapterCount = args.chapterCount ?? DEFAULTS.chapterCount
+  const short = args.form === "short"
+  const defaults = short ? SHORT_DEFAULTS : DEFAULTS
+  const targetWords = args.targetWords ?? defaults.targetWords
+  const chapterCount = args.chapterCount ?? defaults.chapterCount
   const theme = args.theme ?? ""
   const perspective = args.narrativePerspective ?? DEFAULTS.narrativePerspective
 
@@ -63,6 +69,8 @@ export async function novelInitExecute(
     ...CONFIG_TEMPLATE,
     ...vars,
     martialArtsSetting: useMartialArts,
+    ...(short ? { form: "short" } : {}),
+    ...(args.serial ? { serial: true } : {}),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     currentPhase: "concept",
@@ -70,7 +78,10 @@ export async function novelInitExecute(
   await safeWriteJson(getConfigPath(dir), config)
 
   await safeWriteFile(getDocPath(dir, "concept"), fillTemplateVars(CONCEPT_TEMPLATE, vars))
-  await safeWriteFile(getDocPath(dir, "world-building"), fillTemplateVars(WORLD_BUILDING_TEMPLATE, vars))
+  // 短編では世界観の工程を省くので雛形も作らない（未記入の雛形が残ると、埋めるべきものに見えるため）
+  if (!short) {
+    await safeWriteFile(getDocPath(dir, "world-building"), fillTemplateVars(WORLD_BUILDING_TEMPLATE, vars))
+  }
   await safeWriteFile(getDocPath(dir, "characters"), fillTemplateVars(CHARACTER_PROFILES_TEMPLATE, vars))
   await safeWriteFile(getDocPath(dir, "summary"), fillTemplateVars(SUMMARY_TEMPLATE, vars))
   await safeWriteJson(getDocPath(dir, "foreshadow"), FORESHADOW_TEMPLATE)
@@ -96,6 +107,14 @@ export async function novelInitExecute(
     : ""
 
   const perChapter = Math.round(targetWords / chapterCount)
+  const chaptersLine = short && chapterCount === 1
+    ? `形: 短編（章なし。1本の本文）`
+    : args.serial
+      ? `${short ? "形: 短編／" : ""}連載（結末未定）／章数の目安: 全${chapterCount}章（1章あたり約${perChapter.toLocaleString("ja-JP")}文字。超えて書いてよい）`
+      : `${short ? "形: 短編／" : ""}予定章数: 全${chapterCount}章（1章あたり約${perChapter.toLocaleString("ja-JP")}文字）`
+  const next = short
+    ? `  4. 固まったら登場人物づくりへ進みます（短編では世界観と章別プロットの工程を省きます）`
+    : `  4. 固まったら世界観づくりへ進みます`
 
   return `✅ 作品『${title}』の準備ができました。
 
@@ -103,8 +122,7 @@ export async function novelInitExecute(
   .novel/
   ├── config.json          (作品設定)
   ├── concept.md           (作品コンセプト ← まずここから)
-  ├── world-building.md    (世界観)
-  ├── characters/          (登場人物)
+${short ? "" : "  ├── world-building.md    (世界観)\n"}  ├── characters/          (登場人物)
   │   ├── profiles.md
   │   └── state.json
   ├── summary.md           (これまでのあらすじ)
@@ -115,12 +133,12 @@ export async function novelInitExecute(
 📋 作品の基本情報:
   ジャンル: ${genre}
   目標文字数: ${targetWords.toLocaleString("ja-JP")}文字
-  予定章数: 全${chapterCount}章（1章あたり約${perChapter.toLocaleString("ja-JP")}文字）
+  ${chaptersLine}
   視点: ${perspective}
 
 📝 次にやること:
   1. 書きたい話の種を聞かせてください（あらすじ、主人公、中心にある対立）
   2. concept プロンプトを使ってコンセプトを固めます
   3. .novel/concept.md に書き込みます
-  4. 固まったら世界観づくりへ進みます`
+${next}`
 }

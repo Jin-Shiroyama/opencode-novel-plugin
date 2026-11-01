@@ -11,7 +11,9 @@
  * 文字数の累計や書き出しのように、原稿全体を扱うところでだけ節を含める。
  *
  * 伏線と人物の状態の記録は章番号で持つ。節の出来事は recordChapterOf の章番号で記録する
- * （プロローグは 0、幕間は直前の章、エピローグは予定の最後の章）。
+ * （プロローグは 0、幕間は直前の章、エピローグは最後の章）。
+ * エピローグの「最後の章」は本文のある最後の章で、予定章数ではない（lastChapterForRecords）。
+ * 結末を決めずに書き進める連載では、予定章数を超えて書くことがあるため。
  */
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
@@ -137,9 +139,9 @@ export function sameSection(a: ManuscriptSection, b: ManuscriptSection): boolean
 
 /**
  * 記録（伏線・人物の状態）に書く章番号。
- * プロローグは 0、幕間は直前の章、エピローグは予定の最後の章。
+ * プロローグは 0、幕間は直前の章、エピローグは最後の章（lastChapter。lastChapterForRecords で出す）。
  */
-export function recordChapterOf(s: ManuscriptSection, chapterCount: number): number {
+export function recordChapterOf(s: ManuscriptSection, lastChapter: number): number {
   switch (s.kind) {
     case "chapter":
     case "interlude":
@@ -147,8 +149,25 @@ export function recordChapterOf(s: ManuscriptSection, chapterCount: number): num
     case "prologue":
       return 0
     case "epilogue":
-      return chapterCount
+      return lastChapter
   }
+}
+
+/**
+ * エピローグの記録に使う「最後の章」。本文のある最後の章で、まだ1章も無ければ予定章数。
+ *
+ * 予定章数をそのまま使うと、予定（40章）を超えて55章まで書いた連載のエピローグが
+ * 第40章の出来事として記録され、第50章で張った伏線の回収章が張った章より前になる。
+ * 予定より早く閉じた作品でも、書いていない章に記録を置かない。
+ */
+export function lastChapterForRecords(files: ManuscriptFile[], chapterCount: number): number {
+  const last = lastWrittenChapter(files)
+  return last > 0 ? last : chapterCount
+}
+
+/** 本文のある最後の章の番号。1章も無ければ 0 */
+export function lastWrittenChapter(files: ManuscriptFile[]): number {
+  return Math.max(0, ...files.flatMap((f) => (f.section.kind === "chapter" ? [f.section.chapter] : [])))
 }
 
 /** ツールの引数（section / chapterNumber / interludeIndex）から節を決める。決められなければ理由を返す */
@@ -301,7 +320,7 @@ export interface Part {
   number: number
   title: string
   fromChapter: number
-  /** 部の最後の章。最後の部は null（予定の最後の章まで） */
+  /** 部の最後の章。最後の部は null（予定章数か、それを超えて書いた最後の章まで） */
   toChapter: number | null
 }
 
