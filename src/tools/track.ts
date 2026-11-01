@@ -326,31 +326,31 @@ function nextForeshadowId(items: ForeshadowEntry[]): string {
 }
 
 async function getUpdatePrompt(dir: string, promptType: string, chapterNumber?: number): Promise<string> {
-  const { getPromptTemplate, listPromptTemplates } = await import("../prompts.js")
+  const { getPromptTemplate, listPromptTemplates, buildPromptVars, fillPrompt, remainingPlaceholders } = await import("../prompts.js")
   const template = getPromptTemplate(promptType)
   if (!template) {
     return `❌ そのプロンプトは見つかりません: ${promptType}
 使えるもの: ${listPromptTemplates().join(", ")}`
   }
 
-  const config = await safeReadJson<any>(getConfigPath(dir))
-  const characters = await safeReadFile(getDocPath(dir, "characters"))
-
-  let filled = template
-  if (config) {
-    filled = filled.replace(/\{title\}/g, config.title)
-    filled = filled.replace(/\{genre\}/g, config.genre)
-  }
-  if (chapterNumber) {
-    filled = filled.replace(/\{chapterNumber\}/g, String(chapterNumber))
-  }
-  if (characters) {
-    filled = filled.replace(/\{charactersToTrack\}/g, "この章に出てきた全員")
-  }
+  const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
+  // 追う人物は、状態の記録にいる人物の名前。記録が無いか読めなければ、この章に出た全員を見てもらう
+  const state = await readCharacterStateRecord(getDocPath(dir, "character-state"))
+  const names = state.kind === "ok" ? state.value.characters.map((c) => c.name).filter(Boolean) : []
+  const vars = buildPromptVars(config, {
+    // プロローグは記録の章番号が 0。真偽で判定すると 0 が埋まらない
+    chapterNumber,
+    charactersToTrack: names.length > 0 ? `${names.join("、")}（この章に出てこない人物は省く）` : "この章に出てきた全員",
+  })
+  const filled = fillPrompt(template, vars)
+  const left = remainingPlaceholders(filled)
+  const leftNote = left.length > 0
+    ? `\n\n📌 資料から埋めて使う差し込み: ${left.map((k) => `{${k}}`).join("、")}`
+    : ""
 
   return `📝 プロンプト「${promptType}」:
 
-${filled}
+${filled}${leftNote}
 
 💡 このプロンプトと章の本文を合わせて使い、得られた結果を novel_update で保存してください。`
 }

@@ -25,9 +25,9 @@ agent: novel-planner
 ### 二、前提を読む
 
 次を読みます。
-- `.novel/outline-detailed.md` — 章別プロット
+- `.novel/outline-detailed.md` — 章別プロット（短編では作らないので、代わりに `.novel/outline-brief.md` の序破急を読む）
 - `.novel/characters/profiles.md` — 登場人物
-- `.novel/world-building.md` — 世界観
+- `.novel/world-building.md` — 世界観（短編では世界観の工程を省くので、ファイルが無ければ読まない）
 
 ### 三、進め方を決める
 

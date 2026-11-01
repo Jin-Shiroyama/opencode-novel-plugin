@@ -261,7 +261,7 @@ export const OUTLINE_BRIEF_TEMPLATE = `# 『{title}』プロット概要
 
 ## 三幕構成
 
-### 第一幕：導入（全体の約25%、第1〜{act1End}章
+### 第一幕：導入（全体の約25%、第1〜{act1End}章）
 
 **この幕の仕事**：日常を見せる → それを壊す → 主人公を動かす
 
@@ -279,7 +279,7 @@ export const OUTLINE_BRIEF_TEMPLATE = `# 『{title}』プロット概要
 
 ---
 
-### 第二幕前半：上昇（約25%、第{act2aStart}〜{act2aEnd}章
+### 第二幕前半：上昇（約25%、第{act2aStart}〜{act2aEnd}章）
 
 **この幕の仕事**：新しい状況を探る → 試される → 中盤の転換
 
@@ -296,7 +296,7 @@ export const OUTLINE_BRIEF_TEMPLATE = `# 『{title}』プロット概要
 
 ---
 
-### 第二幕後半：危機（約25%、第{act2bStart}〜{act2bEnd}章
+### 第二幕後半：危機（約25%、第{act2bStart}〜{act2bEnd}章）
 
 **この幕の仕事**：敵が迫る → 1つめのジレンマ → 最も暗い時
 
@@ -314,7 +314,7 @@ export const OUTLINE_BRIEF_TEMPLATE = `# 『{title}』プロット概要
 
 ---
 
-### 第三幕：山場と結末（約25%、第{act3Start}〜{act3End}章
+### 第三幕：山場と結末（約25%、第{act3Start}〜{act3End}章）
 
 **この幕の仕事**：気づき → 2つめのジレンマ → 決着 → 新しい均衡
 

@@ -158,10 +158,10 @@ graph LR
 | 0 | `concept.md` | `concept` | 思いつきを物語の核にする |
 | 1 | `world-building.md` | `world-building` | つじつまの合う世界を作る |
 | 2 | `characters/profiles.md` | `characters` | 生身の手ざわりのある人物をそろえる |
-| 3 | `outline-brief.md` | `outline-brief` | 三幕構成の骨を組む |
-| 4 | `outline-detailed.md` | `outline-detailed` | 章ごとの計画に落とす |
-| 5 | `scenes.md` | `scenes` | 章をシーンに割る |
-| 6 | `chapters/*.md` | `chapter-write` / `chapter-continue` | 1章ずつ書く |
+| 3（段A） | `outline-brief.md` | `outline-brief` | 三幕構成の骨を組む |
+| 3（段B） | `outline-detailed.md` | `outline-detailed` | 章ごとの計画に落とす |
+| 4 | `scenes.md` | `scenes` | 章をシーンに割る |
+| 5 | `chapters/*.md` | `chapter-write` / `chapter-continue` | 1章ずつ書く |
 
 プロット概要は三幕構成で骨を組み、起承転結を別の物差しとして見直します。三幕の幕と起承転結は一対一に対応させません。
 起承転結の「転」は危機や山場のことではなく、それまでの見方を変えるもの（別の視点、隠れていた事実など）が入るところだからです。
@@ -286,7 +286,7 @@ Web 連載（カクヨムなど）のように、結末やエピローグを決�
 | `chapterNumber` | number | （章と幕間で ✅） | 章番号（1から）。幕間では幕間を置く位置（直前の章の番号） |
 | `interludeIndex` | number | | 幕間のとき、同じ章のあとの何番目か。既定 1 |
 | `sceneId` | string | | シーンID（1.1、2.3 など）。渡すとそのシーンに印が付きます |
-| `includePrompts` | boolean | | 執筆プロンプトを含めるか。既定 true |
+| `includePrompts` | boolean | | 末尾に「書くときの条件」（分量・視点・書き出しか続きか）を付けるか。既定 true。表記と言い回しは `novel-writing` skill を参照する |
 
 優先度をつけて返します。
 
@@ -603,7 +603,7 @@ pending → planted → resolved
 | temperature | 0.3 |
 | 権限 | edit / bash / webfetch / websearch / question すべて許可 |
 
-- 工程0〜5の企画を進める
+- 工程0〜4の企画を進める（工程5の本文は `novel-writer`）
 - まず例を見せ、穴埋めではなく選択肢（`Question` ツール）で決めてもらう
 - 専門用語には必ずかみくだいた説明を添える
 - 工程の終わりに、まとめ・確認・改善案の3点を出す
@@ -616,10 +616,12 @@ pending → planted → resolved
 | temperature | 0.7 |
 | 権限 | edit / bash / question 許可、webfetch 不可 |
 
-- 章の書き出しを2〜3通り出して選んでもらう
-- 使った技法をその場で説明する（💡 で本文と区別）
-- 迷う箇所は二通り書いて違いを説明する（🔑）
-- 書き終えたら自分で点検し、よい点と直せる点を挙げる
+- `/write-chapter` では1章を一括で書き、本文だけを保存して報告する
+- 相談しながら書くとき（コマンドを使わずに話すとき、または頼まれたとき）は、次を挟む
+  - 章の書き出しを2〜3通り出して選んでもらう
+  - 使った技法をその場で説明する（💡 で本文と区別）
+  - 迷う箇所は二通り書いて違いを説明する（🔑）
+  - 書き終えたら自分で点検し、よい点と直せる点を挙げる
 - 表記規約と反AI一覧を守る
 
 ### `novel-editor` — 原稿を見る編集コーチ
@@ -695,12 +697,12 @@ RTCO（Role-Task-Context-Output）の枠組みで書いた16本です。
 | `concept` | 作品コンセプト | 0 |
 | `world-building` | 世界観 | 1 |
 | `characters` | 登場人物 | 2 |
-| `outline-brief` | プロット概要（三幕構成） | 3 |
+| `outline-brief` | プロット概要（三幕構成） | 3（段A） |
 | `outline-short` | プロット概要（短編・序破急） | 3（短編） |
-| `outline-detailed` | 章別プロット | 4 |
-| `scenes` | シーン設計 | 5 |
-| `chapter-write` | 第1章の本文 | 6 |
-| `chapter-continue` | 第2章以降の本文 | 6 |
+| `outline-detailed` | 章別プロット | 3（段B） |
+| `scenes` | シーン設計 | 4 |
+| `chapter-write` | 第1章の本文 | 5 |
+| `chapter-continue` | 第2章以降の本文 | 5 |
 | `consistency-check` | つじつま確認 | いつでも |
 | `character-state-update` | 人物の状態の更新 | 章ごと |
 | `summary-update` | あらすじの更新 | 章ごと |
@@ -716,7 +718,7 @@ RTCO（Role-Task-Context-Output）の枠組みで書いた16本です。
 - **C**ontext/Organize（`<outline>` `<characters>` など）— 資料とその並べ方
 - **O**utput（`<output>`）— 出力してほしい形
 
-プロンプトは `novel_context` を呼ぶと自動で付き、`novel_update(action: "prompt", content: "<名前>")` でも取れます。
+プロンプトは `novel_update(action: "prompt", content: "<名前>")` で取れます（差し込みは作品設定から埋まります）。`novel_context` の末尾には、全文ではなく要点の「書くときの条件」が付きます。
 
 ---
 
@@ -1008,7 +1010,7 @@ skill には次を収めています。
 `.novel/` はプロジェクトディレクトリごとに独立しています。別のディレクトリで作業してください。
 
 **1章が目標文字数に届かない／超える**
-振れ幅は ±10% まで見ています。日本語の長編は1章 3,000〜6,000文字が読みやすい範囲で、山場の章は 8,000文字まで伸ばしてかまいません。
+1章の目安は、目標文字数÷章数（`novel_context` の「この章の目安」）で、振れ幅は ±10% まで見ています。設定が無いときの一般的な目安は1章 3,000〜6,000文字で、山場の章は 8,000文字まで伸ばしてかまいません。
 
 ---
 
@@ -1017,7 +1019,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（405テスト。test-src/ にまとめてある）
+pnpm test        # node:test で実行（533テスト。test-src/ にまとめてある）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -1048,9 +1050,11 @@ src/
 ├── records.ts        # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
 ├── typography.ts     # 表記の点検（novel-writing skill の表記規約のうち機械で見られるもの）
 ├── ruby.ts           # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
+├── manuscript.ts     # 原稿用紙の枚数換算（書式を指定したときだけ使う）
 ├── sections.ts       # 本文の節（プロローグ・幕間・エピローグ）と部
 ├── prompts.ts        # 16のRTCOプロンプト
 ├── templates.ts      # 文書雛形（Markdown 13 + JSON 3）
+├── agent-config.ts   # opencode.json の agent 設定とプラグインの既定の重ね方
 ├── agents/           # 3つの agent
 └── tools/            # 8つのツールの実装
 commands/             # 11のコマンド
@@ -1166,7 +1170,7 @@ printf '%s' "<字>" | iconv -f UTF-8 -t EUC-JISX0213 >/dev/null 2>&1
 
 - `src/utils.test.ts` を新設。文字数の数え方は、ひらがな・カタカナ・長音符・漢字・三点リーダ・ダッシュ・約物・半角英数字・各種空白・サロゲートペアの混在を網羅
 - `scripts/check-japanese.test.mjs` を新設。検出器の一覧に JIS X 0213 の収録字が混ざっていないことを `iconv` で機械的に検証する
-- 合計 270 テスト。Node 24 標準の `node:test` を使い、**依存パッケージの追加なし**
+- Node 24 標準の `node:test` を使い、**依存パッケージの追加なし**（テストの件数は「開発」の節を参照）
 - `tsconfig.build.json` を新設し、配布ビルドからテストを除外
 - CI に `pnpm test`、`pnpm build`、`pnpm check:ja` を追加
 - `scripts/check-japanese.mjs` を新設（中国語の残存チェック）

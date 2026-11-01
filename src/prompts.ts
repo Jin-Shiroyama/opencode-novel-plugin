@@ -10,7 +10,7 @@
  * - novel-workflow-mcp: 雛形駆動、シーンごとの _Prompt
  */
 
-import { CHAPTER_LENGTH, CHAPTER_WORD_TOLERANCE } from "./constants.js"
+import { CHAPTER_LENGTH, CHAPTER_WORD_TOLERANCE, DEFAULTS } from "./constants.js"
 
 // ============================================================
 // 補助
@@ -255,7 +255,7 @@ export const CHARACTER_PROFILES_PROMPT = `<system>
 </output>`
 
 // ============================================================
-// 工程3: プロット概要
+// 工程3 段A: プロット概要
 // ============================================================
 
 export const OUTLINE_BRIEF_PROMPT = `<system>
@@ -294,7 +294,7 @@ export const OUTLINE_BRIEF_PROMPT = `<system>
 
 ## 三幕構成
 
-### 第一幕：導入（約{act1Words}文字、{act1Chapters}章
+### 第一幕：導入（約{act1Words}文字、{act1Chapters}章）
 - 日常の提示
 - きっかけの出来事
 - 主人公の最初の選択
@@ -302,7 +302,7 @@ export const OUTLINE_BRIEF_PROMPT = `<system>
 
 **第一幕の転換点**：[幕の終わりで何が変わるか]
 
-### 第二幕前半：上昇（約{act2aWords}文字、{act2aChapters}章
+### 第二幕前半：上昇（約{act2aWords}文字、{act2aChapters}章）
 - 新しい状況のはじまり
 - 味方と敵
 - 最初の試練
@@ -310,7 +310,7 @@ export const OUTLINE_BRIEF_PROMPT = `<system>
 
 **中盤の転換**：[説明]
 
-### 第二幕後半：危機（約{act2bWords}文字、{act2bChapters}章
+### 第二幕後半：危機（約{act2bWords}文字、{act2bChapters}章）
 - 敵が迫る
 - ⚡ **1つめのジレンマ**（第{dilemma1Chapter}章あたり）
 - 事態の悪化
@@ -318,7 +318,7 @@ export const OUTLINE_BRIEF_PROMPT = `<system>
 
 **最も暗い時**：[主人公が底に落ちる場面]
 
-### 第三幕：山場と結末（約{act3Words}文字、{act3Chapters}章
+### 第三幕：山場と結末（約{act3Words}文字、{act3Chapters}章）
 - 気づきと立て直し
 - ⚡ **2つめのジレンマ**（第{dilemma2Chapter}章あたり）
 - 最後の対決
@@ -415,7 +415,7 @@ export const OUTLINE_SHORT_PROMPT = `<system>
 </output>`
 
 // ============================================================
-// 工程4: 章別プロット
+// 工程3 段B: 章別プロット
 // ============================================================
 
 export const OUTLINE_DETAILED_PROMPT = `<system>
@@ -482,7 +482,7 @@ export const OUTLINE_DETAILED_PROMPT = `<system>
 </output>`
 
 // ============================================================
-// 工程5: シーン設計
+// 工程4: シーン設計
 // ============================================================
 
 export const SCENES_PROMPT = `<system>
@@ -552,7 +552,7 @@ export const SCENES_PROMPT = `<system>
 </output>`
 
 // ============================================================
-// 工程6: 本文（第1章）
+// 工程5: 本文（第1章）
 // ============================================================
 
 export const CHAPTER_WRITE_PROMPT = `<system>
@@ -621,7 +621,7 @@ ${ANTI_AI_CORE}
 </output>`
 
 // ============================================================
-// 工程6: 本文（第2章以降）
+// 工程5: 本文（第2章以降）
 // ============================================================
 
 export const CHAPTER_CONTINUE_PROMPT = `<system>
@@ -713,26 +713,27 @@ export const CONSISTENCY_CHECK_PROMPT = `<system>
 </task>
 
 <output>
-JSON で返してください。
+次の Markdown の形で返してください（novel-editor skill の「つじつまの確認」と同じ形です）。
 
-{
-  "issues": [
-    {
-      "type": "character|world|timeline|logic|foreshadow|typography",
-      "severity": "error|warning|info",
-      "location": "段落の位置か引用",
-      "description": "どう食い違っているか",
-      "suggestion": "直しかた"
-    }
-  ],
-  "score": {
-    "character_consistency": 0-10,
-    "world_consistency": 0-10,
-    "plot_coherence": 0-10,
-    "overall": 0-10
-  },
-  "summary": "全体の評価"
-}
+## つじつまの確認 — 第{chapterNumber}章
+
+### 見つかったこと
+
+| # | 観点 | 重さ | 場所 | 何が起きているか | 直し方 |
+|---|---|---|---|---|---|
+| 1 | 人物／ことばづかい／世界観／時間／因果／伏線／表記 | 大／中／小 | 段落の位置か引用 | どう食い違っているか | 直しかた |
+
+見つからなければ「見つかったことはありません」と書きます。
+
+### 点数
+
+| 観点 | 点（0-10） |
+|---|---|
+| 人物のぶれなさ | |
+| 世界の約束ごと | |
+| 筋の通り | |
+| 表記 | |
+| 総合 | |
 </output>`
 
 // ============================================================
@@ -754,7 +755,7 @@ export const CHARACTER_STATE_UPDATE_PROMPT = `<system>
 3. **持ち物**：手に入れたもの、失ったもの
 4. **できること**：身につけたこと、失ったこと
 5. **関係**：ほかの人物との関係の変化（改善／悪化／裏切り／信頼）
-6. **所属**：加入／離脱／昇格／降格
+6. **所属**：加入／離脱／昇格／降格（events に書く。role は物語上の役割で、所属ではない）
 7. **出来事**：この章でその人物に起きた重要なこと
 </task>
 
@@ -1048,6 +1049,72 @@ export const CHARACTER_ARCHETYPE_PROMPT = `<system>
 
 export function fillPrompt(template: string, vars: Record<string, string>): string {
   return fillTemplate(template, vars)
+}
+
+/** buildPromptVars が読む作品設定（config.json の一部） */
+export interface PromptConfig {
+  title?: string
+  genre?: string
+  theme?: string
+  narrativePerspective?: string
+  targetWords?: number
+  chapterCount?: number
+}
+
+/**
+ * プロンプトの差し込みを作品設定から作る（novel_update(action: "prompt") で使う）。
+ *
+ * 以前は題・ジャンル・章番号しか埋めず、outline-brief の {act1Words} や outline-short の {joWords} が
+ * そのまま返っていた。三幕は25%ずつ、序破急は 2:6:2 の目安で出す。
+ * 幕の章数は境界 round(章数×i/4) の差で出し、合計を章数と一致させる（それぞれ丸めると合計がずれる）。
+ * 設定に無い値は入れない（差し込みが残り、呼び手が資料から埋める）。
+ */
+export function buildPromptVars(
+  config: PromptConfig | null | undefined,
+  opts: { chapterNumber?: number; charactersToTrack?: string } = {},
+): Record<string, string> {
+  const n = (v: number) => v.toLocaleString("ja-JP")
+  const vars: Record<string, string> = {}
+  if (config?.title) {
+    vars.title = config.title
+    // chapter-write / chapter-continue は上流の識別子のまま {projectTitle} を使う
+    vars.projectTitle = config.title
+  }
+  if (config?.genre) vars.genre = config.genre
+  if (config?.theme) vars.theme = config.theme
+  vars.narrativePerspective = config?.narrativePerspective ?? DEFAULTS.narrativePerspective
+
+  const targetWords = config?.targetWords ?? DEFAULTS.targetWords
+  const chapterCount = Math.max(1, config?.chapterCount ?? DEFAULTS.chapterCount)
+  vars.targetWords = n(targetWords)
+  vars.chapterCount = n(chapterCount)
+  // 1章あたりの目標（chapter-write / chapter-continue の {targetWordCount}）
+  vars.targetWordCount = n(Math.round(targetWords / chapterCount))
+
+  const quarter = Math.round(targetWords / 4)
+  const bound = [0, 1, 2, 3, 4].map((i) => Math.round((chapterCount * i) / 4))
+  const acts = ["act1", "act2a", "act2b", "act3"]
+  acts.forEach((act, i) => {
+    vars[`${act}Words`] = n(quarter)
+    vars[`${act}Chapters`] = n(bound[i + 1] - bound[i])
+  })
+  // ジレンマは第二幕後半と第三幕の中ほど。章が少なくて幕が空なら、幕の境の章に置く
+  const middle = (from: number, to: number) => Math.max(1, from + Math.ceil((to - from) / 2))
+  vars.dilemma1Chapter = String(middle(bound[2], bound[3]))
+  vars.dilemma2Chapter = String(middle(bound[3], bound[4]))
+
+  vars.joWords = n(Math.round(targetWords * 0.2))
+  vars.haWords = n(Math.round(targetWords * 0.6))
+  vars.kyuWords = n(Math.round(targetWords * 0.2))
+
+  if (opts.chapterNumber !== undefined) vars.chapterNumber = String(opts.chapterNumber)
+  if (opts.charactersToTrack) vars.charactersToTrack = opts.charactersToTrack
+  return vars
+}
+
+/** 埋まらずに残った差し込み（{protagonistName} など）。重複は除く */
+export function remainingPlaceholders(text: string): string[] {
+  return [...new Set([...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))]
 }
 
 /** 使えるプロンプトの名前一覧 */

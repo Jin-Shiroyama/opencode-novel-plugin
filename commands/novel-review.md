@@ -1,6 +1,6 @@
 ---
 description: 原稿を点検して手直しする（つじつま・文章・緩急・表記）
-argument-hint: "[章番号|all] [--focus=consistency|style|pace|typography|full]"
+argument-hint: "[章番号 | all | prologue | interlude <章番号> [何番目] | epilogue] [--focus=consistency|style|pace|typography|full]"
 agent: novel-editor
 ---
 
@@ -13,7 +13,10 @@ agent: novel-editor
 | 引数 | 意味 |
 |---|---|
 | 章番号 | その章だけを見る（例：5） |
-| `all` | 書き終わったすべての章を見る |
+| `all` | 書き終わったすべての章を見る（プロローグ・幕間・エピローグも含む） |
+| `prologue`／`プロローグ` | プロローグだけを見る |
+| `interlude 5`／`幕間 5` | 第5章のあとの幕間を見る（2つ目からは `interlude 5 2`） |
+| `epilogue`／`エピローグ` | エピローグだけを見る |
 | `--focus=consistency` | つじつまだけを見る |
 | `--focus=style` | 文章だけを見る |
 | `--focus=pace` | 緩急だけを見る |
@@ -39,7 +42,7 @@ agent: novel-editor
 - `.novel/world-building.md` — 世界の約束ごと
 - `.novel/summary.md` — これまでのあらすじ
 - `.novel/foreshadow.json` — 伏線
-- 対象の章のファイル — 本文
+- 対象の本文 — `.novel/chapters/chapter-NNN.md`（節は `prologue.md`／`interlude-NNN-M.md`／`epilogue.md`）
 
 ### 三、点検する
 
@@ -54,11 +57,9 @@ agent: novel-editor
 - 伏線が計画どおりに扱われているか
 
 #### style（文章）
-- AI くさい言い回しがないか（`novel-writing` skill の A〜E 群で確認）
+- AI くさい言い回し・比喩の多さ・文末の単調さ（`novel-writing` skill の一覧が正本。そこで確かめる）
 - 「見せる、語らない」ができているか
 - 台詞が人の喋り方になっているか
-- 比喩が多すぎないか（1,000文字に1つまで）
-- 文末が単調でないか（「〜た。」が3文以上続いていないか）
 
 #### pace（緩急）
 - 行動シーンと反応シーンの比率
@@ -68,13 +69,9 @@ agent: novel-editor
 - 情報の詰まり具合
 
 #### typography（表記）
-まず `novel_check` を呼び（章番号を渡すか、`all` なら省く）、結果をもとに見ます。
-機械で拾えない数量の使い分けは目で確かめます。
-- 会話の「」と、会話文末の句点の有無
-- 三点リーダ「……」とダッシュ「――」（2つ重ね、偶数個）
-- 感嘆符・疑問符が全角か、直後の全角スペースが規約どおりか
-- 段落頭の字下げ（会話行は字下げしない）
-- 漢数字と算用数字の混在
+まず `novel_check` を呼び、結果をもとに見ます。章なら `chapterNumber`、節なら `section`（幕間は `chapterNumber` に直前の章、
+2つ目からは `interludeIndex` も）を渡し、`all` なら省きます。
+規則は `novel-writing` skill の表記規約が正本です。機械で拾えないもの（漢数字と算用数字の使い分けなど）は、規約を見ながら目で確かめます。
 
 #### full
 上のすべて。

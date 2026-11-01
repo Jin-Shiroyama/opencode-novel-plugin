@@ -106,13 +106,13 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
       }),
 
       "novel_context": tool({
-        description: `指定した章を書くための資料を一式そろえる。この章のプロットとシーン、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、執筆プロンプトを返す。章ごとに分割保存された資料（outline/chapter-002.md など）も読む。
+        description: `指定した章を書くための資料を一式そろえる。この章のプロットとシーン、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、書くときの条件（分量・視点）を返す。章ごとに分割保存された資料（outline/chapter-002.md など）も読む。
 プロローグ・幕間・エピローグは section で指定する（プロットは outline-detailed.md の「## プロローグ」「## 幕間（第5章のあと）」などの節か、outline/prologue.md から読む）。
 使う場面: ある章の執筆にとりかかる直前。優先度は P0(プロット) > P1(人物・前章とのつなぎ) > P2(伏線・あらすじ) の順。`,
         args: {
           ...sectionArgs("これから書く"),
           sceneId: z.string().optional().describe("シーンID（例 1.1、2.3）。渡すとそのシーンに印が付く"),
-          includePrompts: z.boolean().optional().describe("執筆プロンプトを含めるかどうか。既定 true"),
+          includePrompts: z.boolean().optional().describe("末尾に「書くときの条件」（分量・視点・書き出しか続きか）を付けるかどうか。既定 true"),
         },
         async execute(args, context) {
           return novelContextExecute(args as any, context as ToolContext)

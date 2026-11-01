@@ -304,31 +304,24 @@ export async function novelContextExecute(
     context += clipParts(realitySource, "realitySource") + "\n\n"
   }
 
-  if (includePrompts) {
-    const { getPromptTemplate, fillPrompt } = await import("../prompts.js")
-    // 物語の最初に来る本文（プロローグ、プロローグの無い作品の第1章）は書き出しのプロンプト
+  // 書くときの条件。資料は上に載せてあるので、プロンプトの全文を写し直さない
+  // （以前は chapter-write / chapter-continue の全文に「上から書き写してください」と差し込んで載せていたため、
+  //  同じ資料を二度読ませ、表記規約と言い回しの一覧も skill と重ねていた）
+  if (includePrompts && config) {
+    const targetWords = config.targetWords ?? DEFAULTS.targetWords
+    // 物語の最初に来る本文（プロローグ、プロローグの無い作品の第1章）は書き出し
     const isOpening = prev === null && (section.kind === "prologue" || (section.kind === "chapter" && section.chapter === 1))
-    const templateKey = isOpening ? "chapter-write" : "chapter-continue"
-    const template = getPromptTemplate(templateKey)
-    if (template && config) {
-      const targetWords = config.targetWords ?? DEFAULTS.targetWords
-      const prompt = fillPrompt(template, {
-        projectTitle: config.title,
-        genre: config.genre,
-        chapterNumber: section.kind === "chapter" ? String(section.chapter) : label,
-        chapterTitle: label,
-        targetWordCount: String(Math.round(targetWords / chapterCount)),
-        narrativePerspective: config.narrativePerspective ?? DEFAULTS.narrativePerspective,
-        chapterOutline: "［上の「この章のプロット」から書き写してください］",
-        charactersInfo: "［上の「登場人物」から該当者を抜き出してください］",
-        previousContext: summaryText ? "［上の「これまでのあらすじ」を参照］" : "",
-        foreshadowReminders: "［上の「伏線の確認」を参照］",
-        globalSummary: "［上の「これまでのあらすじ」を参照］",
-        previousChapterSummary: summaryText ? "［あらすじから前章の要点を抜き出してください］" : "",
-        previousChapterTail: prev ? "［上の「前章の末尾」を参照］" : "",
-      })
-      context += `## ✍️ 執筆プロンプト\n\`\`\`\n${prompt}\n\`\`\`\n`
-    }
+    const perChapter = Math.round(targetWords / chapterCount).toLocaleString("ja-JP")
+    const tolerance = Math.round(CHAPTER_WORD_TOLERANCE * 100)
+    context += `## ✍️ 書くときの条件\n`
+    context += `- 書くもの: ${label}（${isOpening ? "物語の書き出し。前置きなしに、場面か動作から始める" : "続き。前の本文の末尾から自然につなぐ"}）\n`
+    context += section.kind === "chapter"
+      ? `- 分量: ${perChapter}文字 ±${tolerance}%\n`
+      : `- 分量: プロットに従う（章の目安は ${perChapter}文字）\n`
+    context += `- 視点: ${config.narrativePerspective ?? DEFAULTS.narrativePerspective}（視点人物は1シーンに1人）\n`
+    context += `- 上のプロット（P0）から外れず、人物の設定と「ことばづかい」を保つ\n`
+    context += `- 表記と言い回しは novel-writing skill に従う（表記規約と、AI くさい言い回しの一覧）\n`
+    context += `- 本文だけを書き、章見出しの行を付けずに novel_save_chapter に渡す\n`
   }
 
   return context

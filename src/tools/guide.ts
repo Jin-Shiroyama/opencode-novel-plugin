@@ -17,8 +17,8 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 ## 全体の流れ
 
 \`\`\`
-コンセプト → 世界観 → 人物 → プロット概要 → 章別プロット → シーン設計 → 本文
-   0          1        2         3              4             5          6
+コンセプト → 世界観 → 人物 → プロット（概要 → 章別） → シーン設計 → 本文
+   0          1        2              3                  4          5
 \`\`\`
 
 ## 各工程
@@ -62,7 +62,7 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 **前提**: concept.md と world-building.md が書き終わっていること
 **プロンプト**: characters
 
-### 工程3: プロット概要 (outline-brief.md)
+### 工程3 段A: プロット概要 (outline-brief.md)
 **目的**: 三幕構成の骨をつくる
 
 **書き上げるもの**:
@@ -74,7 +74,7 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 **前提**: コンセプト＋世界観＋人物が書き終わっていること
 **プロンプト**: outline-brief
 
-### 工程4: 章別プロット (outline-detailed.md)
+### 工程3 段B: 章別プロット (outline-detailed.md)
 **目的**: 章ごとの計画に落とす
 
 **書き上げるもの**:
@@ -87,7 +87,7 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 **前提**: outline-brief.md が書き終わっていること
 **プロンプト**: outline-detailed
 
-### 工程5: シーン設計 (scenes.md)
+### 工程4: シーン設計 (scenes.md)
 **目的**: 章を、そのまま書ける大きさのシーンに割る
 
 **書き上げるもの**:
@@ -98,7 +98,7 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 **前提**: outline-detailed.md が書き終わっていること
 **プロンプト**: scenes
 
-### 工程6: 本文 (chapters/)
+### 工程5: 本文 (chapters/)
 **目的**: 1章ずつ書き上げる
 
 **手順**:
@@ -150,12 +150,12 @@ const PROMPTS_GUIDE = `# 📝 プロンプトの使い方
 | concept | 作品コンセプト | 工程0 |
 | world-building | 世界観 | 工程1 |
 | characters | 登場人物 | 工程2 |
-| outline-brief | プロット概要（三幕構成） | 工程3 |
+| outline-brief | プロット概要（三幕構成） | 工程3（段A） |
 | outline-short | プロット概要（短編・序破急） | 工程3（短編） |
-| outline-detailed | 章別プロット | 工程4 |
-| scenes | シーン設計 | 工程5 |
-| chapter-write | 第1章の本文 | 工程6（第1章） |
-| chapter-continue | 第2章以降の本文 | 工程6（第2章〜） |
+| outline-detailed | 章別プロット | 工程3（段B） |
+| scenes | シーン設計 | 工程4 |
+| chapter-write | 第1章の本文 | 工程5（第1章） |
+| chapter-continue | 第2章以降の本文 | 工程5（第2章〜） |
 | consistency-check | つじつま確認 | いつでも |
 | character-state-update | 人物の状態の更新 | 1章書き終えるごと |
 | summary-update | あらすじの更新 | 1章書き終えるごと |
@@ -250,7 +250,7 @@ const WRITING_GUIDE = `# ✍️ 文章の書きかた
 - 1章の目標 = 目標総文字数 ÷ 予定章数
 - 振れ幅は ±${Math.round(CHAPTER_WORD_TOLERANCE * 100)}% まで
 - 既定では ${DEFAULTS.targetWords.toLocaleString("ja-JP")}文字 ÷ 全${DEFAULTS.chapterCount}章 = 1章 ${Math.round(DEFAULTS.targetWords / DEFAULTS.chapterCount).toLocaleString("ja-JP")}文字
-- 日本語の長編は1章 ${CHAPTER_LENGTH.min.toLocaleString("ja-JP")}〜${CHAPTER_LENGTH.max.toLocaleString("ja-JP")}文字が読みやすい範囲（山場の章は ${CHAPTER_LENGTH.peak.toLocaleString("ja-JP")}文字まで）
+- 上の目標が優先。設定が無いときの一般的な目安として、日本語の長編は1章 ${CHAPTER_LENGTH.min.toLocaleString("ja-JP")}〜${CHAPTER_LENGTH.max.toLocaleString("ja-JP")}文字が読みやすい範囲（山場の章は ${CHAPTER_LENGTH.peak.toLocaleString("ja-JP")}文字まで）
 - 文字数は本文だけを、空白と改行を除いた全文字数で数えます（仮名も約物も1文字）。
   章見出しの行は数に入れません
 `

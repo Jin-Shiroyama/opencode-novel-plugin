@@ -10,7 +10,7 @@ agent: novel-planner
 ## 前に確かめること
 
 1. `novel_status(detailed: true)` で前の工程が済んでいるか確かめる
-2. 世界観が未記入なら `/novel-world` を先に実行してもらう
+2. 世界観が未記入なら `/novel-world` を先に実行してもらう（短編＝`.novel/config.json` の `form` が `"short"` では世界観の工程を省くので、確かめない）
 3. 登場人物が書き終わっていれば、作り直すか尋ねる
 
 ## 進めかた
@@ -23,7 +23,7 @@ agent: novel-planner
 
 次を読みます。
 - `.novel/concept.md` — 作品コンセプト
-- `.novel/world-building.md` — 世界観
+- `.novel/world-building.md` — 世界観（短編では世界観の工程を省くので、ファイルが無ければ読まない。舞台はコンセプトに書いてある）
 
 ### 三、対話で決める
 

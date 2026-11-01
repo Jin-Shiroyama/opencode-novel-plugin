@@ -29,6 +29,7 @@ opencode-novel-plugin/
 │   ├── sections.ts           # 本文の節（プロローグ・幕間・エピローグ）と部
 │   ├── prompts.ts            # 16のRTCOプロンプト
 │   ├── templates.ts          # 16の文書雛形（Markdown 13 + JSON 3）
+│   ├── agent-config.ts       # opencode.json の agent 設定とプラグインの既定の重ね方（mergeAgentConfig）
 │   ├── agents/
 │   │   ├── novel-planner.ts  # 企画を手伝うコーチ
 │   │   ├── novel-writer.ts   # 本文を手伝うコーチ
@@ -386,6 +387,18 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 - **エピローグの記録の章番号は、本文のある最後の章**（`lastChapterForRecords`。1章も無ければ `chapterCount`）。
   予定章数を使うと、予定を超えて書いた作品でエピローグの回収章が張った章より前になり、伏線の期限も予定章数で切れる。
   あらすじの基準（`lastWritten`）とも揃う。部の最後の範囲も `max(chapterCount, 書いた最後の章)` で示す。これは連載でなくても同じ
+- **工程の番号は0〜5の6工程**（0 コンセプト、1 世界観、2 人物、3 プロット＝段A 概要・段B 章別、4 シーン、5 本文）。
+  手引き・プロンプトのコメント・README もこの数え方にそろえる
+- **`/write-chapter` は一括で書く**（候補出し・二通りの書き比べ・技法の注記を挟まず、本文だけを保存して報告する）。
+  候補や注記を挟むコーチの進め方は、コマンドを使わずに `novel-writer` と話すとき（または頼まれたとき）だけ。
+  1章の分量は `novel_context` の「この章の目安」（目標文字数÷章数）に従い、3,000〜6,000文字は設定が無いときの目安
+- **`novel_context` の末尾は「書くときの条件」だけ**（分量・視点・書き出しか続きか）。プロンプトの全文は写し直さない
+  （上の資料と二重になり、表記規約と言い回しの一覧も skill と重なるため）。`chapter-write` などは `novel_update(prompt)` で引ける
+- **`novel_update(prompt)` の差し込みは `buildPromptVars` で作品設定から埋める**（三幕は25%ずつ、序破急は 2:6:2、幕の章数は
+  合計が章数と一致するように境界の差で出す）。章番号は 0（プロローグ）も埋める。書き手の材料（`{protagonistName}` など）は
+  埋めずに一覧で示す
+- **点検結果の形の正本は `novel-editor` skill の「点検結果の雛形」**。agent とつじつま確認のプロンプトはそれを指し、
+  つじつまだけを見るときは skill の「つじつまの確認」の表で返す（JSON は使わない）
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
   目標文字数 120,000／章数 40／視点「三人称一元視点」
 - 資料読み込みの上限は `src/constants.ts` の `LIMITS` が既定値。
@@ -399,7 +412,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、520件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、533件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

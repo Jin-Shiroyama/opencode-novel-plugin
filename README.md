@@ -24,11 +24,11 @@ An OpenCode plugin for writing long-form fiction **in Japanese**, from premise t
 
 ## What it provides
 
-- **6 tools** — `novel_init`, `novel_status`, `novel_save_chapter`, `novel_context`, `novel_guide`, `novel_update`
+- **8 tools** — `novel_init`, `novel_status`, `novel_save_chapter`, `novel_context`, `novel_guide`, `novel_update`, `novel_check`, `novel_export`
 - **3 agents** — `novel-planner` (planning coach), `novel-writer` (drafting coach), `novel-editor` (editing coach)
 - **5 skills** — workflow, writing (the canonical typography and anti-AI-cliché reference), editing, historical/swordsman fiction, reality sourcing
 - **11 slash commands** — `/novel-init`, `/novel-concept`, `/write-chapter`, `/novel-review`, …
-- **15 RTCO prompts** and **15 document templates**
+- **16 RTCO prompts** and **16 document templates**
 - File-based project data under `.novel/`
 
 Writing proceeds in six stages: premise → setting → characters → plot outline → scene breakdown → prose,
@@ -75,7 +75,7 @@ The plugin's prompts, templates and interface are all in Japanese — it is buil
 ```bash
 pnpm install
 pnpm typecheck   # type check (includes tests)
-pnpm test        # 69 unit tests via node:test — no extra dependencies
+pnpm test        # 533 unit tests via node:test — no extra dependencies
 pnpm build       # distribution build (dist/, tests excluded)
 pnpm check:ja    # check that no Chinese text remains
 ```
