@@ -97,7 +97,7 @@ export async function novelSaveChapterExecute(
     report += `⚠️ ${manuscript.error}\n`
   }
   // 保存したものをそのまま点検する（行番号が保存ファイルと一致するように）
-  report += summarizeForSave(saved, section)
+  report += summarizeForSave(saved, section, undefined, config?.style)
 
   if (args.updateState !== false) {
     report += `\n💡 novel_update で次の記録を更新しておくと、後の章でつじつまが合わせやすくなります:\n`

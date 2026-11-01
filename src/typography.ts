@@ -81,8 +81,12 @@ const SEPARATOR_LINE = /^[\s　]*[＊*◇◆□■○●※・〜~\-－―]+(?:[
  *
  * 渡すのは章ファイルの全文でよい。`#` で始まる見出しの行と空行は見ない。
  * 行番号はファイルの行番号のまま返す。
+ *
+ * style が "literary"（文芸寄り）のときだけ、地の文の算用数字を確認として拾う。
+ * 既定のライトノベル寄りでは、単位付きの数やステータス表記（3メートル、HP 1200）に算用数字を使うので拾わない。
  */
-export function checkTypography(text: string): TypographyIssue[] {
+export function checkTypography(text: string, opts: { style?: "light" | "literary" } = {}): TypographyIssue[] {
+  const literary = opts.style === "literary"
   const issues: TypographyIssue[] = []
   const lines = text.replace(/\r\n/g, "\n").split("\n")
   lines.forEach((line, i) => {
@@ -99,12 +103,14 @@ export function checkTypography(text: string): TypographyIssue[] {
     // 「｜十七《じゅうしち》」の読みや、傍点の《《》》を約物として扱わないため）。
     // 字の位置は元の行に戻して返す
     const { chars, columns } = stripRubyLine(line)
-    checkLine(chars, columns, original, i + 1, issues)
+    checkLine(chars, columns, original, i + 1, issues, literary)
   })
   return issues
 }
 
-function checkLine(chars: string[], columns: number[], original: string[], lineNo: number, issues: TypographyIssue[]): void {
+function checkLine(
+  chars: string[], columns: number[], original: string[], lineNo: number, issues: TypographyIssue[], literary: boolean,
+): void {
   const add = (column: number, rule: TypographyRule, severity: TypographySeverity, message: string) => {
     // 行末の位置（column === chars.length）は、元の行の行末に当てる
     const at = column < columns.length ? columns[column] : original.length
@@ -208,8 +214,9 @@ function checkLine(chars: string[], columns: number[], original: string[], lineN
       continue
     }
 
-    if (/[0-9]/.test(ch) && !inDialogue[i] && !(i > 0 && /[A-Za-z0-9._\-]/.test(chars[i - 1]))) {
-      add(i, "arabic-digit", "warning", "地の文の数量は原則漢数字（年号・型番などで算用数字が自然なら、作品の中でそろえる）")
+    // 地の文の算用数字は文芸寄りのときだけ拾う（ライトノベル寄りでは単位付きの数やステータスに使うため）
+    if (literary && /[0-9]/.test(ch) && !inDialogue[i] && !(i > 0 && /[A-Za-z0-9._\-]/.test(chars[i - 1]))) {
+      add(i, "arabic-digit", "warning", "文芸寄りの作品では、地の文の数量は原則漢数字（年号・型番などで算用数字が自然なら、作品の中でそろえる）")
       while (/[0-9]/.test(chars[i] ?? "")) i++
       continue
     }

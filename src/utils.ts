@@ -958,6 +958,12 @@ export interface NovelConfig {
    * chapters/epilogue.md を書いたら完結とみなす。エピローグなしで閉じるなら外す
    */
   serial?: boolean
+  /**
+   * 文体の寄せ方。未指定は "light"（ライトノベル・Web 小説寄り）。
+   * "literary"（文芸寄り）は地の文の数量を漢数字にそろえ、空行を場面転換だけに使う。
+   * 違いは novel-writing skill の表記規約に書いてある。機械の点検では地の文の算用数字の扱いだけが変わる
+   */
+  style?: "light" | "literary"
   createdAt: string
   updatedAt: string
   currentPhase: Phase
@@ -1113,6 +1119,16 @@ export function isMartialArtsGenre(genre: string | undefined | null): boolean {
 /** 短編か（config.json の form が "short"） */
 export function isShortForm(config: Pick<NovelConfig, "form"> | null | undefined): boolean {
   return config?.form === "short"
+}
+
+/** 文芸寄りの文体か（未指定はライトノベル寄り） */
+export function isLiteraryStyle(config: Pick<NovelConfig, "style"> | null | undefined): boolean {
+  return config?.style === "literary"
+}
+
+/** 文体の呼び名（資料と状況表示に使う） */
+export function styleLabel(config: Pick<NovelConfig, "style"> | null | undefined): string {
+  return isLiteraryStyle(config) ? "文芸寄り" : "ライトノベル寄り"
 }
 
 /** 連載（結末未定）か。chapterCount は目安として扱う */

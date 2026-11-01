@@ -75,7 +75,7 @@ The plugin's prompts, templates and interface are all in Japanese — it is buil
 ```bash
 pnpm install
 pnpm typecheck   # type check (includes tests)
-pnpm test        # 533 unit tests via node:test — no extra dependencies
+pnpm test        # 538 unit tests via node:test — no extra dependencies
 pnpm build       # distribution build (dist/, tests excluded)
 pnpm check:ja    # check that no Chinese text remains
 ```

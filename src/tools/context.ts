@@ -2,7 +2,7 @@ import {
   safeReadFile, safeReadJson, getDocPath, getConfigPath,
   resolveLimit, takeTailChars, parseChapterNumber, truncateChars, toKanjiNumber,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
-  clipDocParts, selectForeshadowReminders, extractSpeechProfile, isShortForm, isSerial,
+  clipDocParts, selectForeshadowReminders, extractSpeechProfile, isShortForm, isSerial, styleLabel,
 } from "../utils.js"
 import type {
   NovelConfig, DocPart, ForeshadowReminder, CharacterDoc, CharacterState, SpeechProfile,
@@ -318,7 +318,8 @@ export async function novelContextExecute(
     context += section.kind === "chapter"
       ? `- 分量: ${perChapter}文字 ±${tolerance}%\n`
       : `- 分量: プロットに従う（章の目安は ${perChapter}文字）\n`
-    context += `- 視点: ${config.narrativePerspective ?? DEFAULTS.narrativePerspective}（視点人物は1シーンに1人）\n`
+    context += `- 視点: ${config.narrativePerspective ?? DEFAULTS.narrativePerspective}（同じ場面の中で視点人物を入れ替えない。替えるなら区切りを置いて場面を分ける）\n`
+    context += `- 文体: ${styleLabel(config)}（novel-writing skill の表記規約のうち、${styleLabel(config)}の項に従う）\n`
     context += `- 上のプロット（P0）から外れず、人物の設定と「ことばづかい」を保つ\n`
     context += `- 表記と言い回しは novel-writing skill に従う（表記規約と、AI くさい言い回しの一覧）\n`
     context += `- 本文だけを書き、章見出しの行を付けずに novel_save_chapter に渡す\n`

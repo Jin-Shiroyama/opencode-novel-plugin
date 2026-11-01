@@ -4,7 +4,7 @@ import {
   getNovelDir, getDocPath, getChaptersDir, getConfigPath,
   safeReadFile, safeReadJson, listMarkdownFiles,
   countWords, progressBar,
-  determinePhase, usesMartialArtsSetting, isDocFilled, isShortForm, isSerial,
+  determinePhase, usesMartialArtsSetting, isDocFilled, isShortForm, isSerial, styleLabel,
   hasOutlineDetailed, hasSceneList, collectScenes, stripChapterHeading,
   sceneChapterNumber, toKanjiNumber,
 } from "../utils.js"
@@ -86,6 +86,7 @@ export async function novelStatusExecute(
       report += `📋 予定章数: ${config.chapterCount ? `全${config.chapterCount}章` : "未設定"}\n`
     }
     report += `👁️  視点: ${config.narrativePerspective ?? "未設定"}\n`
+    report += `✒️ 文体: ${styleLabel(config)}\n`
     if (usesMartialArtsSetting(config)) {
       report += `🗡️  流派・武芸設定: 使用中\n`
     }

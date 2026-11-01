@@ -81,12 +81,21 @@ describe("規約から外れた文を拾う", () => {
     test(name, () => assert.ok(rules(text).includes(rule), `${text} → ${rules(text).join(", ")}`))
   }
 
-  test("地の文の算用数字と、英数字との半角スペースは確認（warning）にとどめる", () => {
-    const issues = checkTypography("　第5章で見た群れ。\n　昨日 iPhone を買った。")
+  test("文芸寄りでは、地の文の算用数字と、英数字との半角スペースを確認（warning）にとどめる", () => {
+    const issues = checkTypography("　第5章で見た群れ。\n　昨日 iPhone を買った。", { style: "literary" })
     assert.deepEqual(
       issues.map((i) => [i.rule, i.severity]),
       [["arabic-digit", "warning"], ["ascii-space", "warning"], ["ascii-space", "warning"]],
     )
+  })
+
+  test("ライトノベル寄り（既定）では、地の文の算用数字を拾わない", () => {
+    const text = "　HP 1200のスライムが、3メートル先にいた。10分後、レベル5になった。"
+    assert.ok(!checkTypography(text).some((i) => i.rule === "arabic-digit"))
+    assert.ok(!checkTypography(text, { style: "light" }).some((i) => i.rule === "arabic-digit"))
+    assert.ok(checkTypography(text, { style: "literary" }).some((i) => i.rule === "arabic-digit"))
+    // 全角の算用数字は、どちらの文体でも誤り
+    assert.ok(checkTypography("　３メートル先。").some((i) => i.rule === "fullwidth-digit" && i.severity === "error"))
   })
 
   test("ルビ・傍点の記法の崩れを、元の行の位置で拾う", () => {
@@ -112,7 +121,7 @@ describe("規約から外れた文を拾う", () => {
   })
 
   test("規則ごとに数え、規約違反を先に並べる", () => {
-    const counts = countByRule(checkTypography("「行こう。」\n「行く。」\n　第5章の話。"))
+    const counts = countByRule(checkTypography("「行こう。」\n「行く。」\n　第5章の話。", { style: "literary" }))
     assert.deepEqual(counts[0], { rule: "dialogue-period", severity: "error", count: 2 })
     assert.equal(counts[1].severity, "warning")
   })

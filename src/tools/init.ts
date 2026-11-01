@@ -36,6 +36,8 @@ interface InitArgs {
   form?: "long" | "short"
   /** 連載（結末を決めずに書き進める）。chapterCount は目安になり、章数がそろっても完結にしない */
   serial?: boolean
+  /** 文体。省くとライトノベル寄り。文芸寄りは "literary" */
+  style?: "light" | "literary"
 }
 
 export async function novelInitExecute(
@@ -71,6 +73,7 @@ export async function novelInitExecute(
     martialArtsSetting: useMartialArts,
     ...(short ? { form: "short" } : {}),
     ...(args.serial ? { serial: true } : {}),
+    ...(args.style === "literary" ? { style: "literary" } : {}),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     currentPhase: "concept",
@@ -132,6 +135,7 @@ ${short ? "" : "  ├── world-building.md    (世界観)\n"}  ├── char
 
 📋 作品の基本情報:
   ジャンル: ${genre}
+  文体: ${args.style === "literary" ? "文芸寄り（地の文の数は漢数字、空行は場面転換だけ）" : "ライトノベル寄り（単位付きの数は算用数字でよい、間の1行あけも可）"}
   目標文字数: ${targetWords.toLocaleString("ja-JP")}文字
   ${chaptersLine}
   視点: ${perspective}

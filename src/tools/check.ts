@@ -1,4 +1,5 @@
-import { safeReadFile } from "../utils.js"
+import { safeReadFile, safeReadJson, getConfigPath } from "../utils.js"
+import type { NovelConfig } from "../utils.js"
 import { checkTypography, countByRule, formatIssue, TYPOGRAPHY_RULE_LABELS } from "../typography.js"
 import type { TypographyIssue } from "../typography.js"
 import { formatChapterRanges } from "../records.js"
@@ -40,13 +41,15 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
       : `❌ ${sectionLabel(target)}の本文が見つかりません（.novel/chapters/${sectionFileName(target)}）。`
   }
 
+  // 文体（config.json の style）で、地の文の算用数字を拾うかが変わる
+  const style = (await safeReadJson<NovelConfig>(getConfigPath(ctx.directory)))?.style
   const results: Array<{ section: ManuscriptSection; issues: TypographyIssue[] }> = []
   // 読めなかった章は「問題なし」と区別して示す（空の本文として点検すると0件になってしまう）
   const unreadable: ManuscriptSection[] = []
   for (const f of files) {
     const text = await safeReadFile(f.path)
     if (text === null) unreadable.push(f.section)
-    else results.push({ section: f.section, issues: checkTypography(text) })
+    else results.push({ section: f.section, issues: checkTypography(text, { style }) })
   }
   const unreadableNote = unreadable.length > 0
     ? `⚠️ 読み込めず点検できなかった章: ${formatSections(unreadable)}（ファイルの権限や中身を確かめてください）\n`
@@ -88,8 +91,10 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
  * 保存直後の報告に添える短い点検結果。
  * 多くを並べると保存の報告が埋もれるので、件数と最初の数件だけにする。
  */
-export function summarizeForSave(text: string, section: ManuscriptSection, shown = 3): string {
-  const issues = checkTypography(text)
+export function summarizeForSave(
+  text: string, section: ManuscriptSection, shown = 3, style?: "light" | "literary",
+): string {
+  const issues = checkTypography(text, { style })
   if (issues.length === 0) return `📝 表記: 規約から外れた箇所はありません\n`
   const errors = issues.filter((i) => i.severity === "error").length
   const counts = countByRule(issues)

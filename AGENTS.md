@@ -101,7 +101,7 @@ opencode-novel-plugin/
 
 | ツール | 用途 | 主な引数 |
 |---|---|---|
-| `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting, form, serial |
+| `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting, form, serial, style |
 | `novel_status` | 進行状況 | detailed |
 | `novel_save_chapter` | 章の保存 | section, chapterNumber, interludeIndex, title, content |
 | `novel_context` | 執筆用の資料 | section, chapterNumber, interludeIndex, sceneId, includePrompts |
@@ -387,6 +387,10 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 - **エピローグの記録の章番号は、本文のある最後の章**（`lastChapterForRecords`。1章も無ければ `chapterCount`）。
   予定章数を使うと、予定を超えて書いた作品でエピローグの回収章が張った章より前になり、伏線の期限も予定章数で切れる。
   あらすじの基準（`lastWritten`）とも揃う。部の最後の範囲も `max(chapterCount, 書いた最後の章)` で示す。これは連載でなくても同じ
+- **文体の既定はライトノベル寄り**（`config.json` の `style` なし）。文芸寄りは `style: "literary"`。正本は `novel-writing` skill の
+  「文体の寄せ方」の表。ライトノベル寄りでは、単位付きの数やステータスは算用数字でよく、間の1行あけも可、語り手の軽口の比喩も可。
+  機械の点検で変わるのは地の文の算用数字だけ（`checkTypography` の `style`。文芸寄りでだけ ⚠️）。
+  比喩の回数の上限は置かない（型の直喩の連発を避ける）。視点は「同じ場面の中で入れ替えない。替えるなら区切りで場面を分ける」
 - **工程の番号は0〜5の6工程**（0 コンセプト、1 世界観、2 人物、3 プロット＝段A 概要・段B 章別、4 シーン、5 本文）。
   手引き・プロンプトのコメント・README もこの数え方にそろえる
 - **`/write-chapter` は一括で書く**（候補出し・二通りの書き比べ・技法の注記を挟まず、本文だけを保存して報告する）。
@@ -412,7 +416,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、533件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、538件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

@@ -87,7 +87,7 @@ novel_context(chapterNumber: {N}, sceneId: "2.1", includePrompts: true)
 - `novel_context` の「この章の目安」の範囲に収める（±10%）
 - 場面に画を持たせる
 - 台詞をその人らしく書く
-- 視点人物は1シーンに1人だけ
+- 同じ場面の中で視点人物を入れ替えない（替えるなら区切りを置いて場面を分ける）
 - `novel-writing` skill の**表記規約**を守る（会話の句点、三点リーダとダッシュ、感嘆符のあとの空き、字下げ、数字、ルビ。保存すると `novel_check` で機械的に確かめられる）
 - `novel-writing` skill の**AI くさい言い回しの一覧**をすべて避ける
 
