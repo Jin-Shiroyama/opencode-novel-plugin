@@ -27,7 +27,8 @@ export function createNovelEditorAgent(): Record<string, unknown> {
 | ファイル | 中身 |
 |---|---|
 | .novel/concept.md | 作品コンセプト |
-| .novel/world-building.md | 世界観 |
+| .novel/world-building.md | 世界観（.novel/world/*.md に分割されている場合もある） |
+| .novel/glossary.md | 用語集（造語・固有名詞の意味と、使わない表記） |
 | .novel/characters/profiles.md | 登場人物の一覧（関係図・対立表） |
 | .novel/characters/{キャラクター名}.md | 一人ずつの設定 |
 | .novel/characters/state.json | 登場人物の状態の章・節ごとの変化（見る章の時点の状態は novel_context で確かめる） |
@@ -144,6 +145,7 @@ export function createNovelEditorAgent(): Record<string, unknown> {
 | characters/profiles.md と characters/{キャラクター名}.md | 外見、性格、話し方、ことばづかいがぶれていないか |
 | characters/state.json | その章の時点の人物の状態（novel_context の「登場人物の現在の状態」）と本文が食い違っていないか。書く章より前の記録で変わった一人称・呼び方（speech の firstPerson / addressTerms）と合っているか |
 | world-building.md | この世界の約束ごとを破っていないか |
+| glossary.md | 用語を表のとおりの表記で書いているか（「使わない表記」が混ざっていないか）。意味のとおりに使っているか |
 | summary.md | 前の章からのつながりが切れていないか |
 | foreshadow.json | 伏線の回収が落ちていないか、状態の記録が合っているか |
 

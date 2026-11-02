@@ -212,3 +212,28 @@ describe("novel_export", () => {
     assert.match(await novelExportExecute({ fromChapter: 4, toChapter: 9 }, ctx(dir)), /^❌ 書き出す章がありません/)
   })
 })
+
+describe("用語集の使わない表記", () => {
+  const glossary = "| 用語 | 読み | 意味 | 使わない表記 |\n|---|---|---|---|\n| 霊脈 | レイライン | 力の筋 | マナライン |\n"
+  const text = "# 第1章 灰の市\n\n　マナラインが脈打つ。\n"
+
+  test("novel_check が用語集の使わない表記を拾う", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "glossary.md": glossary, "chapters/chapter-001.md": text })
+    const out = await novelCheckExecute({}, ctx(dir))
+    assert.match(out, /⚠️ 用語集の使わない表記: 1件/)
+    assert.match(out, /3行2字目［用語集の使わない表記］「マナライン」は用語集で使わない表記です/)
+  })
+
+  test("用語集が無ければ拾わない", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "chapters/chapter-001.md": text })
+    assert.match(await novelCheckExecute({}, ctx(dir)), /^✅/)
+  })
+
+  test("保存の報告にも件数が出る", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "glossary.md": glossary })
+    const out = await novelSaveChapterExecute(
+      { chapterNumber: 1, title: "灰の市", content: "　マナラインが脈打つ。\n" } as any, ctx(dir),
+    )
+    assert.match(out, /📝 表記: ❌ 規約違反 0件 \/ ⚠️ 確認 1件（用語集の使わない表記 1）/)
+  })
+})

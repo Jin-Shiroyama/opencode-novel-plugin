@@ -27,7 +27,8 @@ export function createNovelPlannerAgent(): Record<string, unknown> {
 | 書くもの | ファイル |
 |---|---|
 | 作品コンセプト | .novel/concept.md |
-| 世界観 | .novel/world-building.md |
+| 世界観 | .novel/world-building.md（分量が増えたら .novel/world/{項目}.md に分けてもよい） |
+| 用語集（造語・固有名詞の意味と表記） | .novel/glossary.md |
 | 登場人物の一覧（関係図・対立表） | .novel/characters/profiles.md |
 | 一人ずつの設定 | .novel/characters/{キャラクター名}.md |
 | プロット概要 | .novel/outline-brief.md |
@@ -53,6 +54,7 @@ JSON で持つファイル（登場人物の状態と伏線は **novel_update �
 - シーン一覧：.novel/scenes/chapter-001.md、chapter-002.md…（章ごと）
 - 流派：.novel/wuxia/sects/{流派名}.md（1流派1ファイル）
 - 刀剣：.novel/wuxia/weapons/{刀剣名}.md（1本1ファイル）
+- 世界観：.novel/world/{項目}.md（「魔法.md」「地理.md」など。world-building.md は概観として残してよい）
 - 取材：.novel/reality/events/（出来事）、.novel/reality/archetypes/（人物の型）、.novel/reality/mappings/（対応表）
 
 ## ⚠️ コーチとしての鉄則
@@ -556,6 +558,7 @@ Question({
 - 登場人物の設定には、基本情報・外見・性格・来歴・動機の三角形（言い直しつき）・ことばづかい（一人称、二人称、丁寧さの基本、語尾・口調、相手ごとの呼び方の表）を含めます
 - プロットには、三幕の区切り・転換点・感情の起伏と、起承転結で見直したときの「転」（見方を変えるもの。危機や山場とは別）を書き入れます
 - 部・プロローグ・幕間・エピローグは、書き手が望むときだけ使います（どれも章の数に入りません）。章別プロットには「## プロローグ」「## 幕間（第5章のあと）」「## エピローグ」の見出しで、章と並べて読む順番に書きます。プロローグを設定の説明に使う案は避け、本編へ引き込む一場面にします
+- 造語・固有名詞（地名、組織、魔法や技の名前、この世界の単位や暦など）を決めたら、.novel/glossary.md の表に「用語｜読み｜意味｜使わない表記」で足します。執筆用の資料には、その章に出る用語がこの表から載ります
 - シーン一覧には、シーンID・所属する章・種別（行動／反応、言い直しつき）・中心にある対立・執筆の手引きを書き入れます
 
 ## 質の基準

@@ -39,7 +39,8 @@ agent: novel-editor
 - `.novel/config.json` — 作品設定
 - `.novel/characters/profiles.md` — 登場人物
 - `.novel/characters/state.json` — 人物の状態の章ごとの変化（その章の時点の状態は `novel_context` の「登場人物の現在の状態」で見る）
-- `.novel/world-building.md` — 世界の約束ごと
+- `.novel/world-building.md` — 世界の約束ごと（`.novel/world/*.md` に分けてあればそれも）
+- `.novel/glossary.md` — 用語集（造語・固有名詞の表記と意味）
 - `.novel/summary.md` — これまでのあらすじ
 - `.novel/foreshadow.json` — 伏線
 - 対象の本文 — `.novel/chapters/chapter-NNN.md`（節は `prologue.md`／`interlude-NNN-M.md`／`epilogue.md`）

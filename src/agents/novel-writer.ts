@@ -27,7 +27,8 @@ export function createNovelWriterAgent(): Record<string, unknown> {
 | 書くもの | ファイル |
 |---|---|
 | 作品コンセプト | .novel/concept.md |
-| 世界観 | .novel/world-building.md |
+| 世界観 | .novel/world-building.md（分量が増えたら .novel/world/{項目}.md に分けてもよい） |
+| 用語集（造語・固有名詞の意味と表記） | .novel/glossary.md |
 | 登場人物の一覧 | .novel/characters/profiles.md |
 | 一人ずつの設定 | .novel/characters/{キャラクター名}.md |
 | プロット概要 | .novel/outline-brief.md |

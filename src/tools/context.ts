@@ -14,7 +14,7 @@ import {
   readTextRecord, describeBrokenRecord,
 } from "../records.js"
 import {
-  isUntouchedTemplate, REALITY_SOURCE_TEMPLATE,
+  isUntouchedTemplate, REALITY_SOURCE_TEMPLATE, WORLD_BUILDING_TEMPLATE, GLOSSARY_TEMPLATE, CONCEPT_TEMPLATE,
   WUXIA_SECTS_TEMPLATE, WUXIA_MARTIAL_ARTS_TEMPLATE, WUXIA_WEAPONS_TEMPLATE,
 } from "../templates.js"
 import {
@@ -23,6 +23,8 @@ import {
   lastChapterForRecords, lastWrittenChapter,
 } from "../sections.js"
 import type { ManuscriptSection, SectionKind } from "../sections.js"
+import { worldBuildingParts, conceptParts } from "../doc-sections.js"
+import { parseGlossary, buildGlossaryContext } from "../glossary.js"
 import { statesBefore, lastRecordedBefore, stateKeyNames, formatStateKeyNames } from "../character-state.js"
 import type { ResolvedCharacter } from "../character-state.js"
 import type { LimitKey } from "../constants.js"
@@ -261,6 +263,45 @@ export async function novelContextExecute(
         context += `   記録の形が崩れていて状態を判定できません（${x.problems.join("、")}）。本文と照らして novel_update で直してください\n`
       }
       context += "\n"
+    }
+  }
+
+  // --- 作品コンセプト ---
+  // 本文の調子と主題を保つために載せる。節ごとに分け、雛形のままの節と基本情報（作品情報と同じ）は載せない
+  const conceptFile = await safeReadFile(getDocPath(dir, "concept"))
+  const concept = conceptParts(conceptFile ?? "", CONCEPT_TEMPLATE)
+  if (concept.length > 0) {
+    context += `## 💡 作品の核 (P1 — 調子と主題を保つ)\n`
+    context += clipParts(withHeading(concept), "concept") + "\n\n"
+  }
+
+  // --- 世界観（world/ 配下の分割保存に対応） ---
+  // world-building.md は節ごとに分け、約束ごとと能力体系に先に枠を配る。雛形のままの節は載せない
+  const worldFile = await safeReadFile(getDocPath(dir, "world-building"))
+  const worldParts = [
+    ...worldBuildingParts(worldFile ?? "", WORLD_BUILDING_TEMPLATE),
+    ...(await readDocParts(dir, null, "world")),
+  ]
+  if (worldParts.length > 0) {
+    context += `## 🗺️ 世界観 (P1 — 約束ごとを破らない)\n`
+    context += clipParts(withHeading(worldParts), "worldBuilding") + "\n\n"
+  }
+
+  // --- 用語集 ---
+  // この章のプロット・シーンに出る用語を先に載せる。表の形で書かれていなければ、文書をそのまま載せる
+  const glossaryFile = await safeReadFile(getDocPath(dir, "glossary"))
+  if (glossaryFile && glossaryFile.trim().length > 0 && !isUntouchedTemplate(glossaryFile, GLOSSARY_TEMPLATE)) {
+    const limit = resolveLimit(config, "glossary")
+    const entries = parseGlossary(glossaryFile)
+    let body = buildGlossaryContext(entries, chapterText, limit)
+    if (entries.length === 0) {
+      const [raw, truncated] = truncateChars(glossaryFile.trim(), limit)
+      body = raw + (truncated ? "\n…（以下省略。limits.glossary で枠を広げられます）" : "")
+    }
+    if (body) {
+      context += `## 📕 用語集 (P1 — 表記と意味)\n`
+      context += `用語は太字の表記で書き、「使わない表記」は使いません。意味は書き手のための説明です。本文にそのまま写さず、場面の中で見せます。\n`
+      context += body + "\n\n"
     }
   }
 
@@ -618,4 +659,12 @@ function foreshadowNote(r: ForeshadowReminder, currentLabel: string): string {
     case "undated":
       return `${planted}／回収の章は未定`
   }
+}
+
+/**
+ * 節に分けた文書が1つだけのとき、どの節かを本文の頭に示す
+ * （clipDocParts は文書が2つ以上のときだけ見出しを付けるため）
+ */
+function withHeading(parts: DocPart[]): DocPart[] {
+  return parts.length === 1 ? [{ ...parts[0], content: `### ${parts[0].label}\n${parts[0].content}` }] : parts
 }

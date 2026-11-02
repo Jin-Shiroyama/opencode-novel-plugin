@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { novelContextExecute } from "../../src/tools/context.js"
 import { novelStatusExecute } from "../../src/tools/status.js"
+import { WORLD_BUILDING_TEMPLATE, GLOSSARY_TEMPLATE, CONCEPT_TEMPLATE, fillTemplateVars } from "../../src/templates.js"
 import {
   determinePhase, allocateCharBudget, characterNameKeys, extractNameAliases, selectCharacterDocs,
   collectScenes, sceneChapterNumber, chapterNumberFromFileName, chapterDocNumber,
@@ -890,5 +891,92 @@ describe("ことばづかい", () => {
     const out = await run(makeProject({ ...base, "config.json": config }))
     assert.match(out, /以下省略|枠が足りず省略/)
     assert.match(out, /\*\*森田悠\*\* — 一人称: 俺/)
+  })
+})
+
+// ============================================================
+// 世界観と用語集
+// ============================================================
+
+describe("世界観と用語集", () => {
+  const worldTemplate = fillTemplateVars(WORLD_BUILDING_TEMPLATE, { title: "灰の王冠" })
+  const world = worldTemplate
+    .replace("[物語が起きる時代と、社会のありさま]", "灰の降る大陸。")
+    .replace("1. [決まり1]", "1. 死者は灰になる")
+  const outline = "# 章別プロット\n\n## 第2章 灰の市\n王都の市で灰術が暴発する。\n"
+  const glossary = `# 用語集
+
+| 用語 | 読み | 意味 | 使わない表記 |
+|---|---|---|---|
+| 霊脈 | レイライン | 大地の下を流れる力の筋 | マナライン |
+| 灰術 | かいじゅつ | 灰を食べて火を出す術 | 灰魔法 |
+`
+
+  test("書いた世界観の節を載せ、雛形のままの節は載せない", async () => {
+    const out = await run(makeProject({ "config.json": CONFIG, "world-building.md": world, "outline-detailed.md": outline }))
+    assert.match(out, /## 🗺️ 世界観/)
+    assert.match(out, /### この世界の約束ごと\n1\. 死者は灰になる/)
+    assert.match(out, /### 時代と背景\n灰の降る大陸。/)
+    assert.doesNotMatch(out, /能力体系/)
+    assert.doesNotMatch(out, /\[決まり2\]/)
+  })
+
+  test("雛形のままの世界観は載せない", async () => {
+    const out = await run(makeProject({ "config.json": CONFIG, "world-building.md": worldTemplate }))
+    assert.doesNotMatch(out, /🗺️ 世界観/)
+  })
+
+  test("節が1つだけでも見出しを付ける", async () => {
+    const one = worldTemplate.replace("1. [決まり1]", "1. 死者は灰になる")
+    const out = await run(makeProject({ "config.json": CONFIG, "world-building.md": one }))
+    assert.match(out, /## 🗺️ 世界観.*\n### この世界の約束ごと\n1\. 死者は灰になる/)
+  })
+
+  test("長い世界観でも、約束ごとが先に枠をもらって落ちない", async () => {
+    const long = world.replace("灰の降る大陸。", "灰の降る大陸。" + "あ".repeat(5000))
+    const config = JSON.stringify({ ...JSON.parse(CONFIG), limits: { worldBuilding: 300 } })
+    const out = await run(makeProject({ "config.json": config, "world-building.md": long }))
+    assert.match(out, /1\. 死者は灰になる/)
+    assert.ok(out.indexOf("この世界の約束ごと") < out.indexOf("時代と背景"), "約束ごとが先に並んでいない")
+  })
+
+  test("world/ 配下の分割ファイルも載せる", async () => {
+    const out = await run(makeProject({ "config.json": CONFIG, "world-building.md": world, "world/魔法.md": "# 魔法\n灰術は三系統。\n" }))
+    assert.match(out, /### world\/魔法\.md\n# 魔法\n灰術は三系統。/)
+  })
+
+  test("用語集はこの章に出る用語を先に載せる", async () => {
+    const out = await run(makeProject({ "config.json": CONFIG, "outline-detailed.md": outline, "glossary.md": glossary }))
+    assert.match(out, /## 📕 用語集/)
+    const first = out.indexOf("**灰術**")
+    const rest = out.indexOf("**霊脈**")
+    assert.ok(first > 0 && rest > first, "この章に出る用語が先に並んでいない")
+    assert.match(out, /### ほかの用語/)
+  })
+
+  test("雛形のままの用語集は載せない", async () => {
+    const out = await run(makeProject({ "config.json": CONFIG, "glossary.md": fillTemplateVars(GLOSSARY_TEMPLATE, { title: "灰の王冠" }) }))
+    assert.doesNotMatch(out, /📕 用語集/)
+  })
+
+  test("表の形でない用語集は、そのまま載せる", async () => {
+    const out = await run(makeProject({ "config.json": CONFIG, "glossary.md": "# 用語集\n- 灰術：灰を食べて火を出す術\n" }))
+    assert.match(out, /## 📕 用語集[^]*- 灰術：灰を食べて火を出す術/)
+  })
+})
+
+describe("作品コンセプト", () => {
+  const blank = fillTemplateVars(CONCEPT_TEMPLATE, { title: "灰の王冠", genre: "ファンタジー", targetWords: 120000, chapterCount: 40 })
+
+  test("書いた節を「作品の核」として載せる", async () => {
+    const concept = blank.replace("[この物語で伝えたい主題。一文で]", "失ったものは灰の中に残る")
+    const out = await run(makeProject({ "config.json": CONFIG, "concept.md": concept }))
+    assert.match(out, /## 💡 作品の核.*\n### 作品テーマ\n失ったものは灰の中に残る/)
+    assert.doesNotMatch(out, /基本情報/)
+  })
+
+  test("雛形のままのコンセプトは載せない", async () => {
+    const out = await run(makeProject({ "config.json": CONFIG, "concept.md": blank }))
+    assert.doesNotMatch(out, /💡 作品の核/)
   })
 })

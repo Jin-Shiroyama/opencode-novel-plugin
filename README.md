@@ -28,7 +28,7 @@ An OpenCode plugin for writing long-form fiction **in Japanese**, from premise t
 - **3 agents** — `novel-planner` (planning coach), `novel-writer` (drafting coach), `novel-editor` (editing coach)
 - **5 skills** — workflow, writing (the canonical typography and anti-AI-cliché reference), editing, historical/swordsman fiction, reality sourcing
 - **11 slash commands** — `/novel-init`, `/novel-concept`, `/write-chapter`, `/novel-review`, …
-- **16 RTCO prompts** and **16 document templates**
+- **16 RTCO prompts** and **17 document templates**
 - File-based project data under `.novel/`
 
 Writing proceeds in six stages: premise → setting → characters → plot outline → scene breakdown → prose,

@@ -38,6 +38,7 @@ export type TypographyRule =
   | "arabic-digit"
   | "ascii-space"
   | "ruby"
+  | "glossary-term"
 
 /** 規則の名前（一覧の見出しに使う） */
 export const TYPOGRAPHY_RULE_LABELS: Record<TypographyRule, string> = {
@@ -53,6 +54,16 @@ export const TYPOGRAPHY_RULE_LABELS: Record<TypographyRule, string> = {
   "arabic-digit": "地の文の算用数字",
   "ascii-space": "日本語と英数字のあいだの空白",
   ruby: "ルビ・傍点の記法",
+  "glossary-term": "用語集の使わない表記",
+}
+
+/**
+ * 用語集（glossary.ts の glossaryCheckTerms）から渡す、表記の点検の材料。
+ * terms は正しい表記。使わない表記がこの中に含まれる場合（「魔素結晶」の中の「魔素」）は拾わない
+ */
+export interface GlossaryCheck {
+  terms: string[]
+  avoid: Array<{ form: string; term: string }>
 }
 
 const OPEN_BRACKETS: Record<string, string> = { "「": "」", "『": "』" }
@@ -85,7 +96,9 @@ const SEPARATOR_LINE = /^[\s　]*[＊*◇◆□■○●※・〜~\-－―]+(?:[
  * style が "literary"（文芸寄り）のときだけ、地の文の算用数字を確認として拾う。
  * 既定のライトノベル寄りでは、単位付きの数やステータス表記（3メートル、HP 1200）に算用数字を使うので拾わない。
  */
-export function checkTypography(text: string, opts: { style?: "light" | "literary" } = {}): TypographyIssue[] {
+export function checkTypography(
+  text: string, opts: { style?: "light" | "literary"; glossary?: GlossaryCheck } = {},
+): TypographyIssue[] {
   const literary = opts.style === "literary"
   const issues: TypographyIssue[] = []
   const lines = text.replace(/\r\n/g, "\n").split("\n")
@@ -104,8 +117,51 @@ export function checkTypography(text: string, opts: { style?: "light" | "literar
     // 字の位置は元の行に戻して返す
     const { chars, columns } = stripRubyLine(line)
     checkLine(chars, columns, original, i + 1, issues, literary)
+    if (opts.glossary) checkGlossaryTerms(chars, columns, original, i + 1, issues, opts.glossary)
   })
   return issues
+}
+
+/**
+ * 用語集の「使わない表記」を拾う。ルビの記法を外した行（親文字）で見る。
+ *
+ * 確認（warning）にとどめる。人物が言い間違える台詞のように、わざと使うことがあるため。
+ * 正しい表記の中に含まれる箇所は拾わない。同じ位置で当たる表記が複数あれば長いほうを採る。
+ */
+function checkGlossaryTerms(
+  chars: string[], columns: number[], original: string[], lineNo: number, issues: TypographyIssue[], glossary: GlossaryCheck,
+): void {
+  const line = chars.join("")
+  // 正しい表記が占める範囲（コードポイントの位置）
+  const covered = new Set<number>()
+  for (const term of glossary.terms) {
+    const t = [...term]
+    for (let i = 0; i + t.length <= chars.length; i++) {
+      if (t.every((c, k) => chars[i + k] === c)) for (let k = 0; k < t.length; k++) covered.add(i + k)
+    }
+  }
+  if (!glossary.avoid.some(({ form }) => line.includes(form))) return
+
+  const forms = glossary.avoid
+    .map((a) => ({ ...a, chars: [...a.form] }))
+    .sort((a, b) => b.chars.length - a.chars.length)
+  for (let i = 0; i < chars.length; ) {
+    const hit = forms.find((f) => i + f.chars.length <= chars.length && f.chars.every((c, k) => chars[i + k] === c))
+    if (!hit) {
+      i++
+      continue
+    }
+    const inTerm = hit.chars.some((_, k) => covered.has(i + k))
+    if (!inTerm) {
+      const at = columns[i]
+      issues.push({
+        line: lineNo, column: at + 1, rule: "glossary-term", severity: "warning",
+        message: `「${hit.form}」は用語集で使わない表記です（「${hit.term}」と書く。人物があえて言うのでなければ）`,
+        excerpt: excerptAt(original, at),
+      })
+    }
+    i += hit.chars.length
+  }
 }
 
 function checkLine(

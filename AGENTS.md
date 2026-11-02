@@ -5,7 +5,7 @@
 OpenCode のサーバープラグインです。日本語の長編小説を書くために、
 8つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update` / `novel_check` / `novel_export`）、
 3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
-16のRTCOプロンプト、16の文書雛形、5つの skill、11のコマンド、
+16のRTCOプロンプト、17の文書雛形、5つの skill、11のコマンド、
 そしてファイルで持つ作品データの管理を提供します。
 
 本リポジトリは [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin) の fork で、
@@ -28,8 +28,10 @@ opencode-novel-plugin/
 │   ├── ruby.ts               # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
 │   ├── manuscript.ts         # 原稿用紙の枚数換算（書式を指定したときだけ使う）
 │   ├── sections.ts           # 本文の節（プロローグ・幕間・エピローグ）と部
+│   ├── doc-sections.ts       # 世界観とコンセプトを節に分け、大事な節に先に枠を配る
+│   ├── glossary.ts           # 用語集（表の読み取りと、この章に出る用語の選び出し）
 │   ├── prompts.ts            # 16のRTCOプロンプト
-│   ├── templates.ts          # 16の文書雛形（Markdown 13 + JSON 3）
+│   ├── templates.ts          # 17の文書雛形（Markdown 14 + JSON 3）
 │   ├── agent-config.ts       # opencode.json の agent 設定とプラグインの既定の重ね方（mergeAgentConfig）
 │   ├── agents/
 │   │   ├── novel-planner.ts  # 企画を手伝うコーチ
@@ -69,7 +71,8 @@ opencode-novel-plugin/
 .novel/
 ├── config.json              # 作品設定（タイトル／ジャンル／文字数／工程／limits）
 ├── concept.md               # 作品コンセプト
-├── world-building.md        # 世界観
+├── world-building.md        # 世界観（world/{項目}.md に分割も可）
+├── glossary.md              # 用語集（造語・固有名詞の読み・意味・使わない表記）
 ├── characters/
 │   ├── profiles.md          # 登場人物の一覧（関係図・対立表）
 │   ├── {キャラクター名}.md   # 一人ずつの設定（動機の三角形／アーク／ことばづかい）
@@ -208,6 +211,7 @@ concept → characters → outline（`outline-brief.md` があるか）→ scene
 |---|---|---|---|
 | 章別プロット | `outline-detailed.md` | `outline/chapter-NNN.md` | 分割を使う |
 | シーン一覧 | `scenes.md` | `scenes/chapter-NNN.md` | 分割を使う |
+| 世界観 | `world-building.md` | `world/**/*.md` | 両方を載せる |
 | 一人ずつの人物設定 | `characters/profiles.md` | `characters/{キャラクター名}.md` | 両方を載せる |
 | 流派・勢力 | `wuxia/sects.md` | `wuxia/sects/*.md` | 両方を載せる |
 | 剣術・技 | `wuxia/martial-arts.md` | `wuxia/martial-arts/*.md` | 両方を載せる |
@@ -397,6 +401,23 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   `novel_context` が書く章より前の記録の `firstPerson` / `addressTerms` を上に重ねて「🗣️ ことばづかい」として載せる。
   人物設定の全文とは別に載せ、`clipDocParts` に入れない（人物設定が長いと切られて、ぶれやすい部分が落ちるため）。
   枠は `limits.speech`。雛形の項目名に「呼称」「別名」などを使わない（`extractNameAliases` に別名として拾われる）
+- **コンセプト・世界観・用語集は執筆用の資料に載せる**（`novel_context`）。コンセプトは `conceptParts`（`src/doc-sections.ts`）で節に分け、
+  ログライン・作品テーマ・文体と手ざわりに先に枠を配る（`limits.concept`）。「基本情報」は作品情報（config.json）と同じなので載せない。
+  雛形の差し込み箇所（`{genre}` など）は、何が入っていても雛形の行とみなす。
+  世界観は `worldBuildingParts`（同じファイル。共通の処理は `templateDocParts`）で `## ` の節に分け、
+  見出しに「約束ごと」「能力体系」を含む節に `priority` を立てて先に枠を配る（`limits.worldBuilding`）。雛形から書き換えていない節は載せず、
+  書きかけの節からは雛形のままの記入欄の行（雛形と同じ行で角括弧を含むもの）だけを外し、それで中身の無くなった小見出しと表も外す。
+  節の中の見出しは1段下げる（資料では節の見出しを `###` で付けるため）。題の行（`# 『題』世界観`）は載せない。
+  `world/**/*.md` の分割は節に分けずにファイルごとに載せる
+- **用語集は `.novel/glossary.md` の表**（`| 用語 | 読み | 意味 | 使わない表記 |`。`src/glossary.ts`）。`novel_init` が長編・短編とも雛形を作る
+  （造語は世界観の工程を省いても出てくるため）。列は名前で読み、ほかの列は「名前：値」で添える。「用語」の列の無い表は読まない。
+  直前の `##` 以下の見出しを分類にする。この章のプロット・シーン（人物の照合と同じ `chapterText`）に用語・読み・使わない表記のどれかが出るものを先に、
+  残りをあとに、1行単位で `limits.glossary` に詰める。1文字の手がかりは漢字だけ。表が1つも読めなければ文書をそのまま載せる。
+  用語集を `world-building.md` の中にも置ける形にはしない（二か所に書くと食い違うため）
+- **用語集の「使わない表記」は表記の点検で ⚠️ として拾う**（`checkTypography` の `glossary`。材料は `readGlossaryCheck`）。`novel_check` と
+  `novel_save_chapter` の報告の両方に出る。⚠️ にとどめるのは、人物がわざと言い間違える台詞があるため。ルビの記法を外した親文字で見る
+  （ルビの読みは見ない）。正しい表記の中に含まれる箇所（「魔素結晶」の中の「魔素」）は拾わず、同じ位置では長い表記を採る。
+  1文字の使わない表記は漢字だけ使う。`novel_export` は ❌ だけを数えるので影響しない
 - **短編は `config.json` の `form: "short"`**（未指定は長編。既存の作品はそのまま動く）。既定値は `SHORT_DEFAULTS`
   （20,000文字・1章＝章なし）。`novel_init` は短編では `world-building.md` を作らない。プロット概要は三幕ではなく
   序破急で組み（`outline-short` / `SHORT_OUTLINE_BRIEF_TEMPLATE`）、章別プロットを作らないので、`novel_context` は
@@ -442,7 +463,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、573件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、624件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

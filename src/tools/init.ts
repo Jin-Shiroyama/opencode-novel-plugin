@@ -12,6 +12,7 @@ import {
   CONFIG_TEMPLATE,
   CONCEPT_TEMPLATE,
   WORLD_BUILDING_TEMPLATE,
+  GLOSSARY_TEMPLATE,
   CHARACTER_PROFILES_TEMPLATE,
   SUMMARY_TEMPLATE,
   FORESHADOW_TEMPLATE,
@@ -85,6 +86,8 @@ export async function novelInitExecute(
   if (!short) {
     await safeWriteFile(getDocPath(dir, "world-building"), fillTemplateVars(WORLD_BUILDING_TEMPLATE, vars))
   }
+  // 用語集は短編でも作る（造語や固有名詞は世界観の工程を省いても出てくるため）
+  await safeWriteFile(getDocPath(dir, "glossary"), fillTemplateVars(GLOSSARY_TEMPLATE, vars))
   await safeWriteFile(getDocPath(dir, "characters"), fillTemplateVars(CHARACTER_PROFILES_TEMPLATE, vars))
   await safeWriteFile(getDocPath(dir, "summary"), fillTemplateVars(SUMMARY_TEMPLATE, vars))
   await safeWriteJson(getDocPath(dir, "foreshadow"), FORESHADOW_TEMPLATE)
@@ -125,7 +128,8 @@ export async function novelInitExecute(
   .novel/
   ├── config.json          (作品設定)
   ├── concept.md           (作品コンセプト ← まずここから)
-${short ? "" : "  ├── world-building.md    (世界観)\n"}  ├── characters/          (登場人物)
+${short ? "" : "  ├── world-building.md    (世界観)\n"}  ├── glossary.md          (用語集。造語・固有名詞の意味と表記)
+  ├── characters/          (登場人物)
   │   ├── profiles.md
   │   └── state.json       (章・節ごとの状態の変化)
   ├── summary.md           (これまでのあらすじ)

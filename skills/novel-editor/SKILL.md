@@ -42,7 +42,8 @@ description: "原稿を見るための skill。つじつまの確認、文章の
 2. 章の本文を次と突き合わせる:
    - characters/profiles.md と characters/{キャラクター名}.md（人物の設定。ことばづかいを含む）
    - characters/state.json（人物の状態の章ごとの変化。見る章の時点の状態は novel_context の「登場人物の現在の状態」で確かめる）
-   - world-building.md（世界の約束ごと）
+   - world-building.md（世界の約束ごと。world/*.md に分けてあればそれも）
+   - glossary.md（用語集。表のとおりの表記か、「使わない表記」が混ざっていないか、意味のとおりに使っているか）
    - summary.md（これまでのあらすじ）
    - foreshadow.json（伏線）
 3. 結果を出す

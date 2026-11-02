@@ -5,6 +5,8 @@ import type { TypographyIssue } from "../typography.js"
 import { formatChapterRanges } from "../records.js"
 import { listManuscriptFiles, describeExtraSections, sectionFromArgs, sectionLabel, sectionFileName, sameSection, sectionCallArgs } from "../sections.js"
 import type { ManuscriptSection, SectionKind } from "../sections.js"
+import { readGlossaryCheck } from "../glossary.js"
+import type { GlossaryCheck } from "../typography.js"
 import type { ToolContext } from "../index.js"
 
 interface CheckArgs {
@@ -43,13 +45,15 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
 
   // 文体（config.json の style）で、地の文の算用数字を拾うかが変わる
   const style = (await safeReadJson<NovelConfig>(getConfigPath(ctx.directory)))?.style
+  // 用語集の「使わない表記」も拾う
+  const glossary = await readGlossaryCheck(ctx.directory)
   const results: Array<{ section: ManuscriptSection; issues: TypographyIssue[] }> = []
   // 読めなかった章は「問題なし」と区別して示す（空の本文として点検すると0件になってしまう）
   const unreadable: ManuscriptSection[] = []
   for (const f of files) {
     const text = await safeReadFile(f.path)
     if (text === null) unreadable.push(f.section)
-    else results.push({ section: f.section, issues: checkTypography(text, { style }) })
+    else results.push({ section: f.section, issues: checkTypography(text, { style, glossary }) })
   }
   const unreadableNote = unreadable.length > 0
     ? `⚠️ 読み込めず点検できなかった章: ${formatSections(unreadable)}（ファイルの権限や中身を確かめてください）\n`
@@ -69,7 +73,7 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
   const errors = all.filter((i) => i.severity === "error").length
   let report = `📝 表記の点検（${scope}）: ❌ 規約違反 ${errors}件 / ⚠️ 確認 ${all.length - errors}件\n`
   report += unreadableNote
-  report += `（規約の正本は novel-writing skill。行と字の位置はファイルのもの。□ は全角スペース）\n\n`
+  report += `（規約の正本は novel-writing skill。用語の表記は .novel/glossary.md。行と字の位置はファイルのもの。□ は全角スペース）\n\n`
 
   report += `## 規則ごとの件数\n`
   for (const { rule, severity, count } of countByRule(all)) {
@@ -92,9 +96,9 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
  * 多くを並べると保存の報告が埋もれるので、件数と最初の数件だけにする。
  */
 export function summarizeForSave(
-  text: string, section: ManuscriptSection, shown = 3, style?: "light" | "literary",
+  text: string, section: ManuscriptSection, shown = 3, style?: "light" | "literary", glossary?: GlossaryCheck,
 ): string {
-  const issues = checkTypography(text, { style })
+  const issues = checkTypography(text, { style, glossary })
   if (issues.length === 0) return `📝 表記: 規約から外れた箇所はありません\n`
   const errors = issues.filter((i) => i.severity === "error").length
   const counts = countByRule(issues)

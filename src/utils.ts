@@ -27,6 +27,7 @@ export const NOVEL_DIR = ".novel"
 export type DocType =
   | "concept"
   | "world-building"
+  | "glossary"
   | "characters"
   | "character-state"
   | "outline-brief"
@@ -71,6 +72,8 @@ export function getDocPath(projectDir: string, docType: DocType, name?: string):
       return join(base, "concept.md")
     case "world-building":
       return join(base, "world-building.md")
+    case "glossary":
+      return join(base, "glossary.md")
     case "characters":
       return join(base, "characters", "profiles.md")
     case "character-state":

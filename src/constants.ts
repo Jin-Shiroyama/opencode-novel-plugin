@@ -54,6 +54,12 @@ export const LIMITS = {
   characterState: 3000,
   /** プロット概要（短編で章別プロットが無いとき、序破急の骨組みとして載せる） */
   outlineBrief: 4000,
+  /** 作品コンセプト（ログライン・テーマ・文体と手ざわりに先に枠を配る。基本情報は作品情報と重なるので載せない） */
+  concept: 3000,
+  /** 世界観（world-building.md と world/ 配下。約束ごとと能力体系に先に枠を配る） */
+  worldBuilding: 6000,
+  /** 用語集（この章のプロット・シーンに出る用語を先に載せる） */
+  glossary: 3000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

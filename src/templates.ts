@@ -118,6 +118,26 @@ export const WORLD_BUILDING_TEMPLATE = `# 『{title}』世界観
 `
 
 // ============================================================
+// 用語集
+// ============================================================
+
+/**
+ * 造語・固有名詞の一覧。表の列の名前（用語／読み／意味／使わない表記）で読む（glossary.ts）。
+ * 雛形の行（角括弧のまま）は読まないので、そのまま残っていても資料には載らない。
+ */
+export const GLOSSARY_TEMPLATE = `# 『{title}』用語集
+
+> この作品だけの言葉（造語、固有名詞、ふつうと違う意味で使う語）を並べます。
+> 執筆用の資料には、その章のプロットとシーンに出る用語を先に載せます。照合には「用語」「読み」「使わない表記」を使います。
+> 「意味」は書き手のための説明です。本文にそのまま写さず、場面の中で見せます。
+> 「## 地名」「## 魔法」のように見出しで分けて、表を複数にしてもかまいません。列も足せます（「初出」など。足した列も資料に載ります）。
+
+| 用語 | 読み | 意味 | 使わない表記 |
+|---|---|---|---|
+| [用語] | [よみ] | [この世界での意味。読者がいつ知るかも書いておくとよい] | [書き間違えやすい表記。読点で区切る] |
+`
+
+// ============================================================
 // 登場人物
 // ============================================================
 
@@ -680,6 +700,7 @@ export const REALITY_SOURCE_TEMPLATE = `# 『{title}』取材メモ
 export type TemplateName =
   | "concept"
   | "world-building"
+  | "glossary"
   | "characters"
   | "character-profile"
   | "outline-brief"
@@ -698,6 +719,8 @@ export function getTemplate(name: TemplateName): string {
       return CONCEPT_TEMPLATE
     case "world-building":
       return WORLD_BUILDING_TEMPLATE
+    case "glossary":
+      return GLOSSARY_TEMPLATE
     case "characters":
       return CHARACTER_PROFILES_TEMPLATE
     case "character-profile":
