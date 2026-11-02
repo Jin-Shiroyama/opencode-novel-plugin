@@ -126,37 +126,35 @@ export function checkTypography(
  * 用語集の「使わない表記」を拾う。ルビの記法を外した行（親文字）で見る。
  *
  * 確認（warning）にとどめる。人物が言い間違える台詞のように、わざと使うことがあるため。
- * 正しい表記の中に含まれる箇所は拾わない。同じ位置で当たる表記が複数あれば長いほうを採る。
+ * 正しい表記の中に含まれる箇所は拾わない。正しい表記を含む長い使わない表記は拾う。
  */
 function checkGlossaryTerms(
   chars: string[], columns: number[], original: string[], lineNo: number, issues: TypographyIssue[], glossary: GlossaryCheck,
 ): void {
   const line = chars.join("")
-  // 正しい表記が占める範囲（コードポイントの位置）
-  const covered = new Set<number>()
-  for (const term of glossary.terms) {
-    const t = [...term]
-    for (let i = 0; i + t.length <= chars.length; i++) {
-      if (t.every((c, k) => chars[i + k] === c)) for (let k = 0; k < t.length; k++) covered.add(i + k)
-    }
-  }
   if (!glossary.avoid.some(({ form }) => line.includes(form))) return
 
-  const forms = glossary.avoid
-    .map((a) => ({ ...a, chars: [...a.form] }))
-    .sort((a, b) => b.chars.length - a.chars.length)
+  // 正しい表記と使わない表記を合わせて、先頭から最長一致で読む。当たったものが使わない表記のときだけ拾う。
+  // 正しい表記の中の使わない表記（「魔力炉」の中の「魔力」）は、長い「魔力炉」が先に当たるので拾わない。
+  // 正しい表記を含む長い使わない表記（「灰術」に対する「灰術魔法」）は、長いほうが当たるので拾う。
+  // 同じ長さなら正しい表記を採る（同じ語を両方の列に書いた表で、正しい表記を指摘しないように）
+  const forms = [
+    ...glossary.terms.map((t) => ({ chars: [...t], avoid: null })),
+    ...glossary.avoid.map((a) => ({ chars: [...a.form], avoid: a })),
+  ]
+    .filter((f) => f.chars.length > 0)
+    .sort((x, y) => y.chars.length - x.chars.length || (x.avoid ? 1 : 0) - (y.avoid ? 1 : 0))
   for (let i = 0; i < chars.length; ) {
     const hit = forms.find((f) => i + f.chars.length <= chars.length && f.chars.every((c, k) => chars[i + k] === c))
     if (!hit) {
       i++
       continue
     }
-    const inTerm = hit.chars.some((_, k) => covered.has(i + k))
-    if (!inTerm) {
+    if (hit.avoid) {
       const at = columns[i]
       issues.push({
         line: lineNo, column: at + 1, rule: "glossary-term", severity: "warning",
-        message: `「${hit.form}」は用語集で使わない表記です（「${hit.term}」と書く。人物があえて言うのでなければ）`,
+        message: `「${hit.avoid.form}」は用語集で使わない表記です（「${hit.avoid.term}」と書く。人物があえて言うのでなければ）`,
         excerpt: excerptAt(original, at),
       })
     }

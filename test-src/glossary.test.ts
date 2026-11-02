@@ -134,6 +134,20 @@ describe("用語集の使わない表記の点検", () => {
     assert.equal(checkTypography("　魔力が満ちる。", { glossary: g }).filter((i) => i.rule === "glossary-term").length, 1)
   })
 
+  test("正しい表記を含む長い使わない表記は拾う（以前は正しい表記と重なると素通りした）", () => {
+    const g = glossaryCheckTerms(parseGlossary("| 用語 | 使わない表記 |\n|---|---|\n| 灰術 | 灰術魔法 |\n| 灰 | |\n| 灰炎 | 灰魔法 |\n"))!
+    const found = (text: string) =>
+      checkTypography(text, { glossary: g }).filter((i) => i.rule === "glossary-term").map((i) => i.message.match(/「(.+?)」/)![1])
+    assert.deepEqual(found("　灰術魔法を放つ。"), ["灰術魔法"])
+    assert.deepEqual(found("　灰魔法を放つ。"), ["灰魔法"])
+    assert.deepEqual(found("　灰術で灰を払う。"), [])
+  })
+
+  test("同じ語を正しい表記と使わない表記の両方に書いても、正しい表記としては指摘しない", () => {
+    const g = glossaryCheckTerms(parseGlossary("| 用語 | 使わない表記 |\n|---|---|\n| 霊脈 | 魔脈 |\n| 魔脈 | 霊脈 |\n"))!
+    assert.equal(checkTypography("　霊脈と魔脈。", { glossary: g }).filter((i) => i.rule === "glossary-term").length, 0)
+  })
+
   test("1文字の使わない表記は漢字だけ使う（仮名1文字はほとんどの行に当たる）", () => {
     assert.deepEqual(glossary.avoid.map((a) => a.form), ["マナライン", "霊の脈", "都", "ミヤコ"])
   })
@@ -141,6 +155,19 @@ describe("用語集の使わない表記の点検", () => {
   test("ルビの記法を外した親文字で見て、位置は元の行に戻す", () => {
     const [issue] = hits("　｜霊の脈《れいのみゃく》を辿る。")
     assert.equal(issue.column, 3)
+  })
+
+  test("「なし」「特になし」「（該当なし）」「-」「――」は未記入とみなす（本文の「前置きなしに」やダッシュを拾わない）", () => {
+    const entries = parseGlossary(`| 用語 | 読み | 使わない表記 |
+|---|---|---|
+| 王都 | なし | 特になし |
+| 霊脈 | - | （該当なし） |
+| 灰術 | ―― | 無し、灰魔法、ー |
+`)
+    assert.deepEqual(entries.map((e) => [e.reading, e.avoid]), [[undefined, []], [undefined, []], [undefined, ["灰魔法"]]])
+    const g = glossaryCheckTerms(entries)!
+    assert.deepEqual(g.avoid.map((a) => a.form), ["灰魔法"])
+    assert.equal(checkTypography("　前置きなしに――走った。", { glossary: g }).filter((i) => i.rule === "glossary-term").length, 0)
   })
 
   test("使わない表記が無ければ材料を作らない", () => {

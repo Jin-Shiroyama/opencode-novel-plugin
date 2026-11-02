@@ -416,8 +416,10 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   用語集を `world-building.md` の中にも置ける形にはしない（二か所に書くと食い違うため）
 - **用語集の「使わない表記」は表記の点検で ⚠️ として拾う**（`checkTypography` の `glossary`。材料は `readGlossaryCheck`）。`novel_check` と
   `novel_save_chapter` の報告の両方に出る。⚠️ にとどめるのは、人物がわざと言い間違える台詞があるため。ルビの記法を外した親文字で見る
-  （ルビの読みは見ない）。正しい表記の中に含まれる箇所（「魔素結晶」の中の「魔素」）は拾わず、同じ位置では長い表記を採る。
-  1文字の使わない表記は漢字だけ使う。`novel_export` は ❌ だけを数えるので影響しない
+  （ルビの読みは見ない）。正しい表記と使わない表記を合わせて先頭から最長一致で読み、当たったのが使わない表記のときだけ拾う。
+  正しい表記の中の箇所（「魔素結晶」の中の「魔素」）は拾わず、正しい表記を含む長い使わない表記（「灰術」に対する「灰術魔法」）は拾う
+  （重なりだけで除くと後者が素通りする）。同じ長さなら正しい表記を採る。1文字の使わない表記は漢字だけ使う。
+  読みと使わない表記の「なし」「特になし」「（該当なし）」「-」「――」は未記入とみなす（`isNoneValue`。本文の「前置きなしに」を拾わないため）。`novel_export` は ❌ だけを数えるので影響しない
 - **短編は `config.json` の `form: "short"`**（未指定は長編。既存の作品はそのまま動く）。既定値は `SHORT_DEFAULTS`
   （20,000文字・1章＝章なし）。`novel_init` は短編では `world-building.md` を作らない。プロット概要は三幕ではなく
   序破急で組み（`outline-short` / `SHORT_OUTLINE_BRIEF_TEMPLATE`）、章別プロットを作らないので、`novel_context` は
@@ -463,7 +465,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、624件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、627件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

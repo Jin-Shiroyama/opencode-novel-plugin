@@ -39,6 +39,17 @@ function columnOf(header: string): Column | null {
   return null
 }
 
+/**
+ * 「無い」ことを表す埋め草か（「なし」「特になし」「（該当なし）」「-」「――」）。
+ * 表を埋めるとき、空欄にせずこう書くことが多い。使わない表記として読むと、本文の「前置きなしに」や
+ * ダッシュのたびに指摘が出るので、読みと使わない表記では未記入とみなす
+ */
+const NONE_VALUE = /^[(（]?(?:(?:特に|該当)?(?:なし|無し|ナシ)|[-－―—ー─]+)[)）]?$/
+
+export function isNoneValue(value: string): boolean {
+  return NONE_VALUE.test(value.trim())
+}
+
 const splitCells = (line: string) =>
   line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.replace(/\*\*/g, "").trim())
 
@@ -84,13 +95,13 @@ export function parseGlossary(content: string): GlossaryEntry[] {
           entry.term = value
           break
         case "reading":
-          entry.reading = value
+          if (!isNoneValue(value)) entry.reading = value
           break
         case "meaning":
           entry.meaning = value
           break
         case "avoid":
-          entry.avoid = value.split(/[、,\uFF0C\/／]+/).map((v) => v.trim()).filter((v) => v.length > 0)
+          entry.avoid = value.split(/[、,\uFF0C\/／]+/).map((v) => v.trim()).filter((v) => v.length > 0 && !isNoneValue(v))
           break
         default:
           entry.extra.push([col.name, value])
