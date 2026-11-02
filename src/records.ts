@@ -153,7 +153,43 @@ export function parseCharacterUpdates(content: string): ParseResult<CharacterUpd
     const names = empty.map((u) => `「${u.name}」`).join("、")
     return { ok: false, message: characterStateError([`${names}の changes が空です（この節で変化が無いなら "updates": [] を渡します）`]) }
   }
-  return { ok: true, value: result.data }
+  return {
+    ok: true,
+    value: { ...result.data, updates: result.data.updates.map((u) => ({ name: u.name, changes: compactChanges(u.changes) })) },
+  }
+}
+
+/**
+ * 中身の無い欄を外す（{ "added": [], "removed": [] } の一覧、空の対応表、空の events など）。
+ *
+ * モデルは例にある欄を空のまま書き写しがちで、そのまま残すと、使っていない項目名
+ * （「できること」など）が記録の項目名として案内され続ける。断ると、同じ更新にある
+ * 正しい変化まで書けなくなるので、外して受け付ける。外した結果 changes が空になった人物は
+ * 「変更なし」として扱う（applySectionUpdates が記録に入れない）
+ */
+export function compactChanges(changes: CharacterChanges): CharacterChanges {
+  const out: CharacterChanges = { ...changes }
+  if (out.lists) {
+    const lists: NonNullable<CharacterChanges["lists"]> = {}
+    for (const [name, diff] of Object.entries(out.lists)) {
+      const d: { added?: string[]; removed?: string[] } = {}
+      if (diff.added && diff.added.length > 0) d.added = diff.added
+      if (diff.removed && diff.removed.length > 0) d.removed = diff.removed
+      if (d.added || d.removed) lists[name] = d
+    }
+    out.lists = lists
+  }
+  if (out.speech) {
+    const speech = { ...out.speech }
+    if (speech.addressTerms && Object.keys(speech.addressTerms).length === 0) delete speech.addressTerms
+    out.speech = speech
+  }
+  if (out.events && out.events.length === 0) delete out.events
+  for (const key of ["lists", "attributes", "relationships", "speech"] as const) {
+    const value = out[key]
+    if (value && Object.keys(value).length === 0) delete out[key]
+  }
+  return out
 }
 
 function characterStateError(problems: string[]): string {

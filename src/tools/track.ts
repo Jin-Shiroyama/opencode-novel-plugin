@@ -163,14 +163,13 @@ ${lines.join("\n")}`.trimEnd()
     report += `\n💡 ${sectionLabel(later[0].section)}以降の記録があります。この変化は、それより後の章・節の資料にも反映されます。`
   }
   // 新しい項目名を使ったときは、すでにある項目名を並べて揺れに気づけるようにする
+  // 値の入った項目名だけを比べる（null で消しただけの項目名は「新しい」としない。stateKeyNames）
   const known = stateKeyNames(file)
+  const incoming = stateKeyNames({ sections: { [key]: { updates: parsed.value.updates } } })
   const fresh: string[] = []
   for (const field of ["attributes", "lists"] as const) {
-    for (const { changes } of parsed.value.updates) {
-      for (const k of Object.keys(changes[field] ?? {})) {
-        if (known[field].length > 0 && !known[field].includes(k) && !fresh.includes(`${field}.${k}`)) fresh.push(`${field}.${k}`)
-      }
-    }
+    if (known[field].length === 0) continue
+    for (const k of incoming[field]) if (!known[field].includes(k)) fresh.push(`${field}.${k}`)
   }
   if (fresh.length > 0) {
     report += `\nℹ️ 新しい項目名を使いました: ${fresh.join("、")}。すでに使っている項目名: ${formatStateKeyNames(known)}（同じものを指すなら名前をそろえてください）`

@@ -152,7 +152,7 @@ export function sameSection(a: ManuscriptSection, b: ManuscriptSection): boolean
 }
 
 /**
- * 記録（伏線・人物の状態）に書く章番号。
+ * 伏線の記録に書く章番号（人物の状態は章番号ではなく、節のキーで記録する。character-state.ts）。
  * プロローグは 0、幕間は直前の章、エピローグは最後の章（lastChapter。lastChapterForRecords で出す）。
  */
 export function recordChapterOf(s: ManuscriptSection, lastChapter: number): number {

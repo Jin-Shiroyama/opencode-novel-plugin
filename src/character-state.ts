@@ -85,7 +85,9 @@ export function lastRecordedBefore(file: CharacterStateFile, target: ManuscriptS
 /**
  * 作品の記録で使っている attributes / lists の項目名（初めて出た順）。
  * 項目名は作品ごとに決めるので、「所持品」と「持ち物」のような揺れが出ないよう、
- * 更新の報告・資料・更新用プロンプトでこれを示す
+ * 更新の報告・資料・更新用プロンプトでこれを示す。
+ * 値が入ったことのある項目名だけを数える（null だけの項目や、空の一覧は使っていないものとみなす。
+ * 誤った項目名を null で消したあとも案内し続けないように）
  */
 export interface StateKeyNames {
   attributes: string[]
@@ -96,8 +98,14 @@ export function stateKeyNames(file: CharacterStateFile): StateKeyNames {
   const names: StateKeyNames = { attributes: [], lists: [] }
   for (const { record } of recordedSections(file)) {
     for (const { changes } of record.updates) {
+      const used = {
+        attributes: Object.entries(changes.attributes ?? {}).filter(([, v]) => v !== null).map(([k]) => k),
+        lists: Object.entries(changes.lists ?? {})
+          .filter(([, d]) => (d.added?.length ?? 0) + (d.removed?.length ?? 0) > 0)
+          .map(([k]) => k),
+      }
       for (const field of ["attributes", "lists"] as const) {
-        for (const k of Object.keys(changes[field] ?? {})) if (!names[field].includes(k)) names[field].push(k)
+        for (const k of used[field]) if (!names[field].includes(k)) names[field].push(k)
       }
     }
   }
@@ -232,6 +240,8 @@ export function applySectionUpdates(
 ): CharacterStateSection {
   const entries: CharacterUpdate[] = replace ? [] : (current?.updates ?? []).map((u) => ({ name: u.name, changes: u.changes }))
   for (const { name, changes } of updates) {
+    // 中身の無い欄を外した結果、変化が残らなかった人物は記録に入れない（compactChanges）
+    if (Object.keys(changes).length === 0) continue
     const existing = entries.find((e) => e.name === name)
     if (existing) existing.changes = mergeChanges(existing.changes, changes)
     else entries.push({ name, changes })

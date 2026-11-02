@@ -119,6 +119,13 @@ describe("novel_update(action: prompt)", () => {
     assert.match(out, /📌 資料から埋めて使う差し込み: .*\{protagonistName\}/)
   })
 
+  test("人物の状態の更新プロンプトは、空の一覧を例に出さず、作品の項目名に合わせるよう求める", () => {
+    const t = getPromptTemplate("character-state-update")!
+    assert.doesNotMatch(t, /"added": \[\]/)
+    assert.match(t, /すでに使っているものに合わせます/)
+    assert.match(t, /空の一覧は書きません/)
+  })
+
   test("所属の変化を入れるキーを示す", () => {
     assert.match(getPromptTemplate("character-state-update")!, /所属.*events に書く/)
   })

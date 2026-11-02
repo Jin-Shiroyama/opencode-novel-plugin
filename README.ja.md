@@ -1057,7 +1057,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（538テスト。test-src/ にまとめてある）
+pnpm test        # node:test で実行（570テスト。test-src/ にまとめてある）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -1155,7 +1155,8 @@ printf '%s' "<字>" | iconv -f UTF-8 -t EUC-JISX0213 >/dev/null 2>&1
 | `Phase` | 進行段階（`concept` → … → `completed`） |
 | `SceneStatus` | シーンの状態（`pending` / `in-progress` / `completed`） |
 | `ForeshadowEntry` | 伏線の項目 |
-| `CharacterState` | 登場人物の現在の状態 |
+| `CharacterStateFile` | 登場人物の状態の記録（章・節ごとの変化。`src/character-state.ts`） |
+| `ResolvedCharacter` | 変化を重ねて組み立てた、ある時点の人物の状態（`src/character-state.ts`） |
 | `NovelConfig` | 作品設定 |
 | `NovelLimits` | 資料読み込みの上限の上書き |
 

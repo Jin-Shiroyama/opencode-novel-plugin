@@ -3,6 +3,7 @@ import {
   resolveLimit, takeTailChars, parseChapterNumber, truncateChars, toKanjiNumber,
   readDocParts, readChapterDoc, listCharacterDocs, selectCharacterDocs, parseScenes,
   clipDocParts, selectForeshadowReminders, extractSpeechProfile, isShortForm, isSerial, styleLabel,
+  characterNameKeys,
 } from "../utils.js"
 import type {
   NovelConfig, DocPart, ForeshadowReminder, CharacterDoc, SpeechProfile,
@@ -201,7 +202,7 @@ export async function novelContextExecute(
   } else if (states.length > 0 && charState.kind === "ok") {
     const asOf = lastRecordedBefore(charState.value, section)
     context += `## 🔄 登場人物の現在の状態（${asOf ? `${sectionLabel(asOf)}の終わり時点` : "記録より"}） (P1 — 重要)\n`
-    context += buildCharacterStateContext(states, relevantDocs, chapterText, resolveLimit(config, "characterState"))
+    context += buildCharacterStateContext(states, allCharacterDocs, relevantDocs, chapterText, resolveLimit(config, "characterState"))
     context += "\n\n"
   }
   // 記録の項目名（作品ごとに決めたもの）。書き終えて novel_update するときに同じ名前を使えるように
@@ -333,10 +334,42 @@ export async function novelContextExecute(
   return context
 }
 
-/** 人物設定の文書がその名前の人物のものか（フルネーム・呼称・姓での記録に合わせる） */
+/**
+ * 人物設定の文書が、記録のその名前の人物のものか。
+ * 記録の名前はフルネーム・姓・名・呼称のどれでもよい（「森田悠.md」を「森田」「悠」「森田悠」の記録と結ぶ）。
+ * 手がかりは characterNameKeys（selectCharacterDocs と同じもの）
+ */
 function docMatchesName(doc: CharacterDoc, name: string): boolean {
-  return doc.label === name || doc.aliases.includes(name) || doc.label.startsWith(name)
+  if (doc.label === name || doc.aliases.includes(name)) return true
+  const keys = characterNameKeys(doc.label, doc.aliases)
+  if (keys.strong.includes(name) || keys.weak.includes(name)) return true
+  // 記録がフルネームで、文書の名前が姓だけのとき（「森田.md」と「森田悠」）
+  return characterNameKeys(name).strong.includes(doc.label)
 }
+
+/**
+ * この章のプロット・シーンに出てくる、記録の人物の名前。
+ *
+ * selectCharacterDocs と同じ二段で照合する。2文字以上の手がかり（フルネーム・姓・名・呼称）で探し、
+ * 当たらなかった人物だけ1文字の手がかりで探し直す。記録がフルネームでもプロットが姓だけ、
+ * という書き方で中心人物を取りこぼさないため。人物設定の文書に結び付く人物は、その呼称も手がかりにする。
+ * 1文字の手がかりは漢字（一文字姓・一文字名）に限る。仮名の1文字（「レン」の「ン」）はほとんどの文に当たるため
+ */
+function statesInText(states: ResolvedCharacter[], allDocs: CharacterDoc[], text: string): Set<string> {
+  const keyed = states.map((c) => {
+    const aliases = allDocs.filter((d) => docMatchesName(d, c.name)).flatMap((d) => [d.label, ...d.aliases])
+    return { name: c.name, keys: characterNameKeys(c.name, aliases) }
+  })
+  const hit = new Set<string>()
+  for (const { name, keys } of keyed) if (keys.strong.some((k) => text.includes(k))) hit.add(name)
+  for (const { name, keys } of keyed) {
+    if (!hit.has(name) && keys.weak.some((k) => /^\p{Script=Han}$/u.test(k) && text.includes(k))) hit.add(name)
+  }
+  return hit
+}
+
+/** 文字数（コードポイント単位。truncateChars と同じ数え方） */
+const charCount = (text: string) => [...text].length
 
 const STATUS_LABELS: Record<string, string> = { deceased: "死亡", missing: "行方不明", retired: "退場" }
 /** 出来事を載せる件数（この章に関わる人物だけ。直近から） */
@@ -347,18 +380,19 @@ const RECENT_EVENTS = 5
  *
  * この章のプロットかシーンに出る人物（selectCharacterDocs で選んだ人物設定に当たるか、名前が出るもの）を
  * 上に詳しく、ほかの人物を下に1行ずつ並べる。群像劇で人数が増えても、この章に要る人物が枠に収まるように。
+ * 誰も特定できなければ全員を上に置く（selectCharacterDocs と同じく、資料が足りないより多いほうが害が小さい）。
  * 死亡・行方不明・退場は名前のすぐ横に、変わった節とともに示す（亡くなった人物を書き戻さないため）。
  * 枠（limits.characterState）を超えたら、上から順に入るところまでを載せ、省いた人物の名前を示す。
  */
 function buildCharacterStateContext(
   states: ResolvedCharacter[],
+  allDocs: CharacterDoc[],
   relevantDocs: CharacterDoc[],
   chapterText: string,
   limit: number,
 ): string {
-  const hasClues = chapterText.trim().length > 0
-  const relevant = (c: ResolvedCharacter) =>
-    !hasClues || relevantDocs.some((d) => docMatchesName(d, c.name)) || chapterText.includes(c.name)
+  const hits = statesInText(states, allDocs, chapterText)
+  const relevant = (c: ResolvedCharacter) => hits.has(c.name) || relevantDocs.some((d) => docMatchesName(d, c.name))
   const statusMark = (c: ResolvedCharacter) => {
     if (c.status === "active") return ""
     const at = c.changedAt.status
@@ -367,8 +401,9 @@ function buildCharacterStateContext(
   const pairs = (map: Record<string, string>, sep: string) =>
     Object.entries(map).map(([k, v]) => `${k}${sep}${v}`).join(" ／ ")
 
-  const main = states.filter(relevant)
-  const others = states.filter((c) => !relevant(c))
+  const identified = chapterText.trim().length > 0 && states.some(relevant)
+  const main = identified ? states.filter(relevant) : states
+  const others = identified ? states.filter((c) => !relevant(c)) : []
   const blocks: Array<{ name: string; text: string }> = []
   for (const c of main) {
     const lines = [`**${c.name}**${statusMark(c)}`]
@@ -396,21 +431,26 @@ function buildCharacterStateContext(
 
   let out = main.length > 0 && others.length > 0 ? "### この章に関わる人物\n" : ""
   const dropped: string[] = []
+  let cut: string | null = null
   let placed = 0
   for (const b of blocks) {
     const next = out.length === 0 || out.endsWith("\n") ? b.text : `\n${b.text}`
-    if (dropped.length === 0 && out.length + next.length <= limit) {
+    if (dropped.length === 0 && charCount(out) + charCount(next) <= limit) {
       out += next
       placed++
     } else if (placed === 0) {
       // 最初の人物だけで枠を超えるときは、その人物を切って載せる（誰も載らないよりよい）
-      out += truncateChars(next, Math.max(0, limit - out.length))[0]
+      out += truncateChars(next, Math.max(0, limit - charCount(out)))[0]
+      cut = b.name
       placed++
     } else {
       dropped.push(b.name)
     }
   }
-  if (dropped.length > 0) out += `\n…（枠が足りず省略: ${dropped.join("、")}。limits.characterState で枠を広げられます）`
+  if (cut || dropped.length > 0) {
+    const parts = [...(cut ? [`${cut}の途中から`] : []), ...(dropped.length > 0 ? [dropped.join("、")] : [])]
+    out += `\n…（枠が足りず省略: ${parts.join("、")}。limits.characterState で枠を広げられます）`
+  }
   return out
 }
 
@@ -428,6 +468,7 @@ function buildSpeechContext(
   chapterText: string,
 ): string {
   const matches = docMatchesName
+  const hits = statesInText(states, allDocs, chapterText)
 
   const entries: Array<{ name: string; profile: SpeechProfile; state?: ResolvedCharacter }> = []
   for (const doc of relevantDocs) {
@@ -438,7 +479,7 @@ function buildSpeechContext(
   for (const state of states) {
     if (!state.firstPerson && Object.keys(state.addressTerms).length === 0) continue
     if (allDocs.some((d) => matches(d, state.name))) continue
-    if (chapterText.trim().length > 0 && !chapterText.includes(state.name)) continue
+    if (chapterText.trim().length > 0 && !hits.has(state.name)) continue
     entries.push({ name: state.name, profile: { addressTerms: [] }, state })
   }
 

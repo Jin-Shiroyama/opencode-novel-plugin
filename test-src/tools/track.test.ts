@@ -649,6 +649,87 @@ describe("資料に載せる人物の状態", () => {
   })
 })
 
+describe("資料の人物の振り分け（この章に関わる人物か）", () => {
+  const record = (dir: string, names: string[]) =>
+    update(dir, "character-state", { updates: names.map((name) => ({ name, changes: { mentalState: `${name}の心` } })) }, 1)
+
+  test("人物ごとの設定ファイルが無くても、プロットの姓だけでフルネームの記録を上に置く", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "outline-detailed.md": "# 章別\n\n## 第2章\n森田が職員室で話す。\n" })
+    await record(dir, ["森田悠", "杉本千尋"])
+    const ctx = await contextOf(dir, 2)
+    const others = ctx.indexOf("### ほかの人物")
+    assert.ok(others > 0)
+    assert.ok(ctx.indexOf("**森田悠**") < others, "姓だけのプロットで中心人物が下に落ちた")
+    assert.match(ctx.slice(others), /- \*\*杉本千尋\*\*/)
+  })
+
+  test("記録を下の名前で付けていても、人物設定のファイル（フルネーム）と結び付ける", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "characters/森田悠.md": "# 森田悠\n\n## ことばづかい\n\n- **一人称**：俺\n",
+      "characters/杉本千尋.md": "# 杉本千尋\n",
+      "outline-detailed.md": "# 章別\n\n## 第2章\n森田悠が職員室で話す。\n",
+    })
+    await update(dir, "character-state", { updates: [{ name: "悠", changes: { speech: { firstPerson: "僕" } } }, { name: "千尋", changes: { mentalState: "待つ" } }] }, 1)
+    const ctx = await contextOf(dir, 2)
+    assert.match(ctx, /\*\*森田悠\*\* — 一人称: 僕（第1章で変更）/)
+    assert.ok(ctx.indexOf("**悠**") < ctx.indexOf("### ほかの人物"))
+  })
+
+  test("プロットに誰の名前も無ければ、全員を上に置く", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "outline-detailed.md": "# 章別\n\n## 第2章\n二人は北へ向かった。\n" })
+    await record(dir, ["レン", "ドルガ"])
+    const ctx = await contextOf(dir, 2)
+    assert.doesNotMatch(ctx, /### ほかの人物/)
+    assert.match(ctx, /\*\*レン\*\*\n  心: レンの心/)
+    assert.match(ctx, /\*\*ドルガ\*\*\n  心: ドルガの心/)
+  })
+
+  test("仮名1文字では照合しない（「レン」の「ン」がほかの文に当たって上に来ない）", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "outline-detailed.md": "# 章別\n\n## 第2章\nドルガがパンを焼く。\n" })
+    await record(dir, ["レン", "ドルガ"])
+    const ctx = await contextOf(dir, 2)
+    assert.match(ctx.slice(ctx.indexOf("### ほかの人物")), /- \*\*レン\*\*/)
+  })
+
+  test("1人だけで枠を超えたら、途中で切ったことを示す", async () => {
+    const config = JSON.stringify({ ...JSON.parse(CONFIG), limits: { characterState: 20 } })
+    const dir = makeProject({ "config.json": config })
+    await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "とても長い心の動きの記録".repeat(3) } }] }, 1)
+    const ctx = await contextOf(dir, 2)
+    assert.match(ctx, /…（枠が足りず省略: レンの途中から。limits\.characterState で枠を広げられます）/)
+  })
+})
+
+describe("中身の無い欄", () => {
+  test("空の一覧・空の対応表は記録に残さず、項目名としても案内しない", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", {
+      updates: [{ name: "レン", changes: { mentalState: "覚悟", lists: { できること: { added: [], removed: [] } }, relationships: {}, events: [] } }],
+    }, 2)
+    assert.match(out, /レン: mentalState$/m)
+    assert.doesNotMatch(out, /新しい項目名/)
+    assert.deepEqual(sectionsOf(dir)["chapter-002"].updates, [{ name: "レン", changes: { mentalState: "覚悟" } }])
+    assert.doesNotMatch(await contextOf(dir, 3), /できること/)
+  })
+
+  test("空の欄しか無い人物は「変更なし」とし、記録に入れない", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", {
+      updates: [{ name: "ミレイ", changes: { lists: { 所持品: { added: [] } } } }],
+    }, 2)
+    assert.match(out, /ミレイ: 変更なし/)
+    assert.deepEqual(sectionsOf(dir)["chapter-002"], { updates: [] })
+  })
+
+  test("null で消しただけの項目名は、使っている項目名に数えない", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: { attributes: { 場所: null, 現在地: "砦" } } }] }, 2)
+    assert.doesNotMatch(out, /場所/)
+    assert.match(await contextOf(dir, 3), /📌 人物の状態の記録で使っている項目名: attributes = 現在地 ／ lists = 所持品（/)
+  })
+})
+
 describe("記録の項目名（attributes / lists）", () => {
   test("新しい項目名を使うと、すでに使っている項目名を示す", async () => {
     const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })

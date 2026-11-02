@@ -381,7 +381,13 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
     `{"updates": []}` は「記録済み・変化なし」。報告はその節を書き終えた時点の状態の前後の差（`describeStateChange`）で、
     すでに記録のある節で変化が無ければ書かない。出来事の重複は同じ節の中だけで判定する
   - `novel_context` は書く章より前の記録だけを載せる。この章のプロット・シーンに出る人物を上に詳しく、ほかを下に1行で並べ、
-    死亡・行方不明・退場は変わった節とともに示す。出来事は直近5件まで。枠は `limits.characterState`
+    死亡・行方不明・退場は変わった節とともに示す。出来事は直近5件まで。枠は `limits.characterState`（コードポイントで数え、
+    1人目を途中で切ったときも省略を示す）
+  - 記録の名前とプロット・人物設定の照合は `characterNameKeys` の手がかりで行う（記録がフルネームでプロットが姓だけ、
+    記録が下の名前でファイルがフルネーム、のどちらでも結ぶ。`docMatchesName` / `statesInText`）。二段目の1文字の手がかりは
+    漢字に限る（仮名1文字はほとんどの文に当たる）。誰も特定できなければ全員を上に置く
+  - 中身の無い欄（`{ "added": [], "removed": [] }`、空の対応表、空の events）は保存前に外す（`compactChanges`）。
+    外して何も残らない人物は「変更なし」として記録に入れない。項目名の案内（`stateKeyNames`）は値の入ったことがある項目名だけを数える
   - `novel_status` は本文があるのに記録の無い章・節を「記録の点検」で示す
   - 人物設定（`characters/{名前}.md`）は変わらない設定の正本で、章ごとの記録の表は持たない
 - **ことばづかい（一人称・二人称・敬語・相手ごとの呼び方）は、初めの設定を人物設定に、途中の変化を `state.json` の `speech` に置く**。
@@ -401,7 +407,8 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 - **連載（結末未定）は `config.json` の `serial: true`**。`chapterCount` と `targetWords` は目安で、超えて書いても崩れない。
   完結はエピローグがあるかで判定し、`novel_status` は分量の不足を知らせず、次の章の章別プロットを足すよう案内する。
   `novel_context` は章別プロットの無い章で ⚠️ を出す（連載では章別プロットを章ごとに足していくため）
-- **エピローグの記録の章番号は、本文のある最後の章**（`lastChapterForRecords`。1章も無ければ `chapterCount`）。
+- **エピローグの伏線の記録の章番号は、本文のある最後の章**（`lastChapterForRecords`。1章も無ければ `chapterCount`）。
+  人物の状態はエピローグそのものの節（`epilogue`）として記録するので、この章番号を使わない。
   予定章数を使うと、予定を超えて書いた作品でエピローグの回収章が張った章より前になり、伏線の期限も予定章数で切れる。
   あらすじの基準（`lastWritten`）とも揃う。部の最後の範囲も `max(chapterCount, 書いた最後の章)` で示す。これは連載でなくても同じ
 - **文体の既定はライトノベル寄り**（`config.json` の `style` なし）。文芸寄りは `style: "literary"`。正本は `novel-writing` skill の
@@ -433,7 +440,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、561件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、570件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
