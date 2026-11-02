@@ -551,8 +551,10 @@ export function extractSpeechProfile(content: string): SpeechProfile | null {
  *     - 先頭からの部分（姓）と末尾からの部分（名）
  *     - 文書に書かれた呼称・別名
  *   weak（1文字。単独では拾いすぎるので、strong で当たらなかったときだけ使う）
- *     - 先頭1文字（「林美咲」の「林」のような一文字姓）
- *     - 1文字の呼称・別名
+ *     - 先頭・末尾の1文字（「林美咲」の「林」のような一文字姓、「森田悠」の「悠」のような一文字名）。
+ *       名前から切り出す1文字は漢字のときだけ。仮名の1文字（「レン」の「ン」）はほとんどの文に当たり、
+ *       名前の出ない章でも人物が選ばれてしまう
+ *     - 1文字の名前そのもの、1文字の呼称・別名（書かれたものなので仮名でも使う）
  *
  * 「林美咲」は先頭2文字が「林美」なので、姓だけの「林」では strong が当たらない。
  * weak の段で拾う。
@@ -574,9 +576,12 @@ export function characterNameKeys(name: string, aliases: string[] = []): { stron
   for (const piece of trimmed.split(/[\s\u3000・]+/)) add(piece)
 
   const chars = [...trimmed]
+  const isHan = (c: string) => /^\p{Script=Han}$/u.test(c)
   for (let n = 1; n < chars.length; n++) {
-    add(chars.slice(0, n).join("")) // 姓の候補
-    add(chars.slice(chars.length - n).join("")) // 名の候補
+    const head = chars.slice(0, n).join("") // 姓の候補
+    const tail = chars.slice(chars.length - n).join("") // 名の候補
+    if (n > 1 || isHan(head)) add(head)
+    if (n > 1 || isHan(tail)) add(tail)
   }
 
   for (const a of aliases) add(a)

@@ -353,7 +353,7 @@ function docMatchesName(doc: CharacterDoc, name: string): boolean {
  * selectCharacterDocs と同じ二段で照合する。2文字以上の手がかり（フルネーム・姓・名・呼称）で探し、
  * 当たらなかった人物だけ1文字の手がかりで探し直す。記録がフルネームでもプロットが姓だけ、
  * という書き方で中心人物を取りこぼさないため。人物設定の文書に結び付く人物は、その呼称も手がかりにする。
- * 1文字の手がかりは漢字（一文字姓・一文字名）に限る。仮名の1文字（「レン」の「ン」）はほとんどの文に当たるため
+ * 名前から切り出す1文字の手がかりは漢字に限る（characterNameKeys）
  */
 function statesInText(states: ResolvedCharacter[], allDocs: CharacterDoc[], text: string): Set<string> {
   const keyed = states.map((c) => {
@@ -362,9 +362,7 @@ function statesInText(states: ResolvedCharacter[], allDocs: CharacterDoc[], text
   })
   const hit = new Set<string>()
   for (const { name, keys } of keyed) if (keys.strong.some((k) => text.includes(k))) hit.add(name)
-  for (const { name, keys } of keyed) {
-    if (!hit.has(name) && keys.weak.some((k) => /^\p{Script=Han}$/u.test(k) && text.includes(k))) hit.add(name)
-  }
+  for (const { name, keys } of keyed) if (!hit.has(name) && keys.weak.some((k) => text.includes(k))) hit.add(name)
   return hit
 }
 

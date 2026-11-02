@@ -221,6 +221,8 @@ concept → characters → outline（`outline-brief.md` があるか）→ scene
 （`selectCharacterDocs`）。照合は二段です。2文字以上の手がかり（フルネーム・姓・名・
 呼称）で照合し、当たらなかった人物だけ1文字の手がかりで再照合します。
 一段目で誰かが当たっても二段目を省きません（省くと一文字姓などが落ちる）。
+名前から切り出す1文字は漢字のときだけ手がかりにします（`characterNameKeys`。仮名1文字の「ン」などはほとんどの文に当たる）。
+1文字の名前そのものと、書かれた呼称は仮名でも使います。
 人物設定に `呼称` を書けば、推定に頼らず明示できます（雛形のままの行は読まない。`isPlaceholderValue`）。
 誰も特定できなければ全員を載せます。
 
@@ -384,8 +386,8 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
     死亡・行方不明・退場は変わった節とともに示す。出来事は直近5件まで。枠は `limits.characterState`（コードポイントで数え、
     1人目を途中で切ったときも省略を示す）
   - 記録の名前とプロット・人物設定の照合は `characterNameKeys` の手がかりで行う（記録がフルネームでプロットが姓だけ、
-    記録が下の名前でファイルがフルネーム、のどちらでも結ぶ。`docMatchesName` / `statesInText`）。二段目の1文字の手がかりは
-    漢字に限る（仮名1文字はほとんどの文に当たる）。誰も特定できなければ全員を上に置く
+    記録が下の名前でファイルがフルネーム、のどちらでも結ぶ。`docMatchesName` / `statesInText`）。1文字の手がかりの扱いは
+    人物設定の選び方と同じ（名前から切り出す1文字は漢字だけ）。誰も特定できなければ全員を上に置く
   - 中身の無い欄（`{ "added": [], "removed": [] }`、空の対応表、空の events）は保存前に外す（`compactChanges`）。
     外して何も残らない人物は「変更なし」として記録に入れない。項目名の案内（`stateKeyNames`）は値の入ったことがある項目名だけを数える
   - `novel_status` は本文があるのに記録の無い章・節を「記録の点検」で示す
@@ -440,7 +442,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、570件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、573件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

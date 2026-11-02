@@ -6,7 +6,7 @@ import { join, dirname } from "node:path"
 import { novelContextExecute } from "../../src/tools/context.js"
 import { novelStatusExecute } from "../../src/tools/status.js"
 import {
-  determinePhase, allocateCharBudget, characterNameKeys, extractNameAliases,
+  determinePhase, allocateCharBudget, characterNameKeys, extractNameAliases, selectCharacterDocs,
   collectScenes, sceneChapterNumber, chapterNumberFromFileName, chapterDocNumber,
   listChapterDocs, readChapterDoc,
 } from "../../src/utils.js"
@@ -452,10 +452,36 @@ describe("characterNameKeys", () => {
     assert.ok(weak.includes("林"))
   })
 
+  test("名前から切り出す1文字は漢字だけ（仮名1文字はほとんどの文に当たる）", () => {
+    assert.deepEqual(characterNameKeys("レン").weak, [])
+    assert.deepEqual(characterNameKeys("ミレイ").weak, [])
+    // 漢字と仮名がまじる名前は、漢字の側だけ
+    assert.deepEqual(characterNameKeys("林あかり").weak, ["林"])
+    // 1文字の名前そのものと、書かれた呼称は仮名でも使う
+    assert.deepEqual(characterNameKeys("ユ").weak, ["ユ"])
+    assert.ok(characterNameKeys("レン", ["ン"]).weak.includes("ン"))
+  })
+
   test("呼称を手がかりに加える", () => {
     const { strong } = characterNameKeys("鏡味征一", ["教頭", "鏡味先生"])
     assert.ok(strong.includes("教頭"))
     assert.ok(strong.includes("鏡味先生"))
+  })
+})
+
+describe("selectCharacterDocs", () => {
+  const doc = (label: string, aliases: string[] = []) => ({ label, content: `# ${label}`, aliases })
+
+  test("仮名の名前は、仮名1文字ではほかの文に当たらない（以前は「レン」が「パン」の「ン」で選ばれた）", () => {
+    const docs = [doc("レン"), doc("ミレイ"), doc("ドルガ")]
+    const picked = selectCharacterDocs(docs, "ドルガがパンを焼く。")
+    assert.deepEqual(picked.map((d) => d.label), ["ドルガ"])
+  })
+
+  test("一文字姓は二段目で拾う", () => {
+    const docs = [doc("林美咲"), doc("森田悠")]
+    const picked = selectCharacterDocs(docs, "林が職員室で森田と話す。")
+    assert.deepEqual(picked.map((d) => d.label), ["林美咲", "森田悠"])
   })
 })
 
