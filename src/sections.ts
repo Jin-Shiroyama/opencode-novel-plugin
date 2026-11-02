@@ -10,8 +10,9 @@
  * 節は章の数に入れない。章番号の仕組み（シーンID、chapterCount、工程の判定）は章だけで動く。
  * 文字数の累計や書き出しのように、原稿全体を扱うところでだけ節を含める。
  *
- * 伏線と人物の状態の記録は章番号で持つ。節の出来事は recordChapterOf の章番号で記録する
+ * 伏線の記録は章番号で持つ。節の出来事は recordChapterOf の章番号で記録する
  * （プロローグは 0、幕間は直前の章、エピローグは最後の章）。
+ * 人物の状態は節のキー（sectionKey）ごとの変化として持つ（character-state.ts）。
  * エピローグの「最後の章」は本文のある最後の章で、予定章数ではない（lastChapterForRecords）。
  * 結末を決めずに書き進める連載では、予定章数を超えて書くことがあるため。
  */
@@ -72,6 +73,19 @@ export function sectionFileName(s: ManuscriptSection): string {
     case "epilogue":
       return "epilogue.md"
   }
+}
+
+/**
+ * 記録のキーにする節の名前（chapter-005 / prologue / interlude-005-1 / epilogue）。
+ * 人物の状態（state.json）の節ごとの記録に使う。ファイル名から .md を外した形
+ */
+export function sectionKey(s: ManuscriptSection): string {
+  return sectionFileName(s).replace(/\.md$/, "")
+}
+
+/** sectionKey の逆。節のキーの形でなければ null */
+export function sectionFromKey(key: string): ManuscriptSection | null {
+  return sectionFromFileName(`${key}.md`)
 }
 
 /**

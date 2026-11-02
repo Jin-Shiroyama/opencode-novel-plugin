@@ -23,6 +23,7 @@ opencode-novel-plugin/
 │   ├── constants.ts          # 既定値（DEFAULTS）と資料読み込みの上限（LIMITS）
 │   ├── utils.ts              # パス／ファイル／文書解析／進行判定／文字数
 │   ├── records.ts            # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
+│   ├── character-state.ts    # 人物の状態（章・節ごとの差分と、その時点の状態の組み立て）
 │   ├── typography.ts         # 表記の点検（表記規約のうち機械で見られるもの）
 │   ├── ruby.ts               # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
 │   ├── manuscript.ts         # 原稿用紙の枚数換算（書式を指定したときだけ使う）
@@ -71,8 +72,8 @@ opencode-novel-plugin/
 ├── world-building.md        # 世界観
 ├── characters/
 │   ├── profiles.md          # 登場人物の一覧（関係図・対立表）
-│   ├── {キャラクター名}.md   # 一人ずつの設定（動機の三角形／アーク／章ごとの記録）
-│   └── state.json           # 登場人物の現在の状態
+│   ├── {キャラクター名}.md   # 一人ずつの設定（動機の三角形／アーク／ことばづかい）
+│   └── state.json           # 登場人物の状態（章・節ごとの変化）
 ├── outline-brief.md         # プロット概要
 ├── outline-detailed.md      # 章別プロット（outline/chapter-001.md に分割も可）
 ├── scenes.md                # シーン一覧（scenes/chapter-001.md に分割も可）
@@ -273,8 +274,10 @@ concept → characters → outline（`outline-brief.md` があるか）→ scene
 - 前の本文の末尾は `previousManuscriptFile`。読む順番ですぐ前の本文を選び、間が欠けていれば載せない
 - **あらすじは節も持つ**（`## プロローグ …` など。`SummarySection.section`）。資料には読む順番で前のものだけを載せる。
   「全体の流れ（第N章まで）」は第N章のあとの幕間まで含むとみなす
-- **伏線と人物の状態は章番号のまま**。`plantChapter` / `resolvedChapter` / `lastUpdatedChapter` は 0（プロローグ）を
+- **伏線は章番号のまま**。`plantChapter` / `resolvedChapter` は 0（プロローグ）を
   受け付ける。`targetChapter` は1以上のまま。`novel_update` に `section` を渡すと `recordChapterOf` の章番号で記録する
+- **人物の状態は節のキー（`sectionKey`：`prologue` / `chapter-001` / `interlude-001-1` / `epilogue`）で持つ**。
+  `recordChapterOf` / `lastChapterForRecords` は使わない（伏線と違い、節そのものの位置で前後が決まるため）
 - **部は `config.json` の `parts`**（`[{ title, fromChapter }]`。章番号は部をまたいで通し）。`parseParts` で読み、
   昇順でない・題が空などの形の誤りは `novel_status` で ⚠️、`novel_export` は書き出さずに断る。
   書き出しでは部の最初の章の前に部の見出しを置き（幕間は直前の章の部に残る）、markdown では部を `##`、章と節を `###` にする
@@ -367,9 +370,23 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   いまの章ファイルを読み込めないときは、旧稿を残せないので保存を断る
 - 読み込めない章（`safeReadFile` が null）は空の本文と区別する。`novel_export` は何も書かずに断り、
   `novel_check` は点検できなかった章として示す（空として扱うと欠落が「成功」「問題なし」になる）
-- **ことばづかい（一人称・二人称・敬語・相手ごとの呼び方）は、初めの設定を人物設定に、途中の変化を `state.json` に置く**。
+- **人物の状態（`state.json`）は章・節ごとの差分で持つ**（`src/character-state.ts`）。形は
+  `{ "sections": { "chapter-001": { "updates": [{ name, changes }] } } }`。状態そのもの（スナップショット）は保存しない。
+  ある節を書くときの状態は、それより前の節の差分を読む順番（`compareSections`）に重ねて組み立てる（`statesBefore`）。
+  前の章を書き直したとき、その節の差分を差し替えるだけで後ろの節の資料に反映させるため（スナップショットだと後ろの記録と食い違う）
+  - `changes` のキーは status / physicalState / mentalState / attributes（`{ 項目: 値 }`）/ lists（`{ 一覧: { added, removed } }`）/
+    relationships / speech（firstPerson・addressTerms）/ events。`null` で欄を消す。`role` は持たない（群像劇で章ごとに主役が替わるため）。
+    attributes と lists の項目名は作品ごとに決める。揺れを防ぐため、すでに使っている項目名を更新の報告・資料・更新用プロンプトで示す（`stateKeyNames`）
+  - `novel_update(character-state)` は章・節の指定が必須。同じ節への再送はその節の差分に重ね（`mergeChanges`）、`"replace": true` で置き換える。
+    `{"updates": []}` は「記録済み・変化なし」。報告はその節を書き終えた時点の状態の前後の差（`describeStateChange`）で、
+    すでに記録のある節で変化が無ければ書かない。出来事の重複は同じ節の中だけで判定する
+  - `novel_context` は書く章より前の記録だけを載せる。この章のプロット・シーンに出る人物を上に詳しく、ほかを下に1行で並べ、
+    死亡・行方不明・退場は変わった節とともに示す。出来事は直近5件まで。枠は `limits.characterState`
+  - `novel_status` は本文があるのに記録の無い章・節を「記録の点検」で示す
+  - 人物設定（`characters/{名前}.md`）は変わらない設定の正本で、章ごとの記録の表は持たない
+- **ことばづかい（一人称・二人称・敬語・相手ごとの呼び方）は、初めの設定を人物設定に、途中の変化を `state.json` の `speech` に置く**。
   人物設定の `## ことばづかい` と `### 相手ごとの呼び方` の表を `extractSpeechProfile` が読み、
-  `novel_context` が `firstPerson` / `addressTerms` を上に重ねて「🗣️ ことばづかい」として載せる。
+  `novel_context` が書く章より前の記録の `firstPerson` / `addressTerms` を上に重ねて「🗣️ ことばづかい」として載せる。
   人物設定の全文とは別に載せ、`clipDocParts` に入れない（人物設定が長いと切られて、ぶれやすい部分が落ちるため）。
   枠は `limits.speech`。雛形の項目名に「呼称」「別名」などを使わない（`extractNameAliases` に別名として拾われる）
 - **短編は `config.json` の `form: "short"`**（未指定は長編。既存の作品はそのまま動く）。既定値は `SHORT_DEFAULTS`
@@ -416,7 +433,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、538件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、561件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

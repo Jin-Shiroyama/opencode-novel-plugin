@@ -127,7 +127,7 @@ export async function novelInitExecute(
   ├── concept.md           (作品コンセプト ← まずここから)
 ${short ? "" : "  ├── world-building.md    (世界観)\n"}  ├── characters/          (登場人物)
   │   ├── profiles.md
-  │   └── state.json
+  │   └── state.json       (章・節ごとの状態の変化)
   ├── summary.md           (これまでのあらすじ)
   ├── foreshadow.json      (伏線の管理)
   ├── reality-source.md    (取材メモ)

@@ -826,9 +826,7 @@ describe("ことばづかい", () => {
 
   test("記録で変わった呼び方を重ね、変わった章を添える", async () => {
     const state = JSON.stringify({
-      characters: [
-        { name: "森田悠", status: "active", role: "protagonist", addressTerms: { 杉本千尋: "千尋" }, lastUpdatedChapter: 1 },
-      ],
+      sections: { "chapter-001": { updates: [{ name: "森田悠", changes: { speech: { addressTerms: { 杉本千尋: "千尋" } } } }] } },
     })
     const out = await run(makeProject({ ...base, "characters/state.json": state }))
     const speech = out.slice(out.indexOf("## 🗣️"))
@@ -837,9 +835,19 @@ describe("ことばづかい", () => {
     assert.match(out, /鏡味征一 → 教頭（敬語）/)
   })
 
+  test("書く章以降に変わった呼び方は重ねない（前の章を書き直すとき）", async () => {
+    const state = JSON.stringify({
+      sections: { "chapter-002": { updates: [{ name: "森田悠", changes: { speech: { addressTerms: { 杉本千尋: "千尋" } } } }] } },
+    })
+    const out = await run(makeProject({ ...base, "characters/state.json": state }))
+    const speech = out.slice(out.indexOf("## 🗣️"))
+    assert.match(speech, /杉本千尋 → 杉本さん（丁寧語）/)
+    assert.doesNotMatch(speech, /千尋（/)
+  })
+
   test("人物設定が無く記録だけにある人物も、章に名前が出れば載せる", async () => {
     const state = JSON.stringify({
-      characters: [{ name: "森田", status: "active", role: "protagonist", firstPerson: "僕" }],
+      sections: { prologue: { updates: [{ name: "森田", changes: { speech: { firstPerson: "僕" } } }] } },
     })
     const out = await run(
       makeProject({
@@ -848,7 +856,7 @@ describe("ことばづかい", () => {
         "outline-detailed.md": "# 章別\n\n## 第2章\n森田が職員室で話す。\n",
       }),
     )
-    assert.match(out, /\*\*森田\*\* — 一人称: 僕（記録で変更）/)
+    assert.match(out, /\*\*森田\*\* — 一人称: 僕（プロローグで変更）/)
   })
 
   test("人物設定が枠で切られても、ことばづかいの一覧は残る", async () => {

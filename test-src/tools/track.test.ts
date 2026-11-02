@@ -43,18 +43,33 @@ const update = (dir: string, action: "character-state" | "summary" | "foreshadow
     { directory: dir } as never,
   )
 
+/** 第1章でレンが水筒を持ち、不安を抱えている記録 */
 const STATE = JSON.stringify({
-  characters: [{ name: "レン", status: "active", role: "protagonist", mentalState: "不安", items: ["水筒"] }],
+  sections: {
+    "chapter-001": { updates: [{ name: "レン", changes: { mentalState: "不安", lists: { 所持品: { added: ["水筒"] } } } }] },
+  },
 })
+const sectionsOf = (dir: string) => JSON.parse(read(dir, "characters/state.json")).sections
+const contextOf = (dir: string, chapterNumber: number) =>
+  novelContextExecute({ chapterNumber, includePrompts: false }, { directory: dir } as never)
 
 describe("novel_update(character-state)", () => {
   test("知らないキーだけの更新は何も書かずに断る（以前は「更新しました」と返していた）", async () => {
     const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
     const out = await update(dir, "character-state", {
       updates: [{ name: "レン", changes: { state: "重傷", change: "剣を失う", inner: "…" } }],
-    })
+    }, 2)
     assert.match(out, /^❌/)
     assert.equal(read(dir, "characters/state.json"), STATE)
+  })
+
+  test("以前の形のキー（items / role / lastUpdatedChapter）は断る", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", {
+      updates: [{ name: "レン", changes: { role: "protagonist", items: { added: ["剣"] }, lastUpdatedChapter: 2 } }],
+    }, 2)
+    assert.match(out, /^❌/)
+    assert.match(out, /lists/)
   })
 
   test("1件でも形が違えば、正しい件も書かない", async () => {
@@ -64,30 +79,68 @@ describe("novel_update(character-state)", () => {
         { name: "レン", changes: { mentalState: "覚悟" } },
         { name: "ミレイ", status: "active" },
       ],
-    })
+    }, 2)
     assert.equal(read(dir, "characters/state.json"), STATE)
   })
 
-  test("変えた項目を人物ごとに返し、章番号を残す", async () => {
+  test("章・節を指さなければ書かない（差分を重ねる順番が決まらない）", async () => {
     const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
-    const out = await update(
-      dir,
-      "character-state",
-      {
-        updates: [
-          { name: "レン", changes: { physicalState: "肋を折った", items: { added: ["古い剣"], removed: ["水筒"] } } },
-          { name: "ミレイ", changes: { role: "supporting", mentalState: "枯渇" } },
-        ],
-      },
-      10,
-    )
-    assert.match(out, /レン: physicalState, items\(\+1\/-1\)/)
-    assert.match(out, /ミレイ（新規）: mentalState/)
-    const saved = JSON.parse(read(dir, "characters/state.json")).characters
-    assert.equal(saved[0].physicalState, "肋を折った")
-    assert.deepEqual(saved[0].items, ["古い剣"])
-    assert.equal(saved[0].lastUpdatedChapter, 10)
-    assert.equal(saved[1].status, "active")
+    const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "覚悟" } }] })
+    assert.match(out, /^❌ 登場人物の状態は更新していません。どの章・節の変化か/)
+    assert.equal(read(dir, "characters/state.json"), STATE)
+  })
+
+  test("同じものを added と removed の両方に入れたら断る", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", {
+      updates: [{ name: "レン", changes: { lists: { 所持品: { added: ["剣"], removed: ["剣"] } } } }],
+    }, 2)
+    assert.match(out, /^❌/)
+    assert.match(out, /両方に入れています: 剣/)
+  })
+
+  test("変えた項目を人物ごとに返し、その章の差分として残す", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", {
+      updates: [
+        { name: "レン", changes: { physicalState: "肋を折った", lists: { 所持品: { added: ["古い剣"], removed: ["水筒"] } } } },
+        { name: "ミレイ", changes: { mentalState: "枯渇", attributes: { 現在地: "砦" } } },
+      ],
+    }, 2)
+    assert.match(out, /^✅ 第2章の人物の状態を更新しました（新規 1人 \/ 更新 1人 \/ 変更なし 0人 \/ 第2章まで登場 2人）/)
+    assert.match(out, /レン: physicalState, lists\.所持品\(\+1\/-1\)/)
+    assert.match(out, /ミレイ（新規）: mentalState, attributes\(現在地\)/)
+    const sections = sectionsOf(dir)
+    assert.deepEqual(Object.keys(sections), ["chapter-001", "chapter-002"])
+    assert.deepEqual(sections["chapter-002"].updates[0], {
+      name: "レン",
+      changes: { physicalState: "肋を折った", lists: { 所持品: { added: ["古い剣"], removed: ["水筒"] } } },
+    })
+    // 第1章の差分には触れない
+    assert.deepEqual(sections["chapter-001"], JSON.parse(STATE).sections["chapter-001"])
+  })
+
+  test("変化の無い節は updates を空で渡して記録できる", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", { updates: [] }, 2)
+    assert.match(out, /^✅ 第2章の人物の状態を記録しました（状態の変化はありません/)
+    assert.deepEqual(sectionsOf(dir)["chapter-002"], { updates: [] })
+    assert.match(await update(dir, "character-state", { updates: [] }, 2), /^ℹ️/)
+  })
+
+  test("changes が空なら、変化なしの書き方を案内して断る", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: {} }] }, 2)
+    assert.match(out, /^❌/)
+    assert.match(out, /"updates": \[\]/)
+  })
+
+  test("null を渡した欄は消える", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: null } }] }, 2)
+    assert.match(out, /レン: mentalState/)
+    const ctx = await contextOf(dir, 3)
+    assert.doesNotMatch(ctx, /不安/)
   })
 })
 
@@ -96,7 +149,7 @@ describe("novel_update(character-state) の変化の数え方", () => {
     const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
     const out = await update(dir, "character-state", {
       updates: [{ name: "レン", changes: { events: [], mentalState: "不安" } }],
-    }, 3)
+    }, 1)
     assert.match(out, /^ℹ️/)
     assert.match(out, /レン: 変更なし/)
     assert.equal(read(dir, "characters/state.json"), STATE)
@@ -105,36 +158,35 @@ describe("novel_update(character-state) の変化の数え方", () => {
   test("持っている品の追加と、無い品の削除は数えない", async () => {
     const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
     const out = await update(dir, "character-state", {
-      updates: [{ name: "レン", changes: { items: { added: ["水筒", "剣"], removed: ["盾"] } } }],
-    })
-    assert.match(out, /レン: items\(\+1\/-0\)/)
-    assert.deepEqual(JSON.parse(read(dir, "characters/state.json")).characters[0].items, ["水筒", "剣"])
+      updates: [{ name: "レン", changes: { lists: { 所持品: { added: ["水筒", "剣"], removed: ["盾"] } } } }],
+    }, 2)
+    assert.match(out, /レン: lists\.所持品\(\+1\/-0\)/)
   })
 
   test("呼び方は相手ごとに重ね、変わった相手を示す。送り直しは変更なし", async () => {
     const state = JSON.stringify({
-      characters: [{ name: "レン", status: "active", role: "protagonist", addressTerms: { ドルガ: "隊長", ミナ: "ミナ" } }],
+      sections: { "chapter-001": { updates: [{ name: "レン", changes: { speech: { addressTerms: { ドルガ: "隊長", ミナ: "ミナ" } } } }] } },
     })
     const dir = makeProject({ "config.json": CONFIG, "characters/state.json": state })
-    const change = { updates: [{ name: "レン", changes: { firstPerson: "俺", addressTerms: { ドルガ: "ドルガ", ミナ: "ミナ" } } }] }
-    const out = await update(dir, "character-state", change, 5)
+    const change = { updates: [{ name: "レン", changes: { speech: { firstPerson: "俺", addressTerms: { ドルガ: "ドルガ", ミナ: "ミナ" } } } }] }
+    const out = await update(dir, "character-state", change, 2)
     assert.match(out, /レン: firstPerson, addressTerms\(ドルガ\)/)
-    const saved = JSON.parse(read(dir, "characters/state.json")).characters[0]
-    assert.deepEqual(saved.addressTerms, { ドルガ: "ドルガ", ミナ: "ミナ" })
-    assert.equal(saved.firstPerson, "俺")
-    assert.equal(saved.lastUpdatedChapter, 5)
 
     const before = read(dir, "characters/state.json")
-    assert.match(await update(dir, "character-state", change, 6), /^ℹ️/)
+    assert.match(await update(dir, "character-state", change, 2), /^ℹ️/)
     assert.equal(read(dir, "characters/state.json"), before)
   })
 
   test("一部の人物だけ変わったときは、変わらなかった人物も示す", async () => {
     const state = JSON.stringify({
-      characters: [
-        { name: "レン", status: "active", role: "protagonist", mentalState: "不安" },
-        { name: "ソウ", status: "active", role: "supporting", mentalState: "待つ" },
-      ],
+      sections: {
+        "chapter-001": {
+          updates: [
+            { name: "レン", changes: { mentalState: "不安" } },
+            { name: "ソウ", changes: { mentalState: "待つ" } },
+          ],
+        },
+      },
     })
     const dir = makeProject({ "config.json": CONFIG, "characters/state.json": state })
     const out = await update(dir, "character-state", {
@@ -142,11 +194,99 @@ describe("novel_update(character-state) の変化の数え方", () => {
         { name: "レン", changes: { mentalState: "覚悟" } },
         { name: "ソウ", changes: { mentalState: "待つ" } },
       ],
-    }, 4)
+    }, 2)
     assert.match(out, /更新 1人 \/ 変更なし 1人/)
-    const saved = JSON.parse(read(dir, "characters/state.json")).characters
-    assert.equal(saved[0].lastUpdatedChapter, 4)
-    assert.equal(saved[1].lastUpdatedChapter, undefined)
+  })
+
+  test("別の章の同じ文言の出来事も、その章の出来事として残す", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    await update(dir, "character-state", { updates: [{ name: "レン", changes: { events: ["村を出る"] } }] }, 1)
+    const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: { events: ["村を出る"] } }] }, 3)
+    assert.match(out, /レン: events\(\+1\)/)
+    // 同じ章への送り直しは足さない
+    assert.match(await update(dir, "character-state", { updates: [{ name: "レン", changes: { events: ["村を出る"] } }] }, 3), /^ℹ️/)
+  })
+})
+
+describe("人物の状態の時点（章・節ごとの差分を重ねる）", () => {
+  // 第1章で父の剣を得て、第2章で失い、第3章で死亡する
+  async function threeChapters() {
+    const dir = makeProject({ "config.json": CONFIG })
+    await update(dir, "character-state", {
+      updates: [{ name: "レン", changes: { mentalState: "不安", lists: { 所持品: { added: ["父の剣"] } }, events: ["村を出る"] } }],
+    }, 1)
+    await update(dir, "character-state", {
+      updates: [{ name: "レン", changes: { mentalState: "決意", lists: { 所持品: { added: ["古い剣"], removed: ["父の剣"] } }, events: ["父の剣を失う"] } }],
+    }, 2)
+    await update(dir, "character-state", { updates: [{ name: "レン", changes: { status: "deceased", events: ["砦で倒れる"] } }] }, 3)
+    return dir
+  }
+
+  test("書く章より前の記録だけを載せる（前の章を書き直すときに先の章の変化を混ぜない）", async () => {
+    const dir = await threeChapters()
+    const ctx2 = await contextOf(dir, 2)
+    assert.match(ctx2, /## 🔄 登場人物の現在の状態（第1章の終わり時点）/)
+    assert.match(ctx2, /\*\*レン\*\*\n  心: 不安/)
+    assert.match(ctx2, /所持品: 父の剣/)
+    assert.doesNotMatch(ctx2, /決意|古い剣/)
+
+    const ctx3 = await contextOf(dir, 3)
+    assert.match(ctx3, /\*\*レン\*\*\n  心: 決意/)
+    assert.match(ctx3, /  所持品: 古い剣\n/)
+    assert.match(ctx3, /- \[第2章\] 父の剣を失う/)
+    // 第3章の死亡はまだ載せない
+    assert.doesNotMatch(ctx3, /死亡|砦で倒れる/)
+  })
+
+  test("第1章には前の記録が無いので載せない", async () => {
+    const dir = await threeChapters()
+    assert.doesNotMatch(await contextOf(dir, 1), /## 🔄 登場人物の現在の状態/)
+  })
+
+  test("前の章を replace で書き直すと、後ろの章の資料にも反映される", async () => {
+    const dir = await threeChapters()
+    const out = await update(dir, "character-state", {
+      replace: true,
+      updates: [{ name: "レン", changes: { mentalState: "迷い", events: ["剣を手放さずに逃げる"] } }],
+    }, 2)
+    assert.match(out, /レン: mentalState, lists\.所持品\(\+1\/-1\), events\(\+1\/-1\)/)
+    assert.match(out, /第3章以降の記録があります/)
+    const sections = sectionsOf(dir)
+    assert.deepEqual(sections["chapter-002"].updates, [{ name: "レン", changes: { mentalState: "迷い", events: ["剣を手放さずに逃げる"] } }])
+
+    const ctx3 = await contextOf(dir, 3)
+    assert.match(ctx3, /\*\*レン\*\*\n  心: 迷い/)
+    assert.match(ctx3, /所持品: 父の剣/)
+  })
+
+  test("replace しなければ、同じ節の差分に重ねる", async () => {
+    const dir = await threeChapters()
+    await update(dir, "character-state", {
+      updates: [{ name: "レン", changes: { lists: { 所持品: { added: ["父の剣"] } }, events: ["剣を拾い直す"] } }],
+    }, 2)
+    const changes = sectionsOf(dir)["chapter-002"].updates[0].changes
+    assert.deepEqual(changes.lists, { 所持品: { added: ["古い剣", "父の剣"] } })
+    assert.deepEqual(changes.events, ["父の剣を失う", "剣を拾い直す"])
+    assert.equal(changes.mentalState, "決意")
+  })
+
+  test("プロローグと幕間は読む順番の位置に入る", async () => {
+    const dir = makeProject({ "config.json": CONFIG })
+    await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "眠い" } }] }, 1)
+    await novelUpdateExecute(
+      { action: "character-state", section: "prologue", content: JSON.stringify({ updates: [{ name: "レン", changes: { physicalState: "無傷" } }] }) },
+      { directory: dir } as never,
+    )
+    await novelUpdateExecute(
+      { action: "character-state", section: "interlude", chapterNumber: 1, content: JSON.stringify({ updates: [{ name: "レン", changes: { mentalState: "夢を見る" } }] }) },
+      { directory: dir } as never,
+    )
+    assert.deepEqual(Object.keys(sectionsOf(dir)).sort(), ["chapter-001", "interlude-001-1", "prologue"])
+    const ctx1 = await contextOf(dir, 1)
+    assert.match(ctx1, /\*\*レン\*\*\n  体: 無傷/)
+    const ctx2 = await contextOf(dir, 2)
+    assert.match(ctx2, /## 🔄 登場人物の現在の状態（幕間（第1章のあと）の終わり時点）/)
+    assert.match(ctx2, /\*\*レン\*\*\n  心: 夢を見る/)
   })
 })
 
@@ -442,6 +582,95 @@ describe("境界条件", () => {
   })
 })
 
+describe("資料に載せる人物の状態", () => {
+  const OUTLINE = "# 章別\n\n## 第3章\nレンとドルガが砦を出る。\n"
+  async function project(extra: Record<string, string> = {}) {
+    const dir = makeProject({ "config.json": CONFIG, "outline-detailed.md": OUTLINE, ...extra })
+    await update(dir, "character-state", {
+      updates: [
+        {
+          name: "レン",
+          changes: {
+            mentalState: "不安",
+            attributes: { 現在地: "北の砦" },
+            relationships: { ドルガ: "信頼する" },
+            events: ["一", "二", "三"],
+          },
+        },
+        { name: "ドルガ", changes: { mentalState: "警戒" } },
+        { name: "ミリィ", changes: { mentalState: "祈っている", attributes: { 現在地: "辺境の村" } } },
+      ],
+    }, 1)
+    await update(dir, "character-state", {
+      updates: [
+        { name: "レン", changes: { events: ["四", "五", "六"] } },
+        { name: "ドルガ", changes: { status: "deceased", events: ["しんがりで倒れる"] } },
+      ],
+    }, 2)
+    return dir
+  }
+
+  test("死亡などの status を変わった章とともに示し、関係・項目・出来事を載せる", async () => {
+    const ctx = await contextOf(await project(), 3)
+    assert.match(ctx, /\*\*ドルガ\*\*【死亡（第2章）】/)
+    assert.match(ctx, /  現在地: 北の砦/)
+    assert.match(ctx, /  関係: ドルガ → 信頼する/)
+    // 出来事は章のラベルつきで、直近の5件だけ
+    assert.match(ctx, /これまでの出来事（直近5件）:\n    - \[第1章\] 二\n/)
+    assert.match(ctx, /    - \[第2章\] 六/)
+    assert.doesNotMatch(ctx, /\[第1章\] 一/)
+  })
+
+  test("この章のプロットに名前が無い人物は下に1行で載せる", async () => {
+    const ctx = await contextOf(await project(), 3)
+    const at = ctx.indexOf("### ほかの人物")
+    assert.ok(ctx.indexOf("### この章に関わる人物") < ctx.indexOf("**レン**"))
+    assert.ok(at > ctx.indexOf("**ドルガ**"))
+    assert.match(ctx.slice(at), /- \*\*ミリィ\*\*: 祈っている ／ 辺境の村/)
+  })
+
+  test("枠を超えたら入るところまで載せ、省いた人物を示す", async () => {
+    const config = JSON.stringify({ ...JSON.parse(CONFIG), limits: { characterState: 120 } })
+    const ctx = await contextOf(await project({ "config.json": config }), 3)
+    assert.match(ctx, /\*\*レン\*\*/)
+    assert.match(ctx, /枠が足りず省略: [^\n]*ミリィ[^\n]*limits\.characterState/)
+  })
+
+  test("novel_status: 本文があるのに人物の状態の記録が無い章・節を示す", async () => {
+    const dir = makeProject({
+      "config.json": CONFIG,
+      "chapters/prologue.md": "# プロローグ\n\n　本文。",
+      "chapters/chapter-001.md": "# 第1章\n\n　本文。",
+      "chapters/chapter-002.md": "# 第2章\n\n　本文。",
+    })
+    await update(dir, "character-state", { updates: [] }, 1)
+    const out = await novelStatusExecute({}, { directory: dir } as never)
+    assert.match(out, /人物の状態の記録が無い章・節: 第2章、プロローグ/)
+  })
+})
+
+describe("記録の項目名（attributes / lists）", () => {
+  test("新しい項目名を使うと、すでに使っている項目名を示す", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    const out = await update(dir, "character-state", {
+      updates: [{ name: "レン", changes: { lists: { 持ち物: { added: ["剣"] } }, attributes: { 現在地: "砦" } } }],
+    }, 2)
+    assert.match(out, /^✅/)
+    assert.match(out, /ℹ️ 新しい項目名を使いました: lists\.持ち物。すでに使っている項目名: lists = 所持品/)
+    // すでにある項目名だけなら知らせない
+    const again = await update(dir, "character-state", { updates: [{ name: "レン", changes: { lists: { 所持品: { added: ["盾"] } } } }] }, 3)
+    assert.doesNotMatch(again, /新しい項目名/)
+  })
+
+  test("novel_context と更新用プロンプトに、記録で使っている項目名を載せる", async () => {
+    const dir = makeProject({ "config.json": CONFIG, "characters/state.json": STATE })
+    await update(dir, "character-state", { updates: [{ name: "レン", changes: { attributes: { 現在地: "砦" } } }] }, 2)
+    assert.match(await contextOf(dir, 3), /📌 人物の状態の記録で使っている項目名: attributes = 現在地 ／ lists = 所持品/)
+    const prompt = await novelUpdateExecute({ action: "prompt", content: "character-state-update", chapterNumber: 3 }, { directory: dir } as never)
+    assert.match(prompt, /📌 この作品の記録で使っている項目名: attributes = 現在地 ／ lists = 所持品/)
+  })
+})
+
 describe("壊れた記録ファイルは上書きしない", () => {
   // 構文エラー・形の異常・読み込めない、の3つ。いずれも空の記録として扱うと、
   // 新しい内容だけで上書きしてそれまでの記録が消える
@@ -478,15 +707,17 @@ describe("壊れた記録ファイルは上書きしない", () => {
   })
 
   for (const [name, body] of [
-    ["構文エラー", '{"characters": [{"name": "レン",}]}'],
-    ["characters が無い", '{"people": []}'],
-    ["名前が無い", '{"characters": [{"mentalState": "不安"}]}'],
-    ["所持品が文字列", '{"characters": [{"name": "レン", "items": "水筒"}]}'],
-    ["呼び方が文字列", '{"characters": [{"name": "レン", "addressTerms": "隊長"}]}'],
+    ["構文エラー", '{"sections": {"chapter-001": {"updates": [{"name": "レン",}]}}}'],
+    ["sections が無い", '{"people": []}'],
+    ["以前の形（characters）", '{"characters": [{"name": "レン"}]}'],
+    ["節のキーが読めない", '{"sections": {"chapter-1": {"updates": []}}}'],
+    ["名前が無い", '{"sections": {"chapter-001": {"updates": [{"changes": {"mentalState": "不安"}}]}}}'],
+    ["一覧が文字列", '{"sections": {"chapter-001": {"updates": [{"name": "レン", "changes": {"lists": "水筒"}}]}}}'],
+    ["呼び方が文字列", '{"sections": {"chapter-001": {"updates": [{"name": "レン", "changes": {"speech": {"addressTerms": "隊長"}}}]}}}'],
   ] as const) {
     test(`人物の状態: ${name}なら断り、元のファイルを残す`, async () => {
       const dir = makeProject({ "config.json": CONFIG, "characters/state.json": body })
-      const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "覚悟" } }] })
+      const out = await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "覚悟" } }] }, 2)
       assert.match(out, /^❌ 登場人物の状態は更新していません（元のファイルはそのまま残しています）/)
       assert.equal(read(dir, "characters/state.json"), body)
     })
@@ -503,7 +734,7 @@ describe("壊れた記録ファイルは上書きしない", () => {
   test("ファイルが無いだけなら、新しく作って更新する", async () => {
     const dir = makeProject({ "config.json": CONFIG })
     assert.match(await update(dir, "foreshadow", NEW_ITEM), /^✅/)
-    assert.match(await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "覚悟" } }] }), /^✅/)
+    assert.match(await update(dir, "character-state", { updates: [{ name: "レン", changes: { mentalState: "覚悟" } }] }, 1), /^✅/)
     assert.match(await update(dir, "summary", "第1章の筋。", 1), /^✅/)
   })
 
@@ -511,7 +742,7 @@ describe("壊れた記録ファイルは上書きしない", () => {
     const dir = makeProject({
       "config.json": CONFIG,
       "foreshadow.json": BROKEN_SYNTAX,
-      "characters/state.json": '{"characters": [{"name": "レン", "items": "水筒"}]}',
+      "characters/state.json": '{"sections": {"chapter-001": {"updates": [{"name": "レン", "changes": {"lists": "水筒"}}]}}}',
       "chapters/chapter-001.md": "# 第1章\n\n　本文。",
     })
     mkdirSync(join(dir, ".novel", "summary.md"))

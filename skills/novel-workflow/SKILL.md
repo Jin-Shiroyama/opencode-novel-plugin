@@ -459,7 +459,7 @@ description: "小説の進め方。長編はコンセプトから完成原稿ま
 1. novel_context(chapterNumber) → 執筆用の資料をそろえる
 2. 資料とプロットに沿って本文を書く
 3. novel_save_chapter(chapterNumber, title, content) → 保存する
-4. novel_update(action: "character-state", chapterNumber) → 人物の状態を更新する
+4. novel_update(action: "character-state", chapterNumber) → この章で変わった人物の状態を記録する（誰も変わらなければ {"updates": []}）
 5. novel_update(action: "summary", chapterNumber) → この章のあらすじを足す（前の章の分は残る）
 6. novel_update(action: "foreshadow", chapterNumber) → 伏線を更新する
 7. シーン一覧で、書いたシーンの状態を [x] に直す
@@ -593,7 +593,7 @@ Web 連載（カクヨムなど）では、結末やエピローグを決めな�
 - **章数は目安**。予定の章数に達しても完結にならず、超えて書いても状況表示や記録は崩れません。章数を延ばすなら `config.json` の `chapterCount` を直します
 - **完結はエピローグで決まる**。`/write-chapter epilogue` でエピローグを書くと完結とみなします。エピローグを置かずに閉じるなら、`serial` を外せば予定章数で判定します
 - 目標文字数も目安です。届かなくても分量の不足は知らせません
-- エピローグの記録（伏線の回収章・人物の状態）は、本文のある最後の章として残ります（予定章数の章には置きません。これは連載でない作品でも同じです）
+- エピローグの伏線の回収章は、本文のある最後の章として残ります（予定章数の章には置きません。これは連載でない作品でも同じです）。人物の状態はエピローグそのものの変化として残ります
 
 ### 工程のどこを変えるか
 

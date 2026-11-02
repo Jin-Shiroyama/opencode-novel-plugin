@@ -3,9 +3,11 @@ import {
   safeReadFile, safeReadJson, safeWriteJson, getDocPath, safeWriteFile, getConfigPath, getChaptersDir,
   listMarkdownFiles, chapterNumberFromFileName, chapterTitleFromHeading,
 } from "../utils.js"
-import type { ForeshadowEntry, CharacterState, NovelConfig } from "../utils.js"
+import type { ForeshadowEntry, NovelConfig } from "../utils.js"
 import { DEFAULTS } from "../constants.js"
-import { sectionFromArgs, recordChapterOf, sectionFileName, sectionLabel, listManuscriptFiles, lastChapterForRecords } from "../sections.js"
+import {
+  sectionFromArgs, recordChapterOf, sectionFileName, sectionLabel, sectionKey, compareSections, listManuscriptFiles, lastChapterForRecords,
+} from "../sections.js"
 import type { ManuscriptSection, SectionKind } from "../sections.js"
 import {
   parseCharacterUpdates, parseForeshadowUpdates, parseSummaryInput, upsertSummarySections,
@@ -13,7 +15,12 @@ import {
 } from "../records.js"
 import { readCharacterStateRecord, readForeshadowRecord, readTextRecord, describeBrokenRecord } from "../records.js"
 import { summaryEntryOf } from "../records.js"
-import type { CharacterChanges, SummarySection, RecordFile } from "../records.js"
+import type { SummarySection, RecordFile } from "../records.js"
+import {
+  applySectionUpdates, describeStateChange, emptyCharacterStateFile, recordedNames, recordedSections, statesThrough,
+  stateKeyNames, formatStateKeyNames,
+} from "../character-state.js"
+import type { CharacterStateFile } from "../character-state.js"
 import type { ToolContext } from "../index.js"
 
 interface UpdateArgs {
@@ -37,8 +44,8 @@ export async function novelUpdateExecute(
     return `❌ chapterNumber は1以上の整数で渡してください（受け取ったのは ${args.chapterNumber}）。記録は更新していません。`
   }
 
-  // プロローグ・幕間・エピローグを指されたとき。あらすじはその節に書き、
-  // 伏線と人物の状態には記録用の章番号（プロローグは 0、幕間は直前の章、エピローグは本文のある最後の章）を使う
+  // プロローグ・幕間・エピローグを指されたとき。あらすじと人物の状態はその節に書き、
+  // 伏線には記録用の章番号（プロローグは 0、幕間は直前の章、エピローグは本文のある最後の章）を使う
   let target: ManuscriptSection | undefined
   if (args.section !== undefined || args.interludeIndex !== undefined) {
     const resolved = sectionFromArgs(args)
@@ -56,7 +63,7 @@ export async function novelUpdateExecute(
 
   switch (args.action) {
     case "character-state":
-      return updateCharacterState(dir, args.content, chapterNumber)
+      return updateCharacterState(dir, args.content, target)
     case "summary":
       return updateSummary(dir, args.content, target)
     case "foreshadow":
@@ -81,108 +88,94 @@ function refuseBroken(label: string, file: string, state: Extract<RecordFile<unk
 }
 
 /**
- * 登場人物の状態を更新する。
+ * 登場人物の状態を、章・節ごとの差分として記録する（character-state.ts）。
  *
- * 形が1か所でも違えば何も書かない（一部だけ反映されると、どこまで
- * 入ったのか分からなくなるため）。
+ * どの章・節の変化かを必ず指してもらう（差分を重ねる順番が決まらないため）。
+ * 同じ節への再送はその節の差分に重ね、replace なら置き換える（章を書き直したとき）。
+ * 形が1か所でも違えば何も書かない（一部だけ反映されると、どこまで入ったのか分からなくなるため）。
  *
- * 報告するのは入力の件数ではなく、更新前と比べて**実際に変わった**ものにする。
- * 持っている品をもう一度足す、無い品を外す、同じ値を入れ直す、といった
- * 入力は変化として数えない。誰も変わらなければファイルは書かず、そう返す。
+ * 報告するのは入力の件数ではなく、その節を書き終えた時点の状態が更新前と比べて
+ * **実際に変わった**ものにする。持っている品をもう一度足す、同じ値を入れ直す、といった
+ * 入力は変化として数えない。すでに記録のある節で何も変わらなければファイルは書かず、そう返す。
  */
-async function updateCharacterState(dir: string, content: string, chapterNumber?: number): Promise<string> {
+async function updateCharacterState(dir: string, content: string, target?: ManuscriptSection): Promise<string> {
+  if (!target) {
+    return `❌ 登場人物の状態は更新していません。どの章・節の変化かが分かりません。chapterNumber（プロローグ・幕間・エピローグなら section）を渡してください。`
+  }
   const parsed = parseCharacterUpdates(content)
   if (!parsed.ok) return parsed.message
 
   const filePath = getDocPath(dir, "character-state")
   const current = await readCharacterStateRecord(filePath)
   if (current.kind === "broken") return refuseBroken("登場人物の状態", ".novel/characters/state.json", current)
-  const characters = current.kind === "ok" ? current.value.characters : []
+  const file: CharacterStateFile = current.kind === "ok" ? current.value : emptyCharacterStateFile()
+
+  const key = sectionKey(target)
+  const label = sectionLabel(target)
+  const existed = key in file.sections
+  const next: CharacterStateFile = {
+    ...file,
+    sections: { ...file.sections, [key]: applySectionUpdates(file.sections[key], parsed.value.updates, parsed.value.replace ?? false) },
+  }
+
+  const before = statesThrough(file, target)
+  const after = statesThrough(next, target)
+  const names = [...new Set([...parsed.value.updates.map((u) => u.name), ...before.map((c) => c.name), ...after.map((c) => c.name)])]
   const lines: string[] = []
   let added = 0
   let changed = 0
   let unchanged = 0
-
-  for (const { name, changes } of parsed.value) {
-    const existing = characters.find((c) => c.name === name)
-    if (existing) {
-      const applied = applyCharacterChanges(existing, changes, chapterNumber)
-      if (applied.length > 0) {
-        changed++
-        lines.push(`  - ${name}: ${applied.join(", ")}`)
-      } else {
+  for (const name of names) {
+    const b = before.find((c) => c.name === name)
+    const a = after.find((c) => c.name === name)
+    const applied = describeStateChange(b, a, target)
+    const requested = parsed.value.updates.some((u) => u.name === name)
+    if (applied.length === 0) {
+      if (requested) {
         unchanged++
         lines.push(`  - ${name}: 変更なし（記録と同じ内容でした）`)
       }
-    } else {
+    } else if (!b) {
       added++
-      const fresh: CharacterState = { name, status: "active", role: "supporting" }
-      const applied = applyCharacterChanges(fresh, changes, chapterNumber)
-      characters.push(fresh)
-      lines.push(`  - ${name}（新規）: ${applied.length > 0 ? applied.join(", ") : "名前のみ"}`)
+      lines.push(`  - ${name}（新規）: ${applied.join(", ")}`)
+    } else if (!a) {
+      changed++
+      lines.push(`  - ${name}: ${label}の記録を外しました`)
+    } else {
+      changed++
+      lines.push(`  - ${name}: ${applied.join(", ")}`)
     }
   }
 
-  if (added === 0 && changed === 0) {
-    return `ℹ️ 登場人物の状態は変わりませんでした（渡された内容はすべて記録と同じでした。ファイルは書き換えていません）
-${lines.join("\n")}`
+  if (existed && added === 0 && changed === 0) {
+    return `ℹ️ 登場人物の状態は変わりませんでした（${label}の記録と同じ内容でした。ファイルは書き換えていません）
+${lines.join("\n")}`.trimEnd()
   }
 
-  await safeWriteJson(filePath, { characters })
-  return `✅ 登場人物の状態を更新しました（新規 ${added}人 / 更新 ${changed}人 / 変更なし ${unchanged}人 / 合計 ${characters.length}人）
-${lines.join("\n")}`
-}
-
-/**
- * 変更を当て、実際に変わった項目を返す（何も変わらなければ空配列）。
- *
- * events は同じ文言がすでにあれば足さない（同じ更新の送り直しで重複させないため）。
- * 最終更新の章は、ほかに変化があったときだけ書く。章番号だけが動いて
- * 「更新した」ことにならないようにするため。lastUpdatedChapter を明示して
- * 値が変わる場合は、それ自体を変化として扱う。
- */
-function applyCharacterChanges(target: CharacterState, changes: CharacterChanges, chapterNumber?: number): string[] {
-  const applied: string[] = []
-  for (const key of ["status", "role", "physicalState", "mentalState", "firstPerson"] as const) {
-    const value = changes[key]
-    if (value === undefined || target[key] === value) continue
-    ;(target as unknown as Record<string, unknown>)[key] = value
-    applied.push(key)
+  await safeWriteJson(filePath, next)
+  const total = statesThrough(next, target).length
+  let report = added === 0 && changed === 0
+    ? `✅ ${label}の人物の状態を記録しました（状態の変化はありません。${label}まで登場 ${total}人）`
+    : `✅ ${label}の人物の状態を更新しました（新規 ${added}人 / 更新 ${changed}人 / 変更なし ${unchanged}人 / ${label}まで登場 ${total}人）`
+  if (lines.length > 0) report += `\n${lines.join("\n")}`
+  const later = recordedSections(next).filter((r) => compareSections(r.section, target) > 0)
+  if (later.length > 0) {
+    report += `\n💡 ${sectionLabel(later[0].section)}以降の記録があります。この変化は、それより後の章・節の資料にも反映されます。`
   }
-  for (const key of ["items", "abilities"] as const) {
-    const diff = changes[key]
-    if (!diff) continue
-    const before = target[key] ?? []
-    const toAdd = [...new Set(diff.added ?? [])].filter((x) => !before.includes(x))
-    const toRemove = [...new Set(diff.removed ?? [])].filter((x) => before.includes(x))
-    if (toAdd.length === 0 && toRemove.length === 0) continue
-    target[key] = [...before, ...toAdd].filter((x) => !toRemove.includes(x))
-    applied.push(`${key}(+${toAdd.length}/-${toRemove.length})`)
-  }
-  for (const key of ["relationships", "addressTerms"] as const) {
-    const incoming = changes[key]
-    if (!incoming) continue
-    const before = target[key] ?? {}
-    const keys = Object.keys(incoming).filter((k) => before[k] !== incoming[k])
-    if (keys.length === 0) continue
-    target[key] = { ...before, ...incoming }
-    applied.push(`${key}(${keys.join("・")})`)
-  }
-  if (changes.events) {
-    const before = target.events ?? []
-    const fresh = [...new Set(changes.events)].filter((e) => !before.includes(e))
-    if (fresh.length > 0) {
-      target.events = [...before, ...fresh]
-      applied.push(`events(+${fresh.length})`)
+  // 新しい項目名を使ったときは、すでにある項目名を並べて揺れに気づけるようにする
+  const known = stateKeyNames(file)
+  const fresh: string[] = []
+  for (const field of ["attributes", "lists"] as const) {
+    for (const { changes } of parsed.value.updates) {
+      for (const k of Object.keys(changes[field] ?? {})) {
+        if (known[field].length > 0 && !known[field].includes(k) && !fresh.includes(`${field}.${k}`)) fresh.push(`${field}.${k}`)
+      }
     }
   }
-  if (changes.lastUpdatedChapter !== undefined && target.lastUpdatedChapter !== changes.lastUpdatedChapter) {
-    target.lastUpdatedChapter = changes.lastUpdatedChapter
-    applied.push("lastUpdatedChapter")
-  } else if (applied.length > 0 && chapterNumber !== undefined && changes.lastUpdatedChapter === undefined) {
-    target.lastUpdatedChapter = chapterNumber
+  if (fresh.length > 0) {
+    report += `\nℹ️ 新しい項目名を使いました: ${fresh.join("、")}。すでに使っている項目名: ${formatStateKeyNames(known)}（同じものを指すなら名前をそろえてください）`
   }
-  return applied
+  return report
 }
 
 /**
@@ -336,7 +329,8 @@ async function getUpdatePrompt(dir: string, promptType: string, chapterNumber?: 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
   // 追う人物は、状態の記録にいる人物の名前。記録が無いか読めなければ、この章に出た全員を見てもらう
   const state = await readCharacterStateRecord(getDocPath(dir, "character-state"))
-  const names = state.kind === "ok" ? state.value.characters.map((c) => c.name).filter(Boolean) : []
+  const names = state.kind === "ok" ? recordedNames(state.value) : []
+  const keyNames = state.kind === "ok" ? formatStateKeyNames(stateKeyNames(state.value)) : ""
   const vars = buildPromptVars(config, {
     // プロローグは記録の章番号が 0。真偽で判定すると 0 が埋まらない
     chapterNumber,
@@ -348,9 +342,13 @@ async function getUpdatePrompt(dir: string, promptType: string, chapterNumber?: 
     ? `\n\n📌 資料から埋めて使う差し込み: ${left.map((k) => `{${k}}`).join("、")}`
     : ""
 
+  const keyNote = promptType === "character-state-update" && keyNames
+    ? `\n\n📌 この作品の記録で使っている項目名: ${keyNames}（同じものはこの名前で書く）`
+    : ""
+
   return `📝 プロンプト「${promptType}」:
 
-${filled}${leftNote}
+${filled}${leftNote}${keyNote}
 
 💡 このプロンプトと章の本文を合わせて使い、得られた結果を novel_update で保存してください。`
 }

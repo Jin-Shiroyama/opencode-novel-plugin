@@ -5,7 +5,7 @@ import {
   clipDocParts, selectForeshadowReminders, extractSpeechProfile, isShortForm, isSerial, styleLabel,
 } from "../utils.js"
 import type {
-  NovelConfig, DocPart, ForeshadowReminder, CharacterDoc, CharacterState, SpeechProfile,
+  NovelConfig, DocPart, ForeshadowReminder, CharacterDoc, SpeechProfile,
 } from "../utils.js"
 import { DEFAULTS, CHAPTER_WORD_TOLERANCE } from "../constants.js"
 import {
@@ -22,6 +22,8 @@ import {
   lastChapterForRecords, lastWrittenChapter,
 } from "../sections.js"
 import type { ManuscriptSection, SectionKind } from "../sections.js"
+import { statesBefore, lastRecordedBefore, stateKeyNames, formatStateKeyNames } from "../character-state.js"
+import type { ResolvedCharacter } from "../character-state.js"
 import type { LimitKey } from "../constants.js"
 import type { ToolContext } from "../index.js"
 
@@ -169,6 +171,8 @@ export async function novelContextExecute(
   }
 
   const charState = await readCharacterStateRecord(getDocPath(dir, "character-state"))
+  // 書く章・節より前の記録だけを重ねる（前の章を書き直すときに、先の章の変化を混ぜない）
+  const states = charState.kind === "ok" ? statesBefore(charState.value, section) : []
 
   // --- ことばづかい（P1） ---
   // 人物設定の全文は上の枠で切られることがあるため、一人称・二人称・呼び方だけを
@@ -176,14 +180,14 @@ export async function novelContextExecute(
   const speech = buildSpeechContext(
     allCharacterDocs,
     relevantDocs,
-    charState.kind === "ok" ? charState.value.characters : [],
+    states,
     chapterText,
   )
   if (speech) {
     const limit = resolveLimit(config, "speech")
     const [body, truncated] = truncateChars(speech, limit)
     context += `## 🗣️ ことばづかい (P1 — 重要)\n`
-    context += `台詞と、一人称の語りなら地の文も、このとおりに書きます。変えるときは理由になる出来事を本文に置き、novel_update(character-state) の firstPerson / addressTerms を更新します。\n`
+    context += `台詞と、一人称の語りなら地の文も、このとおりに書きます。変えるときは理由になる出来事を本文に置き、novel_update(character-state) の speech（firstPerson / addressTerms）を更新します。\n`
     context += body
     if (truncated) context += `\n…（以下省略。limits.speech で枠を広げられます）`
     context += "\n\n"
@@ -194,15 +198,16 @@ export async function novelContextExecute(
   if (charState.kind === "broken") {
     context += `## 🔄 登場人物の現在の状態 (P1 — 重要)\n`
     context += `⚠️ ${describeBrokenRecord(".novel/characters/state.json", charState)}。直すまで人物の状態は載せられず、更新もできません\n\n`
-  } else if (charState.kind === "ok" && charState.value.characters.length > 0) {
-    context += `## 🔄 登場人物の現在の状態 (P1 — 重要)\n`
-    for (const c of charState.value.characters) {
-      context += `**${c.name}**（${c.role ?? "役割未設定"}）: ${c.mentalState ?? "平常"}\n`
-      if (c.physicalState) context += `  体調: ${c.physicalState}\n`
-      if (c.items && c.items.length > 0) context += `  所持品: ${c.items.join("、")}\n`
-      if (c.abilities && c.abilities.length > 0) context += `  できること: ${c.abilities.join("、")}\n`
-    }
-    context += "\n"
+  } else if (states.length > 0 && charState.kind === "ok") {
+    const asOf = lastRecordedBefore(charState.value, section)
+    context += `## 🔄 登場人物の現在の状態（${asOf ? `${sectionLabel(asOf)}の終わり時点` : "記録より"}） (P1 — 重要)\n`
+    context += buildCharacterStateContext(states, relevantDocs, chapterText, resolveLimit(config, "characterState"))
+    context += "\n\n"
+  }
+  // 記録の項目名（作品ごとに決めたもの）。書き終えて novel_update するときに同じ名前を使えるように
+  const keyNames = charState.kind === "ok" ? formatStateKeyNames(stateKeyNames(charState.value)) : ""
+  if (keyNames) {
+    context += `📌 人物の状態の記録で使っている項目名: ${keyNames}（novel_update(character-state) では同じものをこの名前で書きます）\n\n`
   }
 
   // あらすじは、読む順番でこの章・節より前のものを載せる（プロローグには載せない）
@@ -328,30 +333,110 @@ export async function novelContextExecute(
   return context
 }
 
+/** 人物設定の文書がその名前の人物のものか（フルネーム・呼称・姓での記録に合わせる） */
+function docMatchesName(doc: CharacterDoc, name: string): boolean {
+  return doc.label === name || doc.aliases.includes(name) || doc.label.startsWith(name)
+}
+
+const STATUS_LABELS: Record<string, string> = { deceased: "死亡", missing: "行方不明", retired: "退場" }
+/** 出来事を載せる件数（この章に関わる人物だけ。直近から） */
+const RECENT_EVENTS = 5
+
+/**
+ * 書く章より前の記録を重ねた人物の状態を、資料の形にする。
+ *
+ * この章のプロットかシーンに出る人物（selectCharacterDocs で選んだ人物設定に当たるか、名前が出るもの）を
+ * 上に詳しく、ほかの人物を下に1行ずつ並べる。群像劇で人数が増えても、この章に要る人物が枠に収まるように。
+ * 死亡・行方不明・退場は名前のすぐ横に、変わった節とともに示す（亡くなった人物を書き戻さないため）。
+ * 枠（limits.characterState）を超えたら、上から順に入るところまでを載せ、省いた人物の名前を示す。
+ */
+function buildCharacterStateContext(
+  states: ResolvedCharacter[],
+  relevantDocs: CharacterDoc[],
+  chapterText: string,
+  limit: number,
+): string {
+  const hasClues = chapterText.trim().length > 0
+  const relevant = (c: ResolvedCharacter) =>
+    !hasClues || relevantDocs.some((d) => docMatchesName(d, c.name)) || chapterText.includes(c.name)
+  const statusMark = (c: ResolvedCharacter) => {
+    if (c.status === "active") return ""
+    const at = c.changedAt.status
+    return `【${STATUS_LABELS[c.status] ?? c.status}${at ? `（${sectionLabel(at)}）` : ""}】`
+  }
+  const pairs = (map: Record<string, string>, sep: string) =>
+    Object.entries(map).map(([k, v]) => `${k}${sep}${v}`).join(" ／ ")
+
+  const main = states.filter(relevant)
+  const others = states.filter((c) => !relevant(c))
+  const blocks: Array<{ name: string; text: string }> = []
+  for (const c of main) {
+    const lines = [`**${c.name}**${statusMark(c)}`]
+    if (c.mentalState) lines.push(`  心: ${c.mentalState}`)
+    if (c.physicalState) lines.push(`  体: ${c.physicalState}`)
+    if (Object.keys(c.attributes).length > 0) lines.push(`  ${pairs(c.attributes, ": ")}`)
+    for (const [name, values] of Object.entries(c.lists)) lines.push(`  ${name}: ${values.join("、")}`)
+    if (Object.keys(c.relationships).length > 0) lines.push(`  関係: ${pairs(c.relationships, " → ")}`)
+    const recent = c.events.slice(-RECENT_EVENTS)
+    if (recent.length > 0) {
+      const omitted = c.events.length - recent.length
+      lines.push(`  これまでの出来事${omitted > 0 ? `（直近${recent.length}件）` : ""}:`)
+      for (const e of recent) lines.push(`    - [${sectionLabel(e.at)}] ${e.text}`)
+    }
+    blocks.push({ name: c.name, text: lines.join("\n") })
+  }
+  if (others.length > 0) {
+    const heading = main.length > 0 ? "\n### ほかの人物（この章のプロット・シーンに名前が無い）" : ""
+    others.forEach((c, i) => {
+      const summary = [c.mentalState, c.attributes["現在地"]].filter(Boolean).join(" ／ ")
+      const line = `- **${c.name}**${statusMark(c)}${summary ? `: ${summary}` : ""}`
+      blocks.push({ name: c.name, text: i === 0 && heading ? `${heading}\n${line}` : line })
+    })
+  }
+
+  let out = main.length > 0 && others.length > 0 ? "### この章に関わる人物\n" : ""
+  const dropped: string[] = []
+  let placed = 0
+  for (const b of blocks) {
+    const next = out.length === 0 || out.endsWith("\n") ? b.text : `\n${b.text}`
+    if (dropped.length === 0 && out.length + next.length <= limit) {
+      out += next
+      placed++
+    } else if (placed === 0) {
+      // 最初の人物だけで枠を超えるときは、その人物を切って載せる（誰も載らないよりよい）
+      out += truncateChars(next, Math.max(0, limit - out.length))[0]
+      placed++
+    } else {
+      dropped.push(b.name)
+    }
+  }
+  if (dropped.length > 0) out += `\n…（枠が足りず省略: ${dropped.join("、")}。limits.characterState で枠を広げられます）`
+  return out
+}
+
 /**
  * ことばづかいの一覧を作る。載せる人物が無ければ空文字。
  *
- * 人物設定（初めの設定）に、state.json の firstPerson / addressTerms（途中で変わったもの）を重ねる。
+ * 人物設定（初めの設定）に、書く章より前の記録で変わった firstPerson / addressTerms を重ねる。
  * 載せるのはこの章に出る人物（selectCharacterDocs で選んだもの）と、人物設定の文書は無いが
  * 記録に値があり、この章のプロットかシーンに名前が出る人物。
  */
 function buildSpeechContext(
   allDocs: CharacterDoc[],
   relevantDocs: CharacterDoc[],
-  states: CharacterState[],
+  states: ResolvedCharacter[],
   chapterText: string,
 ): string {
-  const matches = (doc: CharacterDoc, name: string) =>
-    doc.label === name || doc.aliases.includes(name) || doc.label.startsWith(name)
+  const matches = docMatchesName
 
-  const entries: Array<{ name: string; profile: SpeechProfile; state?: CharacterState }> = []
+  const entries: Array<{ name: string; profile: SpeechProfile; state?: ResolvedCharacter }> = []
   for (const doc of relevantDocs) {
     const state = states.find((s) => matches(doc, s.name))
     const profile = extractSpeechProfile(doc.content) ?? { addressTerms: [] }
     entries.push({ name: doc.label, profile, state })
   }
   for (const state of states) {
-    if (!state.firstPerson && !state.addressTerms) continue
+    if (!state.firstPerson && Object.keys(state.addressTerms).length === 0) continue
     if (allDocs.some((d) => matches(d, state.name))) continue
     if (chapterText.trim().length > 0 && !chapterText.includes(state.name)) continue
     entries.push({ name: state.name, profile: { addressTerms: [] }, state })
@@ -359,12 +444,14 @@ function buildSpeechContext(
 
   const blocks: string[] = []
   for (const { name, profile, state } of entries) {
-    const at = state?.lastUpdatedChapter
-    const changed = at === undefined ? "（記録で変更）" : at === 0 ? "（プロローグで変更）" : `（第${at}章で変更）`
+    const changed = (field: string) => {
+      const at = state?.changedAt[field]
+      return at ? `（${sectionLabel(at)}で変更）` : "（記録で変更）"
+    }
     const fields: string[] = []
     const firstPerson = state?.firstPerson ?? profile.firstPerson
     if (firstPerson) {
-      const mark = state?.firstPerson && state.firstPerson !== profile.firstPerson ? changed : ""
+      const mark = state?.firstPerson && state.firstPerson !== profile.firstPerson ? changed("firstPerson") : ""
       fields.push(`一人称: ${firstPerson}${mark}`)
     }
     if (profile.secondPerson) fields.push(`二人称: ${profile.secondPerson}`)
@@ -373,8 +460,8 @@ function buildSpeechContext(
     const rows = profile.addressTerms.map((r) => ({ ...r, mark: "" }))
     for (const [target, term] of Object.entries(state?.addressTerms ?? {})) {
       const row = rows.find((r) => r.target === target)
-      if (!row) rows.push({ target, term, mark: changed })
-      else if (row.term !== term) Object.assign(row, { term, politeness: undefined, mark: changed })
+      if (!row) rows.push({ target, term, mark: changed(`addressTerms.${target}`) })
+      else if (row.term !== term) Object.assign(row, { term, politeness: undefined, mark: changed(`addressTerms.${target}`) })
     }
 
     if (fields.length === 0 && rows.length === 0) continue

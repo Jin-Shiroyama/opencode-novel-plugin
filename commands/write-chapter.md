@@ -30,7 +30,7 @@ agent: novel-writer
 節を書くときの違い：
 - プロットは章別プロットの「## プロローグ」「## 幕間（第5章のあと）」「## エピローグ」の節（または `outline/prologue.md` など）から読まれます。シーンIDは振りません
 - 分量は章の目安に縛られません。プロットに従います
-- 記録（人物の状態・伏線）は、プロローグは第0章、幕間は直前の章、エピローグは最後の章として残ります（`section` を渡せば自動でそうなります）
+- 伏線の記録は、プロローグは第0章、幕間は直前の章、エピローグは最後の章として残ります（`section` を渡せば自動でそうなります）。人物の状態はその節そのものの変化として残ります
 - シーンの状態を直す手順（六の二）は飛ばします
 
 ## 進めかた
@@ -118,8 +118,10 @@ novel_update(action: "summary", chapterNumber: {N}, content: "この章だけの
 novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id":"F1","status":"resolved"}]}')
 ```
 
-- 人物の `changes` で使えるキーは status / role / physicalState / mentalState / items / abilities / relationships / firstPerson / addressTerms / events / lastUpdatedChapter だけ
-- この章で一人称や呼び方が変わったら（苗字から名前へ、敬語からため口へ）、`firstPerson` や `addressTerms`（`{ "相手": "いまの呼び方" }`）で残す
+- 人物の `changes` で使えるキーは status / physicalState / mentalState / attributes / lists / relationships / speech / events だけ。消す欄には `null` を渡す
+- 人物の状態はこの章の変化として残り、後の章の資料はそれより前の章の変化を重ねて作られる。誰も変わらなかった章も `{"updates":[]}` で記録する
+- 章を書き直したときは `"replace": true` を添えて、この章の変化を渡し直す（後の章の資料にも反映される）
+- この章で一人称や呼び方が変わったら（苗字から名前へ、敬語からため口へ）、`speech` の `firstPerson` や `addressTerms`（`{ "相手": "いまの呼び方" }`）で残す
 - 伏線の status は `pending` / `planted` / `resolved` / `abandoned` だけ。補強しただけなら status は変えず `notes` に書く
 - 新しい伏線は `title` と `content` を付けて渡す（id は省略できる）
 - 節のときは3つとも `section`（と幕間の `chapterNumber`）を渡す。あらすじは「## プロローグ」などの節として残る

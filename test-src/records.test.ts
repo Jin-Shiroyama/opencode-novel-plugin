@@ -53,22 +53,30 @@ describe("parseCharacterUpdates", () => {
   test("正しい形は通す", () => {
     const r = parseCharacterUpdates(
       JSON.stringify({
-        updates: [{ name: "レン", changes: { mentalState: "覚悟", items: { added: ["剣"] }, events: ["出立"] } }],
+        updates: [{ name: "レン", changes: { mentalState: "覚悟", lists: { 所持品: { added: ["剣"] } }, attributes: { 現在地: "砦" }, events: ["出立"] } }],
       }),
     )
     assert.equal(r.ok, true)
   })
 
-  test("ことばづかい（firstPerson / addressTerms）を受け付ける", () => {
+  test("ことばづかい（speech の firstPerson / addressTerms）を受け付ける", () => {
     const r = parseCharacterUpdates(
-      JSON.stringify({ updates: [{ name: "レン", changes: { firstPerson: "俺", addressTerms: { ドルガ: "ドルガ" } } }] }),
+      JSON.stringify({ updates: [{ name: "レン", changes: { speech: { firstPerson: "俺", addressTerms: { ドルガ: "ドルガ" } } } }] }),
+    )
+    assert.equal(r.ok, true)
+  })
+
+  test("変化なしの節（updates が空）と、置き換え（replace）と、null での削除を受け付ける", () => {
+    assert.equal(parseCharacterUpdates(JSON.stringify({ updates: [] })).ok, true)
+    const r = parseCharacterUpdates(
+      JSON.stringify({ replace: true, updates: [{ name: "レン", changes: { physicalState: null, attributes: { 現在地: null } } }] }),
     )
     assert.equal(r.ok, true)
   })
 
   test("addressTerms の値が文字列でなければ断る", () => {
     const r = parseCharacterUpdates(
-      JSON.stringify({ updates: [{ name: "レン", changes: { addressTerms: { ドルガ: ["隊長", "ドルガ"] } } }] }),
+      JSON.stringify({ updates: [{ name: "レン", changes: { speech: { addressTerms: { ドルガ: ["隊長", "ドルガ"] } } } }] }),
     )
     assert.equal(r.ok, false)
     if (!r.ok) assert.match(r.message, /addressTerms/)

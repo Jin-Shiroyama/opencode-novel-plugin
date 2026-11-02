@@ -7,6 +7,7 @@
  */
 
 import { DEFAULTS } from "./constants.js"
+import type { CharacterStateFile } from "./character-state.js"
 
 // ============================================================
 // 作品コンセプト
@@ -176,7 +177,7 @@ export const CHARACTER_PROFILE_TEMPLATE = `# {キャラクター名}
 ## ことばづかい
 
 > 執筆用の資料に、この節だけを抜き出して載せます。物語の途中で変わったら
-> novel_update(character-state) の firstPerson / addressTerms に記録します。
+> novel_update(character-state) の speech（firstPerson / addressTerms）に記録します。
 
 - **一人称**：[俺／僕／私／わたし／あたし／自分 など。一人称の語りなら地の文もこの語になる]
 - **二人称**：[お前／あなた／君／あんた、または名前で呼ぶ]
@@ -198,13 +199,8 @@ export const CHARACTER_PROFILE_TEMPLATE = `# {キャラクター名}
 | 成長 | [新しい見方] | [気づきの瞬間] | [質の変化] |
 | 終点 | [変わったあと] | [最後の選択] | [アークの完成] |
 
-## 章ごとの記録
-
-> 出番があるたびに novel-editor が追記します。
-
-| 章 | 出来事 | 状態の変化 | 関係の変化 |
-|---|---|---|---|
-| 第1章 | [要点] | [状態] | [関係] |
+> 章ごとの状態の変化（体・心・持ち物・関係・出来事）はここに書かず、
+> 章を書き終えたら novel_update(character-state) で .novel/characters/state.json に記録します。
 `
 
 // ============================================================
@@ -494,22 +490,8 @@ export const FORESHADOW_TEMPLATE = {
 // 登場人物の状態（JSON）
 // ============================================================
 
-export const CHARACTER_STATE_TEMPLATE = {
-  characters: [] as Array<{
-    name: string
-    status: string
-    role: string
-    physicalState: string
-    mentalState: string
-    items: string[]
-    abilities: string[]
-    relationships: Record<string, string>
-    firstPerson?: string
-    addressTerms?: Record<string, string>
-    events: string[]
-    lastUpdatedChapter: number | null
-  }>,
-}
+/** 章・節ごとの差分を持つ（character-state.ts）。キーは chapter-001 / prologue / interlude-001-1 / epilogue */
+export const CHARACTER_STATE_TEMPLATE: CharacterStateFile = { sections: {} }
 
 // ============================================================
 // 作品設定（JSON）
@@ -538,6 +520,7 @@ export const CONFIG_TEMPLATE = {
     realitySource: 6000,
     scenes: 4000,
     speech: 1500,
+    characterState: 3000,
     outlineBrief: 4000,
   },
   createdAt: new Date().toISOString(),

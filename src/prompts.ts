@@ -702,7 +702,7 @@ export const CONSISTENCY_CHECK_PROMPT = `<system>
 
 【見るところ】
 - 人物：言動が設定どおりか
-- ことばづかい：一人称・二人称・相手の呼び方・敬語の度合いが、人物設定と記録（firstPerson / addressTerms）どおりか。
+- ことばづかい：一人称・二人称・相手の呼び方・敬語の度合いが、人物設定と記録（speech の firstPerson / addressTerms）どおりか。
   変わっているなら、理由になる出来事が本文にあるか
 - 世界観：約束ごとを破っていないか
 - 時間：出来事の順序、昼夜、季節に矛盾がないか
@@ -755,7 +755,7 @@ export const CHARACTER_STATE_UPDATE_PROMPT = `<system>
 3. **持ち物**：手に入れたもの、失ったもの
 4. **できること**：身につけたこと、失ったこと
 5. **関係**：ほかの人物との関係の変化（改善／悪化／裏切り／信頼）
-6. **所属**：加入／離脱／昇格／降格（events に書く。role は物語上の役割で、所属ではない）
+6. **所属**：加入／離脱／昇格／降格（attributes の所属などの項目か、events に書く）
 7. **出来事**：この章でその人物に起きた重要なこと
 </task>
 
@@ -770,17 +770,19 @@ JSON で返してください。
         "status": "active|deceased|missing|retired",
         "physicalState": "体の状態",
         "mentalState": "心のありよう",
-        "items": { "added": [], "removed": [] },
-        "abilities": { "added": [], "removed": [] },
+        "attributes": { "項目": "値（現在地・服装など。作品ですでに使っている項目名に合わせる）" },
+        "lists": { "所持品": { "added": [], "removed": [] }, "できること": { "added": [], "removed": [] } },
         "relationships": { "相手の名前": "どう変わったか" },
-        "firstPerson": "一人称が変わったときだけ",
-        "addressTerms": { "相手の名前": "呼び方が変わったときだけ、いまの呼び方" },
-        "events": ["出来事1", "出来事2"],
-        "lastUpdatedChapter": {chapterNumber}
+        "speech": { "firstPerson": "一人称が変わったときだけ", "addressTerms": { "相手の名前": "呼び方が変わったときだけ、いまの呼び方" } },
+        "events": ["出来事1", "出来事2"]
       }
     }
   ]
 }
+
+- 渡すのは、この章で変わった人物と、変わった欄だけです。消す欄には null を渡します
+- この章で誰も変わらなければ { "updates": [] } を返します
+- 章を書き直して、この章の記録を丸ごと入れ替えるときは "replace": true を添えます
 </output>`
 
 // ============================================================

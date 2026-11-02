@@ -40,7 +40,7 @@ export function createNovelWriterAgent(): Record<string, unknown> {
 | 取材メモ | .novel/reality-source.md |
 
 JSON で持つファイル（登場人物の状態と伏線は **novel_update で更新し、Edit で直接書き換えない**。形の確認を通らず、後の章の資料が崩れるため。作品設定を Edit で書くときは壊れた JSON にしないこと）:
-| 登場人物の状態 | .novel/characters/state.json |
+| 登場人物の状態（章・節ごとの変化） | .novel/characters/state.json |
 | 伏線 | .novel/foreshadow.json |
 | 作品設定 | .novel/config.json |
 
@@ -176,7 +176,7 @@ JSON で持つファイル（登場人物の状態と伏線は **novel_update �
 ## 会話の書きかた
 
 - 一人ずつに話し方の癖を持たせる（人物の設定から取る）
-- 一人称・二人称・相手の呼び方・敬語は、資料の「ことばづかい」どおりにする。呼び方が変わる・敬語が崩れるのは関係が変わったしるしなので、理由になる出来事を書き、\`novel_update(character-state)\` の \`firstPerson\` / \`addressTerms\` を更新する
+- 一人称・二人称・相手の呼び方・敬語は、資料の「ことばづかい」どおりにする。呼び方が変わる・敬語が崩れるのは関係が変わったしるしなので、理由になる出来事を書き、\`novel_update(character-state)\` の \`speech\`（\`firstPerson\` / \`addressTerms\`）を更新する
 - 言いよどみや言い直しを入れる（「――いや、そうじゃなくて」）
 - 設定を台詞で説明させない。食い違いと行き違いで張りを作る
 - 台詞のあいだに小さな身ぶりを挟む

@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { buildPromptVars, getPromptTemplate, remainingPlaceholders } from "../src/prompts.js"
-import { getTemplate } from "../src/templates.js"
+import { getTemplate, CHARACTER_PROFILE_TEMPLATE } from "../src/templates.js"
 import { novelUpdateExecute } from "../src/tools/track.js"
 import { novelContextExecute } from "../src/tools/context.js"
 
@@ -94,7 +94,12 @@ describe("novel_update(action: prompt)", () => {
   test("追う人物は状態の記録にいる人物の名前を並べる", async () => {
     const dir = makeProject({
       "config.json": CONFIG,
-      "characters/state.json": JSON.stringify({ characters: [{ name: "佐和" }, { name: "森田" }] }),
+      "characters/state.json": JSON.stringify({
+        sections: {
+          "chapter-002": { updates: [{ name: "森田", changes: { mentalState: "眠い" } }] },
+          "prologue": { updates: [{ name: "佐和", changes: { mentalState: "待つ" } }] },
+        },
+      }),
     })
     const out = await prompt(dir, "character-state-update", { chapterNumber: 3 })
     assert.match(out, /佐和、森田（この章に出てこない人物は省く）/)
@@ -144,5 +149,12 @@ describe("執筆用の資料の末尾", () => {
     assert.match(out, /- 分量: 3,000文字 ±10%/)
     const off = await novelContextExecute({ chapterNumber: 1, includePrompts: false } as any, ctx(dir))
     assert.doesNotMatch(off, /書くときの条件/)
+  })
+})
+
+describe("人物設定の雛形", () => {
+  test("章ごとの記録の表は持たず、state.json に記録するよう案内する", () => {
+    assert.doesNotMatch(CHARACTER_PROFILE_TEMPLATE, /## 章ごとの記録/)
+    assert.match(CHARACTER_PROFILE_TEMPLATE, /novel_update\(character-state\)/)
   })
 })

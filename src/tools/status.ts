@@ -17,7 +17,7 @@ import {
   resolveManuscriptFormat, countManuscriptLines, linesToPages, linesToPagesDecimal, formatManuscriptLabel,
 } from "../manuscript.js"
 import {
-  listManuscriptFiles, describeExtraSections, sectionLabel, sameSection, parseParts, partName, partRange,
+  listManuscriptFiles, describeExtraSections, sectionLabel, sectionKey, sameSection, parseParts, partName, partRange,
 } from "../sections.js"
 import type { ManuscriptSection } from "../sections.js"
 import type { ToolContext } from "../index.js"
@@ -321,6 +321,17 @@ export async function novelStatusExecute(
     const missing = extraFiles.filter((f) => !recorded.some((r) => sameSection(r, f.section)))
     if (missing.length > 0) {
       issues.push(`あらすじの記録が無い節: ${missing.map((f) => sectionLabel(f.section)).join("、")}`)
+    }
+  }
+  // 人物の状態は章・節ごとの変化を重ねて資料にするので、本文のある章・節の記録が欠けると
+  // それより後の資料にその章の変化が入らない。変化が無かった章・節も記録済みにできる
+  if (stateRecord.kind !== "broken" && (writtenChapters.length > 0 || extraFiles.length > 0)) {
+    const recorded = new Set(Object.keys(stateRecord.kind === "ok" ? stateRecord.value.sections : {}))
+    const missingChapters = writtenChapters.filter((n) => !recorded.has(sectionKey({ kind: "chapter", chapter: n })))
+    const missingExtras = extraFiles.filter((f) => !recorded.has(sectionKey(f.section))).map((f) => sectionLabel(f.section))
+    const missing = [...(missingChapters.length > 0 ? [formatChapterRanges(missingChapters)] : []), ...missingExtras]
+    if (missing.length > 0) {
+      issues.push(`人物の状態の記録が無い章・節: ${missing.join("、")}（誰も変わらなかったなら novel_update(character-state) に {"updates": []} を渡して記録済みにします）`)
     }
   }
   for (const x of brokenForeshadow) {

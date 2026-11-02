@@ -30,7 +30,7 @@ export function createNovelEditorAgent(): Record<string, unknown> {
 | .novel/world-building.md | 世界観 |
 | .novel/characters/profiles.md | 登場人物の一覧（関係図・対立表） |
 | .novel/characters/{キャラクター名}.md | 一人ずつの設定 |
-| .novel/characters/state.json | 登場人物の現在の状態 |
+| .novel/characters/state.json | 登場人物の状態の章・節ごとの変化（見る章の時点の状態は novel_context で確かめる） |
 | .novel/outline-brief.md | プロット概要 |
 | .novel/outline-detailed.md | 章別プロット（.novel/outline/chapter-*.md に分割されている場合もある） |
 | .novel/scenes.md | シーン一覧（.novel/scenes/chapter-*.md に分割されている場合もある） |
@@ -142,7 +142,7 @@ export function createNovelEditorAgent(): Record<string, unknown> {
 | 突き合わせる先 | 見ること |
 |---|---|
 | characters/profiles.md と characters/{キャラクター名}.md | 外見、性格、話し方、ことばづかいがぶれていないか |
-| characters/state.json | 人物の現在の状態と本文が食い違っていないか。途中で変わった一人称（firstPerson）・呼び方（addressTerms）と合っているか |
+| characters/state.json | その章の時点の人物の状態（novel_context の「登場人物の現在の状態」）と本文が食い違っていないか。書く章より前の記録で変わった一人称・呼び方（speech の firstPerson / addressTerms）と合っているか |
 | world-building.md | この世界の約束ごとを破っていないか |
 | summary.md | 前の章からのつながりが切れていないか |
 | foreshadow.json | 伏線の回収が落ちていないか、状態の記録が合っているか |

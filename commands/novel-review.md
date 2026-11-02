@@ -38,7 +38,7 @@ agent: novel-editor
 次を読みます。
 - `.novel/config.json` — 作品設定
 - `.novel/characters/profiles.md` — 登場人物
-- `.novel/characters/state.json` — 人物の現在の状態
+- `.novel/characters/state.json` — 人物の状態の章ごとの変化（その章の時点の状態は `novel_context` の「登場人物の現在の状態」で見る）
 - `.novel/world-building.md` — 世界の約束ごと
 - `.novel/summary.md` — これまでのあらすじ
 - `.novel/foreshadow.json` — 伏線

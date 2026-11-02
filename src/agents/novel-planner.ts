@@ -41,7 +41,7 @@ export function createNovelPlannerAgent(): Record<string, unknown> {
 | 取材メモ | .novel/reality-source.md（または .novel/reality/events/、.novel/reality/archetypes/ に分割） |
 
 JSON で持つファイル（登場人物の状態と伏線は **novel_update で更新し、Edit で直接書き換えない**。形の確認を通らず、後の章の資料が崩れるため。作品設定を Edit で書くときは壊れた JSON にしないこと）:
-| 登場人物の状態 | .novel/characters/state.json |
+| 登場人物の状態（章・節ごとの変化） | .novel/characters/state.json |
 | 伏線 | .novel/foreshadow.json |
 | 作品設定 | .novel/config.json |
 

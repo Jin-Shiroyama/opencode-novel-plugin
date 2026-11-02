@@ -13,9 +13,10 @@
 import { readFile } from "node:fs/promises"
 import { z } from "zod"
 import { parseChapterNumber } from "./utils.js"
-import { parseSectionLabel, sectionLabel, compareSections } from "./sections.js"
+import { parseSectionLabel, sectionLabel, compareSections, sectionFromKey, sectionKey } from "./sections.js"
 import type { ManuscriptSection } from "./sections.js"
-import type { ForeshadowEntry, CharacterState } from "./utils.js"
+import type { ForeshadowEntry } from "./utils.js"
+import type { CharacterStateFile } from "./character-state.js"
 
 // ============================================================
 // 検証エラーの表示
@@ -53,7 +54,6 @@ function parseJson(content: string): { ok: true; value: unknown } | { ok: false 
 // ============================================================
 
 export const CHARACTER_STATUSES = ["active", "deceased", "missing", "retired"] as const
-export const CHARACTER_ROLES = ["protagonist", "supporting", "antagonist", "minor"] as const
 
 const chapterNo = z.number().int().positive()
 /**
@@ -61,36 +61,56 @@ const chapterNo = z.number().int().positive()
  * 回収の予定（targetChapter）は 0 にしない（プロローグで回収する予定は立てない）
  */
 const eventChapterNo = z.number().int().nonnegative()
+
+/** 人物の状態の欄の値。null はその欄を消す（伏線の章番号と同じ書き方） */
+const stateText = z.string().min(1)
+const stateTextOrNull = stateText.nullable()
 const addRemove = z
-  .object({ added: z.array(z.string()).optional(), removed: z.array(z.string()).optional() })
+  .object({ added: z.array(stateText).optional(), removed: z.array(stateText).optional() })
+  .strict()
+  .superRefine((v, ctx) => {
+    const both = (v.added ?? []).filter((x) => (v.removed ?? []).includes(x))
+    if (both.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `同じものを added と removed の両方に入れています: ${both.join("、")}` })
+    }
+  })
+
+const speechChangesSchema = z
+  .object({
+    firstPerson: stateTextOrNull.optional(),
+    addressTerms: z.record(stateTextOrNull).optional(),
+  })
   .strict()
 
 const characterChangesSchema = z
   .object({
     status: z.enum(CHARACTER_STATUSES).optional(),
-    role: z.enum(CHARACTER_ROLES).optional(),
-    physicalState: z.string().optional(),
-    mentalState: z.string().optional(),
-    items: addRemove.optional(),
-    abilities: addRemove.optional(),
-    relationships: z.record(z.string()).optional(),
-    firstPerson: z.string().min(1).optional(),
-    addressTerms: z.record(z.string().min(1)).optional(),
-    events: z.array(z.string()).optional(),
-    lastUpdatedChapter: eventChapterNo.optional(),
+    physicalState: stateTextOrNull.optional(),
+    mentalState: stateTextOrNull.optional(),
+    attributes: z.record(stateTextOrNull).optional(),
+    lists: z.record(addRemove).optional(),
+    relationships: z.record(stateTextOrNull).optional(),
+    speech: speechChangesSchema.optional(),
+    events: z.array(stateText).optional(),
   })
   .strict()
 
+const characterUpdateEntrySchema = z.object({ name: stateText, changes: characterChangesSchema }).strict()
+
+/**
+ * novel_update(character-state) の content。updates が空なら「この節は変化なし」。
+ * replace を立てると、その節の記録を渡した内容で置き換える（章を書き直したとき）
+ */
 const characterUpdateSchema = z
   .object({
-    updates: z
-      .array(z.object({ name: z.string().min(1), changes: characterChangesSchema }).strict())
-      .min(1),
+    updates: z.array(characterUpdateEntrySchema),
+    replace: z.boolean().optional(),
   })
   .strict()
 
 export type CharacterChanges = z.infer<typeof characterChangesSchema>
-export type CharacterUpdate = z.infer<typeof characterUpdateSchema>["updates"][number]
+export type CharacterUpdate = z.infer<typeof characterUpdateEntrySchema>
+export type CharacterUpdateInput = z.infer<typeof characterUpdateSchema>
 
 /** novel_update(character-state) の正しい形。ツールの説明と誤りの案内で使う */
 export const CHARACTER_STATE_EXAMPLE = `{
@@ -100,9 +120,10 @@ export const CHARACTER_STATE_EXAMPLE = `{
       "changes": {
         "physicalState": "肋を一本折った。熱がある",
         "mentalState": "「自分で選んだから立つ」と初めて口にする",
-        "items": { "added": ["古い剣"], "removed": ["父の剣"] },
+        "attributes": { "現在地": "北の砦" },
+        "lists": { "所持品": { "added": ["古い剣"], "removed": ["父の剣"] } },
         "relationships": { "ドルガ": "撤退を拒んだドルガを信頼する" },
-        "addressTerms": { "ドルガ": "ドルガ（「隊長」と呼ぶのをやめた）" },
+        "speech": { "addressTerms": { "ドルガ": "ドルガ（「隊長」と呼ぶのをやめた）" } },
         "events": ["魔王の波に吹き飛ばされ、剣を失う"]
       }
     }
@@ -110,14 +131,15 @@ export const CHARACTER_STATE_EXAMPLE = `{
 }`
 
 export const CHARACTER_STATE_KEYS =
-  "status（active / deceased / missing / retired）, role（protagonist / supporting / antagonist / minor）, " +
-  "physicalState, mentalState, items（{ added, removed }）, abilities（{ added, removed }）, " +
-  "relationships（{ 相手: 変化 }）, firstPerson（いまの一人称）, addressTerms（{ 相手: いまの呼び方 }）, " +
-  "events（文字列の配列）, lastUpdatedChapter（プロローグは 0）"
+  "status（active / deceased / missing / retired）, physicalState, mentalState, " +
+  "attributes（{ 項目: 値 }。現在地・服装など、作品に合わせて名前を決める）, " +
+  "lists（{ 一覧の名前: { added, removed } }。所持品・できることなど）, relationships（{ 相手: 関係 }）, " +
+  "speech（{ firstPerson, addressTerms: { 相手: いまの呼び方 } }。人物設定から変わったときだけ）, " +
+  "events（この章・節の出来事。文字列の配列）。値に null を渡すとその欄を消す"
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; message: string }
 
-export function parseCharacterUpdates(content: string): ParseResult<CharacterUpdate[]> {
+export function parseCharacterUpdates(content: string): ParseResult<CharacterUpdateInput> {
   const json = parseJson(content)
   if (!json.ok) {
     return { ok: false, message: characterStateError(["content が JSON として読めません"]) }
@@ -129,9 +151,9 @@ export function parseCharacterUpdates(content: string): ParseResult<CharacterUpd
   const empty = result.data.updates.filter((u) => Object.keys(u.changes).length === 0)
   if (empty.length > 0) {
     const names = empty.map((u) => `「${u.name}」`).join("、")
-    return { ok: false, message: characterStateError([`${names}の changes が空です`]) }
+    return { ok: false, message: characterStateError([`${names}の changes が空です（この節で変化が無いなら "updates": [] を渡します）`]) }
   }
-  return { ok: true, value: result.data.updates }
+  return { ok: true, value: result.data }
 }
 
 function characterStateError(problems: string[]): string {
@@ -938,30 +960,36 @@ export function readForeshadowRecord(path: string): Promise<RecordFile<{ items: 
 /**
  * 登場人物の状態（state.json）の形。
  *
- * 更新処理は名前で人物を探し、所持品などの配列に足し引きする。名前が無い、
- * 配列のはずの項目が文字列、といった形のままだと、更新が誤った値を書く
- * （文字列を配列として展開すると一文字ずつに割れる）。そこで項目の型まで
- * 確かめる。status や role の値の誤りは断らない（changes で直せるため）。
+ * 章・節のキー（sectionKey）ごとに、その節で変わったこと（novel_update の updates と同じ形）を持つ。
+ * 状態はここから組み立てる（character-state.ts）。差分の欄の型まで確かめるのは、
+ * 形の崩れた差分を重ねると誤った状態ができる（文字列を一覧として展開すると一文字ずつに割れる）ため。
+ * status の値の誤りは断らない（その節を replace で渡し直して直せるようにするため）。
+ * 節のキーは読み戻せる形に限る（chapter-5 と chapter-005 が同じ節を二重に指さないように）。
  */
-const storedCharacterSchema = z
+const storedSectionSchema = z
   .object({
-    name: z.string().min(1),
-    status: z.string().optional(),
-    role: z.string().optional(),
-    physicalState: z.string().optional(),
-    mentalState: z.string().optional(),
-    items: z.array(z.string()).optional(),
-    abilities: z.array(z.string()).optional(),
-    relationships: z.record(z.string()).optional(),
-    firstPerson: z.string().optional(),
-    addressTerms: z.record(z.string()).optional(),
-    events: z.array(z.string()).optional(),
-    lastUpdatedChapter: z.number().optional(),
+    updates: z.array(
+      z.object({ name: stateText, changes: characterChangesSchema.extend({ status: z.string().optional() }).passthrough() }).passthrough(),
+    ),
   })
   .passthrough()
 
-const characterFileSchema = z.object({ characters: z.array(storedCharacterSchema) }).passthrough()
+const characterFileSchema = z
+  .object({ sections: z.record(storedSectionSchema) })
+  .passthrough()
+  .superRefine((v, ctx) => {
+    for (const key of Object.keys(v.sections)) {
+      const section = sectionFromKey(key)
+      if (!section || sectionKey(section) !== key) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["sections", key],
+          message: "節のキーとして読めません（chapter-001 / prologue / interlude-001-1 / epilogue の形）",
+        })
+      }
+    }
+  })
 
-export function readCharacterStateRecord(path: string): Promise<RecordFile<{ characters: CharacterState[] }>> {
-  return readJsonRecord(path, characterFileSchema) as Promise<RecordFile<{ characters: CharacterState[] }>>
+export function readCharacterStateRecord(path: string): Promise<RecordFile<CharacterStateFile>> {
+  return readJsonRecord(path, characterFileSchema) as Promise<RecordFile<CharacterStateFile>>
 }

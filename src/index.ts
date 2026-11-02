@@ -139,7 +139,10 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
 使う場面: 1章を書き終えたあと、人物の変化・あらすじ・伏線の回収状況を書き残すとき。
 形が違うと何も書き込まずに ❌ と理由を返す。そのときは案内どおりに直して渡し直す。
 
-■ character-state（content は JSON。変わった項目だけを渡す）
+■ character-state（content は JSON。この章・節で変わった人物と欄だけを渡す。chapterNumber か section を必ず渡す）
+章・節ごとの変化として残り、後の章の資料はそれより前の章・節の変化を重ねて作られる。
+同じ章・節に送り直すとその章・節の変化に重なる。章を書き直したときは "replace": true でその章・節の変化を置き換える。
+誰も変わらなかった章・節は {"updates": []} を渡して記録する。
 changes で使えるキー: ${CHARACTER_STATE_KEYS}
 ${CHARACTER_STATE_EXAMPLE}
 
@@ -149,7 +152,7 @@ ${CHARACTER_STATE_EXAMPLE}
 プロローグ・幕間・エピローグのあらすじは section で指す（幕間は chapterNumber に直前の章、2つ目からは interludeIndex も）。
 
 ■ プロローグ・幕間・エピローグの出来事を character-state / foreshadow に記録するときも section を渡す。
-記録の章番号は、プロローグは 0、幕間は直前の章、エピローグは本文のある最後の章（予定章数を超えて書いていればその章）になる。
+人物の状態はその節の変化として残る。伏線の記録の章番号は、プロローグは 0、幕間は直前の章、エピローグは本文のある最後の章（予定章数を超えて書いていればその章）になる。
 
 ■ foreshadow（content は JSON。既存の伏線は id で指し、変える項目だけを渡す）
 使えるキー: ${FORESHADOW_KEYS}

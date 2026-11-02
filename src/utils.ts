@@ -49,12 +49,6 @@ export type SceneStatus = "pending" | "in-progress" | "completed"
 /** 伏線の状態 */
 export type ForeshadowStatus = "pending" | "planted" | "resolved" | "abandoned"
 
-/** キャラクターの生存状態 */
-export type CharacterStatus = "active" | "deceased" | "missing" | "retired"
-
-/** キャラクターの役割 */
-export type CharacterRole = "protagonist" | "supporting" | "antagonist" | "minor"
-
 // ============================================================
 // パス
 // ============================================================
@@ -900,24 +894,6 @@ export function selectForeshadowReminders(
     const tb = b.item.targetChapter ?? Number.MAX_SAFE_INTEGER
     return ta - tb
   })
-}
-
-/** キャラクターの現在状態 */
-export interface CharacterState {
-  name: string
-  status: CharacterStatus
-  role: CharacterRole
-  physicalState?: string
-  mentalState?: string
-  items?: string[]
-  abilities?: string[]
-  relationships?: Record<string, string>
-  /** いまの一人称。人物設定の値から変わったときに記録する */
-  firstPerson?: string
-  /** 相手 → いまの呼び方。人物設定の値から変わったときに記録する */
-  addressTerms?: Record<string, string>
-  events?: string[]
-  lastUpdatedChapter?: number
 }
 
 /**

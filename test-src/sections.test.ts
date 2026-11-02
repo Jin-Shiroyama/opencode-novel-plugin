@@ -308,13 +308,11 @@ describe("novel_context と節", () => {
 })
 
 describe("記録の章番号 0（プロローグ）", () => {
-  test("伏線の張った章・回収した章、人物の最終更新に 0 を書ける", () => {
+  test("伏線の張った章・回収した章に 0 を書ける", () => {
     const f = parseForeshadowUpdates(JSON.stringify({ items: [{ title: "鍵", content: "古い鍵", plantChapter: 0 }] }), new Set())
     assert.ok(f.ok)
     const target = parseForeshadowUpdates(JSON.stringify({ items: [{ title: "鍵", content: "古い鍵", targetChapter: 0 }] }), new Set())
     assert.ok(!target.ok, "回収の予定は 0 にしない")
-    const c = parseCharacterUpdates(JSON.stringify({ updates: [{ name: "佐和", changes: { lastUpdatedChapter: 0 } }] }))
-    assert.ok(c.ok)
   })
 })
 
@@ -394,7 +392,7 @@ describe("あらすじの節", () => {
     assert.match(status, /あらすじの記録が無い節: 幕間（第1章のあと）、幕間（第1章のあと・2）、エピローグ/)
   })
 
-  test("伏線と人物の状態には、節の記録用の章番号を使う", async () => {
+  test("伏線には節の記録用の章番号を使い、人物の状態は節のキーで残す", async () => {
     const dir = sampleProject()
     await novelUpdateExecute(
       { action: "foreshadow", section: "prologue", content: JSON.stringify({ items: [{ title: "鍵", content: "古い鍵", status: "planted" }] }) },
@@ -412,7 +410,8 @@ describe("あらすじの節", () => {
       ctx(dir),
     )
     const state = JSON.parse(readFileSync(join(dir, ".novel", "characters", "state.json"), "utf-8"))
-    assert.equal(state.characters[0].lastUpdatedChapter, 0)
+    assert.deepEqual(Object.keys(state.sections), ["prologue"])
+    assert.equal(state.sections.prologue.updates[0].name, "佐和")
   })
 })
 
