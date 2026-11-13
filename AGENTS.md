@@ -36,7 +36,7 @@ opencode-novel-plugin/
 │   ├── agent-config.ts       # opencode.json の agent 設定とプラグインの既定の重ね方（mergeAgentConfig）
 │   ├── agents/
 │   │   ├── novel-planner.ts  # 企画を手伝うコーチ
-│   │   ├── novel-writer.ts   # 本文を手伝うコーチ
+│   │   ├── novel-writer.ts   # 本文を書く書き手
 │   │   └── novel-editor.ts   # 原稿を見る編集コーチ
 │   └── tools/
 │       ├── init.ts           # novel_init — プロジェクトの作成
@@ -463,8 +463,13 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   1話＝1章で、カクヨムの「章」は `parts`（部）に当たる
 - **工程の番号は0〜5の6工程**（0 コンセプト、1 世界観、2 人物、3 プロット＝段A 概要・段B 章別、4 シーン、5 本文）。
   手引き・プロンプトのコメント・README もこの数え方にそろえる
-- **`/write-chapter` は一括で書く**（候補出し・二通りの書き比べ・技法の注記を挟まず、本文だけを保存して報告する）。
-  候補や注記を挟むコーチの進め方は、コマンドを使わずに `novel-writer` と話すとき（または頼まれたとき）だけ。
+- **`novel-writer` は書き手で、既定は「書き上げる」**（`/write-chapter` でも、会話で章を頼まれたときも、候補出し・二通りの書き比べ・
+  技法の注記を挟まず、1章を通して書いて保存し、記録を更新して報告する）。候補や注記を挟む進め方は、頼まれたときだけ
+  （「相談しながら」「候補を見せて」など）。以前は「教えるコーチ」で、コマンドを使わない会話では候補出しが既定だったが、
+  本文を LLM に書かせる使い方に合わせて逆にした。
+  agent のプロンプトには、どの作品でも要る決まり（進め方・手順・文体の決め方・言い回し・表記）だけを置く。
+  作品の種類ごとの書き方（Web 小説・二次創作・立ち合い・現実の素材）は skill に置き、agent は表で skill を指す
+  （毎回のプロンプトに、使わない種類の長い節と文芸調の例文を載せないため。例文の調子にモデルが引かれる）。
   1章の分量は `novel_context` の「この章の目安」（目標文字数÷章数）に従い、3,000〜6,000文字は設定が無いときの目安
 - **`novel_context` の末尾は「書くときの条件」だけ**（分量・視点・書き出しか続きか）。プロンプトの全文は写し直さない
   （上の資料と二重になり、表記規約と言い回しの一覧も skill と重なるため）。`chapter-write` などは `novel_update(prompt)` で引ける
@@ -503,7 +508,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、648件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、652件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
