@@ -21,6 +21,8 @@ import {
 } from "../sections.js"
 import type { ManuscriptSection } from "../sections.js"
 import { sourceWorkOf, hasCanonOverview } from "../canon.js"
+import { parsePublishInfo, describePublishInfo, publishIssues } from "../publish.js"
+import { getNovelPath } from "../utils.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
@@ -339,6 +341,14 @@ export async function novelStatusExecute(
   }
   for (const x of brokenForeshadow) {
     issues.push(`伏線 ${x.id} の記録の形が崩れています: ${x.problems.join("、")}`)
+  }
+  // 投稿用の情報（/novel-publish で作る）。キャッチコピーの文字数とタグの数は機械で数える
+  const publishFile = await safeReadFile(getNovelPath(dir, "publish.md"))
+  if (publishFile) {
+    const info = parsePublishInfo(publishFile)
+    const line = describePublishInfo(info)
+    if (line) report += `\n📣 投稿用の情報: ${line}\n`
+    issues.push(...publishIssues(info))
   }
   // 二次創作なのに土台（原作と扱い方）が無いと、原作の設定をモデルの記憶で補うことになる
   if (sourceWorkOf(config) && !(await hasCanonOverview(dir))) {

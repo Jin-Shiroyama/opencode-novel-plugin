@@ -35,6 +35,8 @@ describe("コマンドの agent 指定", () => {
     "novel-outline": "novel-planner",
     "novel-scenes": "novel-planner",
     "novel-reality": "novel-planner",
+    "novel-canon": "novel-planner",
+    "novel-publish": "novel-planner",
     "write-chapter": "novel-writer",
     "novel-review": "novel-editor",
   }
@@ -61,8 +63,8 @@ describe("コマンドの agent 指定", () => {
 })
 
 describe("コマンドの登録", () => {
-  test("12 のコマンドが登録される", () => {
-    assert.equal(Object.keys(config.command).length, 12)
+  test("13 のコマンドが登録される", () => {
+    assert.equal(Object.keys(config.command).length, 13)
   })
 
   test("description と template が入っている", () => {

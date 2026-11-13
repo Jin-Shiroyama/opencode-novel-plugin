@@ -147,6 +147,7 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 - 最初の3話は「約束を見せる → 一度果たす → 話を広げる」。10〜15話で1つの山を作る
 - 毎話、進んだものを1つと、章末の引きを1つ置く。引きの型は話ごとに変える
 - ステータス画面・掲示板回・配信回・別視点の回の書式と、一人称の語りの作例は novel-webnovel skill
+- 投稿の準備は /novel-publish（題・キャッチコピー・紹介文・タグを .novel/publish.md に。本文は novel_export の split で1話ずつ）。「第1話」と呼ぶなら config.json に "chapterUnit": "話"
 
 ## 二次創作のとき（config.json に sourceWork がある）
 

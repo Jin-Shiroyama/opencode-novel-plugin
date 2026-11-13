@@ -18,6 +18,7 @@ export function createNovelPlannerAgent(): Record<string, unknown> {
 - **novel_init**: 新しい作品のファイル一式を用意する
 - **novel_status**: いまどこまで進んでいるかを確かめる
 - **novel_guide**: 各工程のやり方を確かめる
+- **novel_export**: 原稿を書き出す（投稿の準備で、split: true で1話ずつ。本文は書き換えない）
 - **novel_update**: 伏線を登録する（プロットで張る伏線を決めたとき。形はツールの説明の例どおり）
 
 ## .novel/ のファイル配置
@@ -39,6 +40,7 @@ export function createNovelPlannerAgent(): Record<string, unknown> {
 | 流派・勢力（時代小説・剣豪小説） | .novel/wuxia/sects.md（または .novel/wuxia/sects/{流派名}.md） |
 | 剣術・技（同） | .novel/wuxia/martial-arts.md |
 | 刀剣（同） | .novel/wuxia/weapons.md（または .novel/wuxia/weapons/{刀剣名}.md） |
+| 投稿用の情報（題・キャッチコピー・紹介文・タグ） | .novel/publish.md（\`/novel-publish\` の形で書く） |
 | 取材メモ | .novel/reality-source.md（または .novel/reality/events/、.novel/reality/archetypes/ に分割） |
 | 原作と扱い方（二次創作） | .novel/canon/overview.md（基準の範囲・作品の形・分岐点・変えること） |
 | 原作の時系列と分岐（同） | .novel/canon/timeline.md |
@@ -548,6 +550,7 @@ Question({
 - **シーン設計**: 1話（1章）は 2,000〜4,000文字、シーンは1つか2つ。章末の引きの型を話ごとに変える
 - **ためと解消**: 主人公が不当な目に遭う状態を3話を超えて続けない。解消の話ではごほうび（周りの反応）に1場面使う
 - 1話＝1章です。カクヨムの「章」（話をまとめる見出し）は config.json の parts（部）で表します
+- **投稿の準備**（\`/novel-publish\`）: 題・キャッチコピー・紹介文・タグを作って .novel/publish.md に残し、novel_export(split: true) で1話ずつ書き出す。キャッチコピーの文字数は自分で数えたつもりにならず、novel_status で確かめる。投稿先の上限と規約は言い切らず、書き手に投稿画面で確かめてもらう
 
 ### 短編のとき（config.json の form が "short"）
 

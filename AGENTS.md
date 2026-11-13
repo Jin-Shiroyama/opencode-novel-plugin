@@ -5,7 +5,7 @@
 OpenCode のサーバープラグインです。日本語の長編小説を書くために、
 8つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update` / `novel_check` / `novel_export`）、
 3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
-16のRTCOプロンプト、21の文書雛形、7つの skill、12のコマンド、
+16のRTCOプロンプト、21の文書雛形、7つの skill、13のコマンド、
 そしてファイルで持つ作品データの管理を提供します。
 
 本リポジトリは [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin) の fork で、
@@ -31,6 +31,7 @@ opencode-novel-plugin/
 │   ├── doc-sections.ts       # 世界観とコンセプトを節に分け、大事な節に先に枠を配る
 │   ├── glossary.ts           # 用語集（表の読み取りと、この章に出る用語の選び出し）
 │   ├── canon.ts              # 原作の資料（二次創作。.novel/canon/ の読み込み）
+│   ├── publish.ts            # 投稿用の情報（publish.md の読み取りと、キャッチコピーの文字数・タグの数の点検）
 │   ├── prompts.ts            # 16のRTCOプロンプト
 │   ├── templates.ts          # 21の文書雛形（Markdown 18 + JSON 3）
 │   ├── agent-config.ts       # opencode.json の agent 設定とプラグインの既定の重ね方（mergeAgentConfig）
@@ -54,7 +55,7 @@ opencode-novel-plugin/
 │   └── prepare-test-out.mjs  # test-out/ に commands/ と skills/ を写す
 ├── scripts/
 │   └── check-japanese.mjs    # 中国語の残存チェック
-├── commands/                 # スラッシュコマンド（12本）
+├── commands/                 # スラッシュコマンド（13本）
 ├── skills/                   # 執筆用の skill（7本）
 │   ├── novel-workflow/       # 6工程の進め方（通し作例つき）
 │   ├── novel-writing/        # 本文の書き方【表記規約と反AI一覧の正本】
@@ -90,6 +91,8 @@ opencode-novel-plugin/
 │   ├── martial-arts.md      # 剣術・技
 │   └── weapons.md           # 刀剣（weapons/{刀剣名}.md に分割も可）
 ├── reality-source.md        # 取材メモ（reality/events/ などに分割も可）
+├── publish.md               # 投稿用の情報（/novel-publish で作る。題・キャッチコピー・紹介文・タグ）
+├── export/                  # 書き出した原稿（episodes/ は1話ずつの書き出し）
 ├── canon/                   # 原作の資料（二次創作。config.json に sourceWork があるとき）
 │   ├── overview.md          # 原作と扱い方（基準の範囲・作品の形・分岐点・変えること）
 │   ├── timeline.md          # 原作の時系列と分岐
@@ -120,7 +123,7 @@ opencode-novel-plugin/
 | `novel_guide` | 進め方の手引き | section |
 | `novel_update` | 記録の更新 | action, content, section, chapterNumber, interludeIndex |
 | `novel_check` | 表記の点検 | section, chapterNumber, interludeIndex, maxIssues |
-| `novel_export` | 原稿の書き出し | format, numerals, fromChapter, toChapter, outputPath |
+| `novel_export` | 原稿の書き出し | format, numerals, ruby, unit, split, fromChapter, toChapter, outputPath |
 
 > コンセプト・世界観・登場人物・プロット・シーンなどの文書は、opencode 内蔵の Edit / Write ツールで編集します。
 > パスの対応は各 agent のプロンプトにあります。
@@ -176,6 +179,7 @@ opencode-novel-plugin/
 | `/novel-scenes` | 各章をシーンに割る | なし |
 | `/novel-reality` | 現実から題材を取る | なし |
 | `/novel-canon` | 二次創作の原作の資料を整える | なし |
+| `/novel-publish` | 投稿の準備をする（題・キャッチコピー・紹介文・タグ、1話ずつの書き出し） | なし |
 | `/write-chapter` | 1章の本文を書く | `<章番号 \| prologue \| interlude <章番号> [何番目] \| epilogue>`（章を分けない短編は省ける） |
 | `/novel-status` | 進行状況を見る | なし |
 | `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|canon\|full` |
@@ -385,6 +389,17 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   漢数字へ直す。書き出し先は作品のディレクトリの中に限り、`.novel/chapters/` には書かない。
   パスの文字列だけで判定せず、書き出し先がリンクなら断り、親ディレクトリは実体（realpath）で判定する
   （リンク経由で章ファイルや作品の外を上書きしないため）
+- **章の単位の呼び名は `config.json` の `chapterUnit`（"章" か "話"。`novel_export` の `unit` が優先）**。変わるのは書き出しの見出しだけ
+  （「第1話　タイトル」。数字の既定も算用数字になる）。保存ファイルの見出し・ツールの引数・進行状況は「章」のまま
+  （機械で章番号を読む箇所と、agent への指示の言葉を二通りにしないため）。読めない値は書き出さずに断る
+- **`novel_export` の `split` は1話ずつ別のファイルに書き出す**（既定 `.novel/export/episodes/`）。各ファイルは本文だけで、
+  題・文字数・部の見出しは `index.txt` に並べる（投稿サイトは題と本文の欄が分かれている）。ファイル名は本文のファイル名と同じ
+  （`chapter-001.txt`。題を名前に入れると、題を変えるたびに古いファイルが残る）。書く前にすべての書き出し先を `checkOutputPath` で確かめ、
+  1つでも断るものがあれば何も書かない
+- **投稿用の情報は `.novel/publish.md`**（`/novel-publish` が `## 投稿先` `## キャッチコピー` `## タグ` などの節で書く。`src/publish.ts`）。
+  モデルは文字数を数えまちがえるので、キャッチコピーの文字数とタグの数だけは `novel_status` が数え、投稿先がカクヨムのときに
+  上限（`KAKUYOMU_LIMITS`。35文字・8個）を超えていれば「記録の点検」で知らせる。ほかの投稿先の上限は持たない。
+  上限や区分は変わるので、コマンドと skill は言い切らず、投稿画面で確かめてもらう。投稿そのものは行わない
 - **`novel_save_chapter` はすでにある章を黙って上書きしない**。内容が変わるときは、前の原稿を
   `.novel/drafts/chapter-NNN-YYYYMMDD-HHMMSS.md` に残してから書く（同じ秒なら `-2` を付ける）。
   旧稿は chapters/ の外に置き、名前も章ファイルの形から外す（章として数えないため）。
@@ -508,7 +523,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、652件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、667件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

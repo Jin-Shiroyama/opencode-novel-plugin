@@ -197,16 +197,20 @@ ${FORESHADOW_EXAMPLE}`,
 format: text（既定。投稿サイトや縦書きエディタに貼る形。見出しは「第一章　タイトル」、Markdown の記号なし）／markdown（作品タイトルを #、章を ## にする）。
 numerals: 章見出しの数字。text は既定で漢数字、markdown は既定で算用数字。
 ruby: ルビ・傍点の書き出し先の記法。kakuyomu（｜親文字《ルビ》・《《傍点》》。text の既定）／narou（傍点は「・」のルビ）／aozora（青空文庫の注記）／pixiv（[[rb:親文字 > ルビ]]）／html（<ruby>。markdown の既定）／paren（親文字（ルビ）。応募原稿向け）／none（ルビを外す）。
-書き出し先は既定で .novel/export/{作品タイトル}.txt（.md）。outputPath で作品のディレクトリ内の別の場所を指定できる。
+unit: 章の単位の呼び名。「話」にすると見出しが「第1話　タイトル」になる（数字の既定も算用数字になる）。省くと config.json の chapterUnit、それも無ければ「章」。
+split: true にすると1話ずつ別のファイルに書き出す（投稿サイトの本文欄に1話ずつ貼る形。ファイルは本文だけで、題と文字数は index.txt に並べる）。
+書き出し先は既定で .novel/export/{作品タイトル}.txt（.md）、split のときは .novel/export/episodes/。outputPath で作品のディレクトリ内の別の場所を指定できる。
 使う場面: 書き上げた原稿をまとめて読みたい、投稿したい、人に渡したいとき。`,
         args: {
           format: z.enum(["text", "markdown"]).optional().describe("書き出す形式。既定 text"),
-          numerals: z.enum(["kanji", "arabic"]).optional().describe("章見出しの数字。既定は text なら kanji、markdown なら arabic"),
+          numerals: z.enum(["kanji", "arabic"]).optional().describe("章見出しの数字。既定は text なら kanji、markdown なら arabic（章の単位が「話」なら、どちらも arabic）"),
           ruby: z.enum(RUBY_NOTATIONS).optional().describe("ルビ・傍点の記法。既定は text なら kakuyomu、markdown なら html"),
           manuscript: z.string().optional().describe("原稿用紙の書式（「20x20」）。指定すると報告に原稿用紙換算の枚数を添える。省くと config.json の manuscript"),
           fromChapter: z.number().int().positive().optional().describe("この章から書き出す。既定 1"),
           toChapter: z.number().int().positive().optional().describe("この章まで書き出す。既定は最後の章"),
-          outputPath: z.string().optional().describe("書き出し先（作品のディレクトリからの相対パス）"),
+          outputPath: z.string().optional().describe("書き出し先（作品のディレクトリからの相対パス）。split のときはディレクトリ"),
+          unit: z.enum(["章", "話"]).optional().describe("章の単位の呼び名。「話」なら見出しが「第1話」になる。省くと config.json の chapterUnit、それも無ければ「章」"),
+          split: z.boolean().optional().describe("true なら1話ずつ別のファイルに書き出す（本文だけ。題は index に並べる）。既定 false"),
         },
         async execute(args, context) {
           return novelExportExecute(args as any, context as ToolContext)

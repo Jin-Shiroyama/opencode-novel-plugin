@@ -10,7 +10,9 @@ import { checkTypography } from "../typography.js"
 import { convertRuby, countRubyMarks } from "../ruby.js"
 import type { RubyNotation } from "../ruby.js"
 import { resolveManuscriptFormat, countManuscriptLines, linesToPages, formatManuscriptLabel } from "../manuscript.js"
-import { listManuscriptFiles, describeExtraSections, sectionLabel, SECTION_NAMES, parseParts, partName } from "../sections.js"
+import {
+  listManuscriptFiles, describeExtraSections, sectionLabel, sectionFileName, SECTION_NAMES, parseParts, partName,
+} from "../sections.js"
 import type { ManuscriptFile } from "../sections.js"
 import type { ToolContext } from "../index.js"
 
@@ -22,6 +24,26 @@ interface ExportArgs {
   fromChapter?: number
   toChapter?: number
   outputPath?: string
+  /** 章の単位の呼び名（「第1章」か「第1話」か）。省くと config.json の chapterUnit、それも無ければ「章」 */
+  unit?: string
+  /** true なら、1話（1章・1節）ずつ別のファイルに書き出す（投稿サイトに1話ずつ貼る形） */
+  split?: boolean
+}
+
+/** 章の単位の呼び名として受け付けるもの */
+const CHAPTER_UNITS = ["章", "話"] as const
+type ChapterUnit = (typeof CHAPTER_UNITS)[number]
+
+/** 書き出す1つの章・節 */
+interface ExportEntry {
+  file: ManuscriptFile
+  /** この章の前に置く部の見出し（「第一部　春」）。部の最初の章だけ */
+  partLine: string | null
+  /** 章の呼び名（「第1話」「プロローグ」）。章見出しを付けない短編の本文では空 */
+  name: string
+  title: string
+  body: string
+  chars: number
 }
 
 /**
@@ -50,13 +72,20 @@ interface ExportArgs {
  * 既定は text ならカクヨム形式（原稿の記法のまま）、markdown なら HTML の <ruby>
  * （Markdown の表示では《》の記法が読まれないため）。
  *
+ * 章の単位の呼び名は unit（省くと config.json の chapterUnit、それも無ければ「章」）。「話」にすると見出しが
+ * 「第1話　タイトル」になる（Web 連載の呼び方）。そのときの数字の既定は、text でも算用数字にする。
+ *
+ * split を true にすると、1話ずつ別のファイルに書き出す（投稿サイトの本文欄に1話ずつ貼る形）。
+ * ファイルは本文だけで、見出しを付けない（題は別の欄に入れるため）。題と文字数は index に並べる。
+ * ファイル名は本文のファイル名と同じ（chapter-001.txt、prologue.txt）にして、書き出し直しても同じ場所に上書きされるようにする
+ * （題を名前に入れると、題を変えるたびに古いファイルが残る）。
+ *
  * 本文は保存されたものをそのまま使い、書き換えない。表記の点検はしないが、
  * 規約から外れた箇所の件数を報告に添える。
  */
 export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Promise<string> {
   const dir = ctx.directory
   const format = args.format ?? "text"
-  const numerals = args.numerals ?? (format === "text" ? "kanji" : "arabic")
   const ruby: RubyNotation = args.ruby ?? (format === "text" ? "kakuyomu" : "html")
   const from = args.fromChapter ?? 1
   const to = args.toChapter ?? Number.MAX_SAFE_INTEGER
@@ -64,6 +93,15 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
 
   const config = await safeReadJson<NovelConfig>(getConfigPath(dir))
   const workTitle = config?.title?.trim() || "原稿"
+  // 章の単位の呼び名。読めない指定は、見出しを勝手に変えずに断る
+  const unitRaw = args.unit ?? (config as { chapterUnit?: unknown } | null)?.chapterUnit ?? "章"
+  if (!CHAPTER_UNITS.includes(unitRaw as ChapterUnit)) {
+    return `❌ 章の単位（${args.unit !== undefined ? "unit" : "config.json の chapterUnit"}）は「章」か「話」にしてください（受け取ったのは ${JSON.stringify(unitRaw)}）。`
+  }
+  const unit = unitRaw as ChapterUnit
+  // 「第1話」は Web 連載の呼び方なので、数字の既定を算用数字にする
+  const numerals = args.numerals ?? (unit === "話" ? "arabic" : format === "text" ? "kanji" : "arabic")
+  const split = args.split === true
   // 原稿用紙の書式は、指定があるときだけ使う。読めない指定なら書き出す前に断る
   const manuscript = resolveManuscriptFormat(args.manuscript, config?.manuscript)
   if (manuscript && "error" in manuscript) return `❌ ${manuscript.error}`
@@ -75,10 +113,14 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
 
   // 書き出し先は作品のディレクトリの中に限る（外へ書かない）
   const ext = format === "text" ? "txt" : "md"
-  const defaultPath = join(getNovelDir(dir), "export", `${safeFileName(workTitle)}.${ext}`)
+  const defaultPath = split
+    ? join(getNovelDir(dir), "export", "episodes")
+    : join(getNovelDir(dir), "export", `${safeFileName(workTitle)}.${ext}`)
   const outPath = args.outputPath ? resolve(dir, args.outputPath) : defaultPath
-  const refused = await checkOutputPath(dir, outPath, args.outputPath ?? outPath)
-  if (refused) return refused
+  if (!split) {
+    const refused = await checkOutputPath(dir, outPath, args.outputPath ?? outPath)
+    if (refused) return refused
+  }
 
   const files = (await listManuscriptFiles(dir)).filter((f) => inRange(f, from, to, args.toChapter === undefined))
   if (files.length === 0) return `❌ 書き出す章がありません（.novel/chapters/chapter-NNN.md）。`
@@ -107,7 +149,7 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
    ファイルの権限や中身（ディレクトリになっていないか）を確かめてください。`
   }
 
-  const parts: string[] = []
+  const entries: ExportEntry[] = []
   let totalChars = 0
   let totalLines = 0
   let typographyErrors = 0
@@ -120,10 +162,11 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
     // 部の最初の章の前に部の見出しを置く（範囲の途中から書き出すときも、範囲に入る最初の章が部の頭なら置く）
     const section = f.section
     const part = section.kind === "chapter" ? bookParts.find((p) => p.fromChapter === section.chapter) : undefined
+    let partLine: string | null = null
     if (part) {
       const name = partName(part, numerals, toKanjiNumber)
       partsShown.push(name)
-      parts.push(format === "text" ? `${name}　${part.title}` : `## ${name} ${part.title}`)
+      partLine = `${name}　${part.title}`
     }
     const rawBody = stripChapterHeading(text).replace(/\s+$/, "")
     totalChars += countWords(rawBody)
@@ -135,24 +178,42 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
     const title = convertRuby(chapterTitleFromHeading(text), ruby)
     const body = convertRuby(rawBody, ruby)
 
+    const chars = countWords(rawBody)
     if (f.section.kind === "chapter" && bareChapter) {
-      parts.push(body)
+      entries.push({ file: f, partLine, name: "", title: "", body, chars })
       continue
     }
     const no = f.section.kind === "chapter" ? (numerals === "kanji" ? toKanjiNumber(f.section.chapter) : String(f.section.chapter)) : ""
     const name =
-      f.section.kind === "chapter" ? (short ? no : `第${no}章`) : SECTION_NAMES[f.section.kind]
-    const heading =
-      format === "text"
-        ? `${name}${title ? `　${title}` : ""}`
-        : `${chapterMark} ${name}${title ? ` ${title}` : ""}`
-    parts.push(`${heading}\n\n${body}`)
+      f.section.kind === "chapter" ? (short ? no : `第${no}${unit}`) : SECTION_NAMES[f.section.kind]
+    entries.push({ file: f, partLine, name, title, body, chars })
   }
 
-  const head = format === "text" ? `${workTitle}\n\n\n` : `# ${workTitle}\n\n`
-  // 章のあいだは text では2行空けて区切りを見やすくする
-  const separator = format === "text" ? "\n\n\n" : "\n\n"
-  await safeWriteFile(outPath, head + parts.join(separator) + "\n")
+  let written: string
+  if (split) {
+    const result = await writeEpisodes(dir, outPath, args.outputPath ?? outPath, ext, workTitle, entries)
+    if ("error" in result) return result.error
+    written = `📁 ディレクトリ: ${outPath}（${entries.length}ファイル＋${result.index}。本文だけで、見出しは付けていません。題は ${result.index} にあります）`
+  } else {
+    const parts: string[] = []
+    for (const e of entries) {
+      if (e.partLine) parts.push(format === "text" ? e.partLine : `## ${e.partLine.replace("　", " ")}`)
+      if (!e.name) {
+        parts.push(e.body)
+        continue
+      }
+      const heading =
+        format === "text"
+          ? `${e.name}${e.title ? `　${e.title}` : ""}`
+          : `${chapterMark} ${e.name}${e.title ? ` ${e.title}` : ""}`
+      parts.push(`${heading}\n\n${e.body}`)
+    }
+    const head = format === "text" ? `${workTitle}\n\n\n` : `# ${workTitle}\n\n`
+    // 章のあいだは text では2行空けて区切りを見やすくする
+    const separator = format === "text" ? "\n\n\n" : "\n\n"
+    await safeWriteFile(outPath, head + parts.join(separator) + "\n")
+    written = `📄 ファイル: ${outPath}`
+  }
 
   // 範囲の中で抜けている章。toChapter を明示されたら、その章までを見る
   // （存在する最後の章で切ると、範囲の末尾の欠けを見落とす）
@@ -168,8 +229,8 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
       : chapters.length > 0 ? [`${formatChapterRanges(chapters)}（${chapters.length}章）`] : []),
     ...(extras ? [extras] : []),
   ].join("＋")
-  let report = `✅ 原稿を書き出しました（${format === "text" ? "テキスト" : "Markdown"}）
-📄 ファイル: ${outPath}
+  let report = `✅ 原稿を書き出しました（${format === "text" ? "テキスト" : "Markdown"}${split ? "・1話ずつ" : ""}）
+${written}
 📚 章: ${range}
 📊 文字数: ${totalChars.toLocaleString("ja-JP")}文字（本文のみ。見出しは含まない）
 `
@@ -187,6 +248,39 @@ export async function novelExportExecute(args: ExportArgs, ctx: ToolContext): Pr
     report += `⚠️ 表記の規約違反が ${typographyErrors}件あります（書き出しでは直していません）。novel_check で確かめられます\n`
   }
   return report
+}
+
+/**
+ * 1話ずつ別のファイルに書き出す。書く前にすべての書き出し先を確かめ、1つでも断るものがあれば何も書かない。
+ *
+ * 各ファイルは本文だけ（投稿サイトでは題と本文の欄が分かれているため）。題・文字数・部の見出しは index に並べる。
+ */
+async function writeEpisodes(
+  dir: string, outDir: string, shown: string, ext: string, workTitle: string, entries: ExportEntry[],
+): Promise<{ index: string } | { error: string }> {
+  const stat = await lstat(outDir).catch(() => null)
+  if (stat && !stat.isDirectory() && !stat.isSymbolicLink()) {
+    return { error: `❌ 1話ずつ書き出すときの書き出し先はディレクトリにしてください（${shown} はファイルです）。` }
+  }
+  const indexName = `index.${ext}`
+  const targets = [
+    ...entries.map((e) => join(outDir, sectionFileName(e.file.section).replace(/\.md$/, `.${ext}`))),
+    join(outDir, indexName),
+  ]
+  for (const target of targets) {
+    const refused = await checkOutputPath(dir, target, relative(dir, target))
+    if (refused) return { error: refused }
+  }
+
+  const lines: string[] = [workTitle, ""]
+  for (const [i, e] of entries.entries()) {
+    await safeWriteFile(targets[i], e.body + "\n")
+    if (e.partLine) lines.push("", `■ ${e.partLine}`)
+    const heading = e.name ? `${e.name}${e.title ? `　${e.title}` : ""}` : "本文"
+    lines.push(`${basename(targets[i])}　${heading}（${e.chars.toLocaleString("ja-JP")}文字）`)
+  }
+  await safeWriteFile(targets[targets.length - 1], lines.join("\n") + "\n")
+  return { index: indexName }
 }
 
 /** 書き出す範囲に入るか（節の扱いは novelExportExecute の説明を参照） */

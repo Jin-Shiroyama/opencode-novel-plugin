@@ -964,6 +964,11 @@ export interface NovelConfig {
    * クロスオーバーは「A × B」のように1つの文字列で書く
    */
   sourceWork?: string
+  /**
+   * 章の単位の呼び名。"話" にすると、書き出しの見出しが「第1話　タイトル」になる（Web 連載の呼び方）。
+   * 未指定は "章"。保存ファイルの見出し（# 第1章 …）とツールの引数・表示は「章」のまま変えない
+   */
+  chapterUnit?: "章" | "話"
   createdAt: string
   updatedAt: string
   currentPhase: Phase

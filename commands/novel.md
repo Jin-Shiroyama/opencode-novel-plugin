@@ -23,6 +23,8 @@ agent: novel-planner
 | writing | 本文を書いている | `/write-chapter {次の章番号}`（章を分けない短編は `/write-chapter`） |
 | completed | 全章そろった | `/novel-review all` |
 
+本文が1話でも書けていて、投稿の準備（題・キャッチコピー・紹介文・タグ、1話ずつの書き出し）がまだなら、`/novel-publish` も添えて案内します。
+
 短編（`config.json` の `form` が `"short"`）では world-building と章別プロットの工程は出てきません。
 コンセプト → 登場人物 → プロット概要（序破急） → シーン → 本文 の順に案内します。
 

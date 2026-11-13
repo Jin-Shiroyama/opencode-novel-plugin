@@ -2,7 +2,7 @@
 
 OpenCode 向けの執筆支援プラグインです。日本語の長編小説を、作品コンセプトから完成原稿まで工程に分けて書き進めるための道具をまとめています。
 
-8つのツール、3つの agent、7つの skill、12のコマンド、16のRTCOプロンプト、21の文書雛形で構成されています。
+8つのツール、3つの agent、7つの skill、13のコマンド、16のRTCOプロンプト、21の文書雛形で構成されています。
 
 > **このリポジトリは fork です。**
 > 原作は [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin)（中国語・中国のWeb小説向け）です。
@@ -207,6 +207,15 @@ Web 連載（カクヨムなど）のように、結末やエピローグを決�
 - 伏線は回収の章を決めずに張れます（`targetChapter` を省くと「回収の章は未定」）
 
 連載でない作品でも、予定章数を超えて書くことはできます。エピローグの伏線の回収章は本文のある最後の章として残り、部の範囲も書いた最後の章まで示します。
+
+### 投稿の準備
+
+`/novel-publish` で、題・キャッチコピー・紹介文・タグを作って `.novel/publish.md` に残し、本文を1話ずつ書き出します（`novel_export` の `split`）。
+
+- 作り方は `novel-webnovel` skill の「投稿の準備」にあります（題の3つの作り方、紹介文の構成、タグの選び方、公開の前の確認）
+- **キャッチコピーの文字数とタグの数は `novel_status` が数えます**（モデルは文字数を数えまちがえるため）。投稿先がカクヨムのとき、35文字・8個を超えていれば「記録の点検」で知らせます
+- 上限や区分の名前は投稿先ごとに違い、変わることもあります。入力の前に投稿画面で確かめてください
+- 投稿そのもの（サイトへの入力や送信）は行いません。ファイルを用意するところまでです
 
 ### 二次創作（原作のある作品）
 
@@ -632,7 +641,9 @@ pending → planted → resolved
 | `manuscript` | string | | 原稿用紙の書式（`20x20`）。指定すると報告に原稿用紙換算の枚数を添える。省くと `config.json` の `manuscript` |
 | `fromChapter` | number | | この章から。既定 1 |
 | `toChapter` | number | | この章まで。既定は最後の章 |
-| `outputPath` | string | | 書き出し先（作品のディレクトリからの相対パス）。既定 `.novel/export/{作品タイトル}.txt`（`.md`） |
+| `outputPath` | string | | 書き出し先（作品のディレクトリからの相対パス）。既定 `.novel/export/{作品タイトル}.txt`（`.md`）。`split` のときはディレクトリで、既定 `.novel/export/episodes/` |
+| `unit` | enum | | 章の単位の呼び名。`章`（既定）／ `話`。`話` にすると見出しが `第1話　タイトル` になり、数字の既定も算用数字になる。省くと `config.json` の `chapterUnit` |
+| `split` | boolean | | `true` なら1話ずつ別のファイルに書き出す（下の「1話ずつ書き出す」） |
 
 書いた章を読む順番に繋ぎます。プロローグ・幕間・エピローグも置かれた位置に繋ぎ、`config.json` に `parts` があれば部の最初の章の前に部の見出し（`第一部　春`）を置きます。本文は書き換えません。
 
@@ -640,6 +651,24 @@ pending → planted → resolved
 
 - **text** — 投稿サイトや縦書きのエディタに貼る形。先頭に作品タイトル、章見出しは `第一章　タイトル`（全角スペース区切り）で、Markdown の記号を使いません
 - **markdown** — 作品タイトルを `#`、章を `## 第1章 タイトル` にして繋ぎます。部があるときは部を `##`、章と節を `###` にします
+
+**1話ずつ書き出す** — `split: true` を渡すと、投稿サイトの本文欄に1話ずつ貼れる形で書き出します。
+
+```
+.novel/export/episodes/
+├── index.txt             # 題と文字数の一覧（部があれば「■ 第1部　…」の見出しも）
+├── prologue.txt          # 本文だけ（見出しなし）
+├── chapter-001.txt
+├── chapter-002.txt
+└── interlude-002-1.txt
+```
+
+各ファイルは本文だけで、見出しを付けません（投稿サイトでは題と本文の欄が分かれているため）。題は `index.txt` に
+`chapter-001.txt　第1話　追放（3,012文字）` の形で並びます。ファイル名は本文のファイル名と同じにしてあるので、書き出し直すと同じ場所に上書きされます。
+書き出し先は1つずつ確かめ、断るものが1つでもあれば何も書きません。
+
+**「第1話」と呼ぶ** — Web 連載の呼び方に合わせるなら、`.novel/config.json` に `"chapterUnit": "話"` を書きます（または `unit: "話"`）。
+変わるのは書き出しの見出しだけです。保存ファイルの見出し（`# 第1章 …`）、ツールの引数、進行状況の表示は「章」のままです。
 
 **ルビと傍点** — 原稿はカクヨムの記法（`｜親文字《ルビ》`・`《《傍点》》`）で書きます。書き出すときに `ruby` で記法を選べます。
 
@@ -747,6 +776,7 @@ skill はリポジトリ直下の `skills/` にあり、`config.skills.paths` �
 | `/novel-scenes` | 各章をシーンに割る | なし |
 | `/novel-reality` | 現実から題材を取る | なし |
 | `/novel-canon` | 二次創作の原作の資料を整える | なし |
+| `/novel-publish` | 投稿の準備をする（題・キャッチコピー・紹介文・タグを作り、1話ずつ書き出す） | なし |
 | `/write-chapter` | 1章の本文を書く | `<章番号 \| prologue \| interlude <章番号> [何番目] \| epilogue>`（章を分けない短編は省ける） |
 | `/novel-status` | 進行状況を見る | なし |
 | `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|canon\|full` |
@@ -951,6 +981,8 @@ skill には次を収めています。
 ├── foreshadow.json          # 伏線
 ├── wuxia/                   # 流派・武芸設定（有効なときだけ）
 ├── reality-source.md        # 取材メモ
+├── publish.md               # 投稿用の情報（/novel-publish で作る。題・キャッチコピー・紹介文・タグ）
+├── export/                  # 書き出した原稿（novel_export。episodes/ は1話ずつ）
 ├── canon/                   # 原作の資料（二次創作のときだけ）
 │   ├── overview.md          # 原作と扱い方（基準の範囲・分岐点・変えること）
 │   ├── timeline.md          # 原作の時系列と分岐
@@ -1128,7 +1160,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（652テスト。test-src/ にまとめてある）
+pnpm test        # node:test で実行（667テスト。test-src/ にまとめてある）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -1165,12 +1197,13 @@ src/
 ├── doc-sections.ts   # 世界観とコンセプトを節に分け、大事な節に先に枠を配る
 ├── glossary.ts       # 用語集（表の読み取りと、この章に出る用語の選び出し）
 ├── canon.ts          # 原作の資料（二次創作。.novel/canon/ の読み込み）
+├── publish.ts        # 投稿用の情報（publish.md の読み取りと、キャッチコピーの文字数・タグの数の点検）
 ├── prompts.ts        # 16のRTCOプロンプト
 ├── templates.ts      # 文書雛形（Markdown 18 + JSON 3）
 ├── agent-config.ts   # opencode.json の agent 設定とプラグインの既定の重ね方
 ├── agents/           # 3つの agent
 └── tools/            # 8つのツールの実装
-commands/             # 12のコマンド
+commands/             # 13のコマンド
 skills/               # 7つの skill
 scripts/
 └── check-japanese.mjs  # 中国語の残存チェック
