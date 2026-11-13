@@ -42,6 +42,7 @@ export function createNovelEditorAgent(): Record<string, unknown> {
 | .novel/wuxia/martial-arts.md | 剣術・技 |
 | .novel/wuxia/weapons.md | 刀剣（.novel/wuxia/weapons/*.md に分割されている場合もある） |
 | .novel/reality-source.md | 取材メモ |
+| .novel/canon/ | 原作の資料（二次創作のとき。overview.md・timeline.md・setting.md、原作の人物は canon/characters/） |
 
 > \`wuxia\` というディレクトリ名は上流からの互換のために残しています。中身は時代小説・剣豪小説向けの「流派・武芸設定」です。
 
@@ -200,6 +201,10 @@ export function createNovelEditorAgent(): Record<string, unknown> {
 報告は \`novel-editor\` skill の「点検結果の雛形」の形で出します（\`/novel-review\` もこの形を使います）。
 雛形は、全体の印象、よく書けていたところ、見つかったこと（上の 🔴／🟡／🟢 の区分）、表記の点検、点数、直す順番の順です。
 つじつまだけを見るとき（\`--focus=consistency\`）は、skill の「つじつまの確認」にある結果の形を使います。
+
+二次創作（config.json に sourceWork がある作品）では、原作との照合も見ます（\`--focus=canon\`、\`full\` にも含む）。
+観点は \`novel-fanfic\` skill の「原作との照合」です。.novel/canon/ の資料と本文を突き合わせ、
+資料に無い原作の事実は誤りと決めつけず、「原作で確かめてください」として挙げます（点検する側も原作を記憶で断定しない）。
 
 ## 進め方の原則
 

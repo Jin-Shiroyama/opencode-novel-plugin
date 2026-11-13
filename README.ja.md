@@ -2,7 +2,7 @@
 
 OpenCode 向けの執筆支援プラグインです。日本語の長編小説を、作品コンセプトから完成原稿まで工程に分けて書き進めるための道具をまとめています。
 
-8つのツール、3つの agent、5つの skill、11のコマンド、16のRTCOプロンプト、17の文書雛形で構成されています。
+8つのツール、3つの agent、6つの skill、12のコマンド、16のRTCOプロンプト、21の文書雛形で構成されています。
 
 > **このリポジトリは fork です。**
 > 原作は [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin)（中国語・中国のWeb小説向け）です。
@@ -208,6 +208,26 @@ Web 連載（カクヨムなど）のように、結末やエピローグを決�
 
 連載でない作品でも、予定章数を超えて書くことはできます。エピローグの伏線の回収章は本文のある最後の章として残り、部の範囲も書いた最後の章まで示します。
 
+### 二次創作（原作のある作品）
+
+原作のある作品を書くなら、`novel_init` に `sourceWork`（原作名）を渡します（`/novel-init` でオリジナルか二次創作かを聞かれます。あとから `config.json` に `"sourceWork": "原作名"` を書き足してもかまいません）。
+
+AI は原作の細部（一人称、呼び方、技の名前、出来事の順番）をもっともらしく誤ります。そこで、**書き手が原作で確かめた資料を `.novel/canon/` に置き、それを正として執筆用の資料に載せます。**
+
+| ファイル | 書くこと | `novel_context` での扱い |
+|---|---|---|
+| `canon/overview.md` | 原作と扱い方（基準にする媒体と範囲、作品の形、分岐点、変えないこと・変えること、読者への前提、投稿先と決まり） | 毎回、先に載る |
+| `canon/timeline.md` | 原作の時系列と分岐（分岐点より前の出来事、分岐点より後の原作の出来事とこの作品での扱い） | 載る |
+| `canon/setting.md`、`canon/setting/{項目}.md` など | 原作の設定（世界の決まり、能力、組織、場所） | 載る。分割ファイルは、名前がその章のプロット・シーンに出ると先に載る |
+| `canon/characters/{名前}.md` | 原作の人物（性格と行動の芯、ことばづかい、分岐点での状況、この作品での違い） | その章に出る人物が、登場人物に「（原作の人物）」として載る。ことばづかいの一覧にも載る |
+
+- **工程の前に `/novel-canon`** で資料を整えます。記憶から出した項目には「（要確認）」が付くので、原作で確かめて外します
+- **原作の事実は `canon/`、この作品だけの設定は元の場所**に書きます（変える世界の決まりは `world-building.md`、オリジナルの人物は `characters/`）。原作の固有名詞は `glossary.md` に入れ、まちがえやすい書き方を「使わない表記」に書くと、保存のたびに機械で拾えます
+- 本文を書くときは、資料に無い原作の事実を記憶で補って断定しません。雛形のままの資料は載らず、土台（`canon/overview.md`）が無いうちは `novel_context` と `novel_status` が ⚠️ で知らせます
+- **原作との照合**は `/novel-review <章番号> --focus=canon`（原作の人物の口調・行動の芯・時系列・能力を資料と突き合わせます）
+- 枠は `limits.canon`（既定 6,000文字）です
+- 作品の形（原作沿い・IF・オリジナル主人公・転生・クロスオーバー）ごとの注意、原作を変えたときの連鎖の追い方、**権利と投稿先の規約の注意**は `novel-fanfic` skill にあります。公開の前に、原作の権利者の二次創作ガイドラインと投稿先の最新の規約を確かめてください
+
 ---
 
 ## ツール
@@ -225,6 +245,7 @@ Web 連載（カクヨムなど）のように、結末やエピローグを決�
 | `form` | enum | | `long`（既定。中編・長編）／ `short`（短編。下の「短編」）。短編の既定は 20,000文字・章なしで、`world-building.md` を作らない |
 | `style` | enum | | 文体の寄せ方。`light`（既定。ライトノベル・Web 小説寄り）／ `literary`（文芸寄り。時代小説・純文学向き）。下の「文体の寄せ方と数字」 |
 | `serial` | boolean | | 連載（結末を決めずに書き進める）なら `true`。章数は目安になり、エピローグを書いたら完結（下の「連載（結末未定）」） |
+| `sourceWork` | string | | 二次創作のときの原作名（クロスオーバーは「A × B」）。渡すと `.novel/canon/` に原作の資料の雛形を作る（上の「二次創作（原作のある作品）」） |
 | `martialArtsSetting` | boolean | | 流派・刀剣・剣術の設定ファイルを作るか。省略時はジャンルから判断 |
 
 作られるもの:
@@ -245,6 +266,7 @@ Web 連載（カクヨムなど）のように、結末やエピローグを決�
 ```
 
 `martialArtsSetting` が有効なときは `wuxia/sects.md` / `wuxia/martial-arts.md` / `wuxia/weapons.md` も作られます。
+`sourceWork` を渡したときは `canon/overview.md` / `canon/timeline.md` / `canon/setting.md` も作られます。
 
 ### `novel_status` — 進行状況
 
@@ -295,7 +317,7 @@ Web 連載（カクヨムなど）のように、結末やエピローグを決�
 | 優先度 | 内容 |
 |---|---|
 | **P0** | この章のプロット、この章のシーンと `_Prompt` |
-| **P1** | 登場人物（一覧＋この章に出る人物の個別設定）、ことばづかいの一覧、その現在の状態、前章の末尾 |
+| **P1** | 登場人物（一覧＋この章に出る人物の個別設定。二次創作では原作の人物も）、ことばづかいの一覧、その現在の状態、前章の末尾、原作の資料（二次創作のとき） |
 | **P2** | これまでのあらすじ、伏線の確認 |
 
 第2章以降は前章の末尾が付きます。分量は `config.json` の `limits.previousChapterTail` で変えられます（既定 1,200文字）。
@@ -702,6 +724,8 @@ pending → planted → resolved
 | `novel-wuxia` | 時代小説・剣豪小説。段位（初伝→皆伝）、藩と道場、立ち合いの緩急、筋立ての型、刀剣、武家と市井の作法 | 時代小説・剣豪小説のとき |
 | `novel-reality` | 社会派／私小説的／寓話・象徴の三手法、異化の技法10、人物の型の取り出し、現実から虚構への移し替え、**日本法にもとづく注意** | 現実から題材を取るとき |
 
+| `novel-fanfic` | 二次創作。原作の資料（`.novel/canon/`）の作り方、作品の形（原作沿い・IF・オリジナル主人公・転生・クロスオーバー）、原作の人物を崩さない書き方、連鎖の追い方、**権利と投稿先の規約の注意**、原作との照合 | 原作のある作品を書くとき |
+
 skill はリポジトリ直下の `skills/` にあり、`config.skills.paths` で登録されます。YAML frontmatter 形式で、`load_skills` 引数で agent の文脈に読み込めます。
 
 表記規約と反AI一覧は `novel-writing` skill が正本です。ほかの skill・プロンプト・agent はここを参照し、食い違いがあれば `novel-writing` を正しいものとします。
@@ -720,9 +744,10 @@ skill はリポジトリ直下の `skills/` にあり、`config.skills.paths` �
 | `/novel-outline` | プロットを作る（概要＋章別） | なし |
 | `/novel-scenes` | 各章をシーンに割る | なし |
 | `/novel-reality` | 現実から題材を取る | なし |
+| `/novel-canon` | 二次創作の原作の資料を整える | なし |
 | `/write-chapter` | 1章の本文を書く | `<章番号 \| prologue \| interlude <章番号> [何番目] \| epilogue>`（章を分けない短編は省ける） |
 | `/novel-status` | 進行状況を見る | なし |
-| `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|full` |
+| `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|canon\|full` |
 
 コマンドはリポジトリ直下の `commands/` にあり、`config.command` で登録されます。
 
@@ -924,6 +949,11 @@ skill には次を収めています。
 ├── foreshadow.json          # 伏線
 ├── wuxia/                   # 流派・武芸設定（有効なときだけ）
 ├── reality-source.md        # 取材メモ
+├── canon/                   # 原作の資料（二次創作のときだけ）
+│   ├── overview.md          # 原作と扱い方（基準の範囲・分岐点・変えること）
+│   ├── timeline.md          # 原作の時系列と分岐
+│   ├── setting.md           # 原作の設定（setting/{項目}.md に分割も可）
+│   └── characters/          # 原作の人物（{キャラクター名}.md）
 ├── chapters/                # 本文
 │   ├── prologue.md          # プロローグ（置くときだけ）
 │   ├── chapter-001.md
@@ -1009,7 +1039,8 @@ skill には次を収めています。
     "outlineBrief": 4000,
     "concept": 3000,
     "worldBuilding": 6000,
-    "glossary": 3000
+    "glossary": 3000,
+    "canon": 6000
   },
   "currentPhase": "writing",
   "createdAt": "2026-10-09T00:00:00.000Z",
@@ -1035,6 +1066,7 @@ skill には次を収めています。
 | `concept` | 3,000 | 作品コンセプト（ログライン・テーマ・文体と手ざわりに先に配る） |
 | `worldBuilding` | 6,000 | 世界観（約束ごとと能力体系に先に配る） |
 | `glossary` | 3,000 | 用語集（この章に出る用語を先に載せる） |
+| `canon` | 6,000 | 原作の資料（二次創作。扱い方と、この章に名前の出る項目に先に配る。原作の人物は `characterProfiles` の枠） |
 
 > 0 以下の値、数値でない値、`NaN`、`Infinity` は無視され、既定値が使われます。
 
@@ -1094,7 +1126,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（629テスト。test-src/ にまとめてある）
+pnpm test        # node:test で実行（640テスト。test-src/ にまとめてある）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -1130,13 +1162,14 @@ src/
 ├── sections.ts       # 本文の節（プロローグ・幕間・エピローグ）と部
 ├── doc-sections.ts   # 世界観とコンセプトを節に分け、大事な節に先に枠を配る
 ├── glossary.ts       # 用語集（表の読み取りと、この章に出る用語の選び出し）
+├── canon.ts          # 原作の資料（二次創作。.novel/canon/ の読み込み）
 ├── prompts.ts        # 16のRTCOプロンプト
-├── templates.ts      # 文書雛形（Markdown 14 + JSON 3）
+├── templates.ts      # 文書雛形（Markdown 18 + JSON 3）
 ├── agent-config.ts   # opencode.json の agent 設定とプラグインの既定の重ね方
 ├── agents/           # 3つの agent
 └── tools/            # 8つのツールの実装
-commands/             # 11のコマンド
-skills/               # 5つの skill
+commands/             # 12のコマンド
+skills/               # 6つの skill
 scripts/
 └── check-japanese.mjs  # 中国語の残存チェック
 test-src/             # テスト（src/ と同じ並び）

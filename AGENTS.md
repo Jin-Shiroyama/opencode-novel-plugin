@@ -5,7 +5,7 @@
 OpenCode のサーバープラグインです。日本語の長編小説を書くために、
 8つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update` / `novel_check` / `novel_export`）、
 3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
-16のRTCOプロンプト、17の文書雛形、5つの skill、11のコマンド、
+16のRTCOプロンプト、21の文書雛形、6つの skill、12のコマンド、
 そしてファイルで持つ作品データの管理を提供します。
 
 本リポジトリは [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin) の fork で、
@@ -30,8 +30,9 @@ opencode-novel-plugin/
 │   ├── sections.ts           # 本文の節（プロローグ・幕間・エピローグ）と部
 │   ├── doc-sections.ts       # 世界観とコンセプトを節に分け、大事な節に先に枠を配る
 │   ├── glossary.ts           # 用語集（表の読み取りと、この章に出る用語の選び出し）
+│   ├── canon.ts              # 原作の資料（二次創作。.novel/canon/ の読み込み）
 │   ├── prompts.ts            # 16のRTCOプロンプト
-│   ├── templates.ts          # 17の文書雛形（Markdown 14 + JSON 3）
+│   ├── templates.ts          # 21の文書雛形（Markdown 18 + JSON 3）
 │   ├── agent-config.ts       # opencode.json の agent 設定とプラグインの既定の重ね方（mergeAgentConfig）
 │   ├── agents/
 │   │   ├── novel-planner.ts  # 企画を手伝うコーチ
@@ -53,13 +54,14 @@ opencode-novel-plugin/
 │   └── prepare-test-out.mjs  # test-out/ に commands/ と skills/ を写す
 ├── scripts/
 │   └── check-japanese.mjs    # 中国語の残存チェック
-├── commands/                 # スラッシュコマンド（11本）
-├── skills/                   # 執筆用の skill（5本）
+├── commands/                 # スラッシュコマンド（12本）
+├── skills/                   # 執筆用の skill（6本）
 │   ├── novel-workflow/       # 6工程の進め方（通し作例つき）
 │   ├── novel-writing/        # 本文の書き方【表記規約と反AI一覧の正本】
 │   ├── novel-editor/         # 原稿の点検
 │   ├── novel-wuxia/          # 時代小説・剣豪小説の設定と書き方
-│   └── novel-reality/        # 現実から題材を取る（日本法の注意つき）
+│   ├── novel-reality/        # 現実から題材を取る（日本法の注意つき）
+│   └── novel-fanfic/         # 二次創作（原作の資料・人物を崩さない書き方・権利と規約の注意）
 ├── package.json
 ├── tsconfig.json             # typecheck / test 用（src と test-src。出力は test-out/）
 └── tsconfig.build.json       # 配布ビルド用（src だけ。出力は dist/）
@@ -87,6 +89,11 @@ opencode-novel-plugin/
 │   ├── martial-arts.md      # 剣術・技
 │   └── weapons.md           # 刀剣（weapons/{刀剣名}.md に分割も可）
 ├── reality-source.md        # 取材メモ（reality/events/ などに分割も可）
+├── canon/                   # 原作の資料（二次創作。config.json に sourceWork があるとき）
+│   ├── overview.md          # 原作と扱い方（基準の範囲・作品の形・分岐点・変えること）
+│   ├── timeline.md          # 原作の時系列と分岐
+│   ├── setting.md           # 原作の設定（canon/ の下に項目ごとの分割も可）
+│   └── characters/          # 原作の人物（{キャラクター名}.md。人物設定と同じ形）
 ├── chapters/                # 本文
 │   ├── prologue.md          # プロローグ（置くときだけ）
 │   ├── chapter-001.md
@@ -105,7 +112,7 @@ opencode-novel-plugin/
 
 | ツール | 用途 | 主な引数 |
 |---|---|---|
-| `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting, form, serial, style |
+| `novel_init` | プロジェクトの作成 | title, genre, targetWords, chapterCount, narrativePerspective, martialArtsSetting, form, serial, style, sourceWork |
 | `novel_status` | 進行状況 | detailed |
 | `novel_save_chapter` | 章の保存 | section, chapterNumber, interludeIndex, title, content |
 | `novel_context` | 執筆用の資料 | section, chapterNumber, interludeIndex, sceneId, includePrompts |
@@ -152,6 +159,7 @@ opencode-novel-plugin/
 | `novel-editor` | つじつま確認、六回に分けて見る手順、点検結果の雛形 | 原稿を見るとき |
 | `novel-wuxia` | 流派・武芸の設定、立ち合いの書き方、筋立ての型、刀剣、作法 | 時代小説・剣豪小説のとき |
 | `novel-reality` | 三つの手法、異化の技法、人物の型、**日本法の注意** | 現実から題材を取るとき |
+| `novel-fanfic` | 原作の資料の作り方、作品の形、原作の人物を崩さない書き方、**権利と投稿先の規約の注意**、原作との照合 | 原作のある作品を書くとき |
 
 ## コマンド
 
@@ -165,9 +173,10 @@ opencode-novel-plugin/
 | `/novel-outline` | プロットを作る | なし |
 | `/novel-scenes` | 各章をシーンに割る | なし |
 | `/novel-reality` | 現実から題材を取る | なし |
+| `/novel-canon` | 二次創作の原作の資料を整える | なし |
 | `/write-chapter` | 1章の本文を書く | `<章番号 \| prologue \| interlude <章番号> [何番目] \| epilogue>`（章を分けない短編は省ける） |
 | `/novel-status` | 進行状況を見る | なし |
-| `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|full` |
+| `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|canon\|full` |
 
 各コマンドは frontmatter の `agent` で動かす agent を指定します。`/novel-status`
 以外はすべて指定があり、実行すると専用のプロンプト・温度・権限に切り替わります。
@@ -217,6 +226,7 @@ concept → characters → outline（`outline-brief.md` があるか）→ scene
 | 剣術・技 | `wuxia/martial-arts.md` | `wuxia/martial-arts/*.md` | 両方を載せる |
 | 刀剣 | `wuxia/weapons.md` | `wuxia/weapons/*.md` | 両方を載せる |
 | 取材メモ | `reality-source.md` | `reality/**/*.md` | 両方を載せる |
+| 原作の資料（二次創作） | `canon/overview.md`・`timeline.md`・`setting.md` | `canon/**/*.md`（`canon/characters/` を除く） | 両方を載せる |
 
 章別プロットとシーン一覧はその章の記述が一箇所に収まるため分割を優先します。
 設定の資料は統合ファイルを概観として残す使い方ができるため両方を載せます。
@@ -455,6 +465,23 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   埋めずに一覧で示す
 - **点検結果の形の正本は `novel-editor` skill の「点検結果の雛形」**。agent とつじつま確認のプロンプトはそれを指し、
   つじつまだけを見るときは skill の「つじつまの確認」の表で返す（JSON は使わない）
+- **二次創作は `config.json` の `sourceWork`（原作名）**。あれば二次創作として扱う（`src/canon.ts` の `sourceWorkOf`）。
+  モデルの記憶で原作を補わせると、口調・呼び方・出来事の順番にもっともらしい誤りが混ざるので、
+  **書き手が確かめた資料を `.novel/canon/` に置き、それを正として `novel_context` に載せる**
+  - `canon/overview.md`（原作と扱い方）・`timeline.md`・`setting.md` は `novel_init` が雛形を作る。`readCanonParts` が `canon/` の下を読み、
+    雛形から書き換えていない統合ファイルは載せない。`overview.md` と、ファイル名がこの章のプロット・シーン（`chapterText`）に出る
+    分割ファイル（名前は2文字以上）に `priority` を立てて先に枠を配る。枠は `limits.canon`
+  - **原作の人物は `canon/characters/{名前}.md`**。人物設定と同じ形（`CANON_CHARACTER_TEMPLATE`。「ことばづかい」の節は同じ）で、
+    `listCharacterDocs` が `characters/` のあとに `canon: true` を立てて返す。人物の選び出し・ことばづかい・状態の照合を共有し、
+    資料では「（原作の人物）」と見出しで区別する。原作の資料の節には重ねて載せない。
+    同じ名前が両方にあれば、ことばづかいは `characters/`（この作品の設定）を使う
+  - **`canon/` は原作の事実だけを持つ**。原作から変える設定は `world-building.md`、オリジナルの人物は `characters/`、
+    固有名詞の表記は `glossary.md`（二か所に書くと食い違うため）
+  - `sourceWork` があるのに `canon/overview.md` が無い・雛形のままなら、`novel_context` と `novel_status`（記録の点検）が ⚠️ で知らせる。
+    工程の判定（`determinePhase`）は変えない
+  - 「書くときの条件」に、資料に無い原作の事実を記憶で補って断定しないこと、原作の文章・台詞・歌詞を写さないことを添える
+  - 権利と投稿先の規約は `novel-fanfic` skill の「権利と、投稿先の決まり」。規約は変わるので、agent とコマンドは言い切らず、
+    書き手に最新の案内を確かめてもらう。原作との照合の観点も同じ skill が正本（`/novel-review --focus=canon`）
 - 既定値は `src/constants.ts` の `DEFAULTS` に一元化する。
   目標文字数 120,000／章数 40／視点「三人称一元視点」
 - 資料読み込みの上限は `src/constants.ts` の `LIMITS` が既定値。
@@ -468,7 +495,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、629件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、640件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

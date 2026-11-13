@@ -20,6 +20,7 @@ import {
   listManuscriptFiles, describeExtraSections, sectionLabel, sectionKey, sameSection, parseParts, partName, partRange,
 } from "../sections.js"
 import type { ManuscriptSection } from "../sections.js"
+import { sourceWorkOf, hasCanonOverview } from "../canon.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
@@ -90,6 +91,8 @@ export async function novelStatusExecute(
     if (usesMartialArtsSetting(config)) {
       report += `🗡️  流派・武芸設定: 使用中\n`
     }
+    const sourceWork = sourceWorkOf(config)
+    if (sourceWork) report += `📚 二次創作: 原作『${sourceWork}』\n`
     report += `📅 開始日: ${new Date(config.createdAt).toLocaleDateString("ja-JP")}\n\n`
   }
 
@@ -336,6 +339,10 @@ export async function novelStatusExecute(
   }
   for (const x of brokenForeshadow) {
     issues.push(`伏線 ${x.id} の記録の形が崩れています: ${x.problems.join("、")}`)
+  }
+  // 二次創作なのに土台（原作と扱い方）が無いと、原作の設定をモデルの記憶で補うことになる
+  if (sourceWorkOf(config) && !(await hasCanonOverview(dir))) {
+    issues.push("原作の資料がまだありません（.novel/canon/overview.md が雛形のまま、または無い）。/novel-canon で基準にする範囲・分岐点・変えることを決めてください")
   }
   if (unreadableChapters.length > 0) {
     issues.push(`読み込めない章があります: ${formatChapterRanges(unreadableChapters)}（累計と平均には含めていません。章ファイルとしては数えるので、段階の判定には入ります）`)

@@ -27,6 +27,7 @@ import { worldBuildingParts, conceptParts } from "../doc-sections.js"
 import { parseGlossary, buildGlossaryContext } from "../glossary.js"
 import { statesBefore, lastRecordedBefore, stateKeyNames, formatStateKeyNames } from "../character-state.js"
 import type { ResolvedCharacter } from "../character-state.js"
+import { sourceWorkOf, readCanonParts } from "../canon.js"
 import type { LimitKey } from "../constants.js"
 import type { ToolContext } from "../index.js"
 
@@ -163,7 +164,11 @@ export async function novelContextExecute(
   }))
   const allCharacterDocs = await listCharacterDocs(dir)
   const relevantDocs = selectCharacterDocs(allCharacterDocs, chapterText)
-  const characterParts = [...profileParts, ...relevantDocs]
+  // 原作の人物（二次創作。canon/characters/）は、見出しで区別する
+  const characterParts = [
+    ...profileParts,
+    ...relevantDocs.map((d) => (d.canon ? { ...d, label: `${d.label}（原作の人物）` } : d)),
+  ]
   if (characterParts.length > 0) {
     context += `## 👤 登場人物 (P1 — 重要)\n`
     if (allCharacterDocs.length > 0 && relevantDocs.length < allCharacterDocs.length) {
@@ -275,6 +280,19 @@ export async function novelContextExecute(
     context += clipParts(withHeading(concept), "concept") + "\n\n"
   }
 
+  // --- 原作の資料（二次創作。canon/ 配下。人物は上の登場人物に載せてある） ---
+  // モデルの記憶で原作を補わせないために、書き手が確かめた資料を正として渡す
+  const sourceWork = sourceWorkOf(config)
+  const canonParts = await readCanonParts(dir, chapterText)
+  if (canonParts.length > 0) {
+    context += `## 📚 原作の資料${sourceWork ? ` —『${sourceWork}』` : ""} (P1 — 原作と食い違わせない)\n`
+    context += `原作の事実はこの資料と、登場人物の「（原作の人物）」の設定を正とします。「変えること」に書かれた点のほかは原作どおりに書きます。\n`
+    context += clipParts(withHeading(canonParts), "canon") + "\n\n"
+  } else if (sourceWork) {
+    context += `## 📚 原作の資料 —『${sourceWork}』 (P1 — 原作と食い違わせない)\n`
+    context += `⚠️ 原作の資料がまだありません（.novel/canon/overview.md が雛形のまま、または無い）。/novel-canon で、基準にする範囲・分岐点・変えることを先に決めてください。資料の無いまま書くと、原作の設定を記憶で補うことになります。\n\n`
+  }
+
   // --- 世界観（world/ 配下の分割保存に対応） ---
   // world-building.md は節ごとに分け、約束ごとと能力体系に先に枠を配る。雛形のままの節は載せない
   const worldFile = await safeReadFile(getDocPath(dir, "world-building"))
@@ -368,6 +386,9 @@ export async function novelContextExecute(
     context += `- 視点: ${config.narrativePerspective ?? DEFAULTS.narrativePerspective}（同じ場面の中で視点人物を入れ替えない。替えるなら区切りを置いて場面を分ける）\n`
     context += `- 文体: ${styleLabel(config)}（novel-writing skill の表記規約のうち、${styleLabel(config)}の項に従う）\n`
     context += `- 上のプロット（P0）から外れず、人物の設定と「ことばづかい」を保つ\n`
+    if (sourceWork) {
+      context += `- 二次創作（原作『${sourceWork}』）: 原作の人物の口調・呼び方・能力・出来事は「原作の資料」と人物設定どおりにする。資料に無い原作の事実を記憶で補って断定しない（要るなら書かずに済ませるか、報告で書き手に確かめる）。原作の文章・台詞・歌詞を写さない（novel-fanfic skill）\n`
+    }
     context += `- 表記と言い回しは novel-writing skill に従う（表記規約と、AI くさい言い回しの一覧）\n`
     context += `- 本文だけを書き、章見出しの行を付けずに novel_save_chapter に渡す\n`
   }
@@ -511,6 +532,8 @@ function buildSpeechContext(
 
   const entries: Array<{ name: string; profile: SpeechProfile; state?: ResolvedCharacter }> = []
   for (const doc of relevantDocs) {
+    // 同じ名前の文書がこの作品の人物設定（characters/）と原作の人物（canon/characters/）の両方にあれば、この作品の設定を使う
+    if (doc.canon && relevantDocs.some((d) => !d.canon && d.label === doc.label)) continue
     const state = states.find((s) => matches(doc, s.name))
     const profile = extractSpeechProfile(doc.content) ?? { addressTerms: [] }
     entries.push({ name: doc.label, profile, state })

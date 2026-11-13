@@ -70,6 +70,7 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
           form: z.enum(["long", "short"]).optional().describe("作品の形。short（短編）は世界観と章別プロットの工程を省き、プロット概要を序破急で組む。既定は 2万文字・章なし。省くと long（中編・長編）"),
           style: z.enum(["light", "literary"]).optional().describe("文体の寄せ方。light（既定。ライトノベル・Web 小説寄り：単位付きの数やステータスは算用数字でよい、間の1行あけ可）／literary（文芸寄り：地の文の数は漢数字、空行は場面転換だけ。時代小説・純文学向き）"),
           serial: z.boolean().optional().describe("連載（結末を決めずに書き進める）なら true。chapterCount は目安になり、章数がそろっても完結にしない（エピローグを書いたら完結）。省くと予定章数で完結とみなす"),
+          sourceWork: z.string().optional().describe("二次創作のときの原作名（クロスオーバーは「A × B」）。渡すと .novel/canon/ に原作の資料（扱い方・時系列・設定）の雛形を作り、執筆用の資料に載せる。オリジナル作品では省く"),
           martialArtsSetting: z.boolean().optional().describe("流派・刀剣・剣術の設定ファイルを作るかどうか。省略時はジャンルから判断する（剣豪・剣客・武侠・チャンバラ・時代活劇・剣戟を含む場合のみ有効）"),
         },
         async execute(args, context) {
@@ -108,6 +109,7 @@ const NovelPlugin: Plugin = async (ctx: PluginInput): Promise<Hooks> => {
 
       "novel_context": tool({
         description: `指定した章を書くための資料を一式そろえる。この章のプロットとシーン、登場人物とその現在の状態、これまでのあらすじ、前章の末尾、伏線の確認、書くときの条件（分量・視点）を返す。章ごとに分割保存された資料（outline/chapter-002.md など）も読む。
+二次創作（config.json の sourceWork）では、.novel/canon/ の原作の資料と原作の人物（canon/characters/）も載せる。
 プロローグ・幕間・エピローグは section で指定する（プロットは outline-detailed.md の「## プロローグ」「## 幕間（第5章のあと）」などの節か、outline/prologue.md から読む）。
 使う場面: ある章の執筆にとりかかる直前。優先度は P0(プロット) > P1(人物・前章とのつなぎ) > P2(伏線・あらすじ) の順。`,
         args: {

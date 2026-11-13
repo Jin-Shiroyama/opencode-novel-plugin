@@ -1,6 +1,6 @@
 ---
 description: 原稿を点検して手直しする（つじつま・文章・緩急・表記）
-argument-hint: "[章番号 | all | prologue | interlude <章番号> [何番目] | epilogue] [--focus=consistency|style|pace|typography|full]"
+argument-hint: "[章番号 | all | prologue | interlude <章番号> [何番目] | epilogue] [--focus=consistency|style|pace|typography|canon|full]"
 agent: novel-editor
 ---
 
@@ -21,6 +21,7 @@ agent: novel-editor
 | `--focus=style` | 文章だけを見る |
 | `--focus=pace` | 緩急だけを見る |
 | `--focus=typography` | 表記だけを見る |
+| `--focus=canon` | 原作との照合だけを見る（二次創作のとき） |
 | `--focus=full` | すべて見る（既定） |
 
 ## 進めかた
@@ -43,6 +44,7 @@ agent: novel-editor
 - `.novel/glossary.md` — 用語集（造語・固有名詞の表記と意味）
 - `.novel/summary.md` — これまでのあらすじ
 - `.novel/foreshadow.json` — 伏線
+- `.novel/canon/` — 原作の資料（二次創作のとき。`overview.md`・`timeline.md`・`setting.md`・`characters/*.md`）
 - 対象の本文 — `.novel/chapters/chapter-NNN.md`（節は `prologue.md`／`interlude-NNN-M.md`／`epilogue.md`）
 
 ### 三、点検する
@@ -74,8 +76,19 @@ agent: novel-editor
 2つ目からは `interludeIndex` も）を渡し、`all` なら省きます。
 規則は `novel-writing` skill の表記規約が正本です。機械で拾えないもの（文体に合った数字の使い分けなど。`config.json` の `style`）は、規約を見ながら目で確かめます。
 
+#### canon（原作との照合。二次創作のとき）
+`novel-fanfic` skill を読み込み、「原作との照合」の表で見ます。
+- 原作の人物の一人称・二人称・呼び方・敬語が、資料（`canon/characters/`）どおりか
+- 「譲らないこと」に反する行動をしていないか（しているなら、理由になる出来事が本文にあるか）
+- その時点でまだ知らないこと、まだ起きていない原作の出来事を踏まえていないか（`canon/timeline.md`）
+- 原作でできないことをしていないか。「変えること」（`canon/overview.md`）に無い設定を変えていないか
+- 原作の文章・台詞・歌詞をそのまま使っていないか
+- 本文が、資料に無い原作の事実を断定していないか。これは誤りと決めつけず、「原作で確かめてください」として挙げる
+
+`config.json` に `sourceWork` が無い作品では、この観点は飛ばします。
+
 #### full
-上のすべて。
+上のすべて（`canon` は二次創作のときだけ）。
 
 ### 四、結果を出す
 

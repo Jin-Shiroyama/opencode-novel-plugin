@@ -61,8 +61,8 @@ describe("コマンドの agent 指定", () => {
 })
 
 describe("コマンドの登録", () => {
-  test("11 のコマンドが登録される", () => {
-    assert.equal(Object.keys(config.command).length, 11)
+  test("12 のコマンドが登録される", () => {
+    assert.equal(Object.keys(config.command).length, 12)
   })
 
   test("description と template が入っている", () => {

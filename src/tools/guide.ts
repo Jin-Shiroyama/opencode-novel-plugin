@@ -140,6 +140,14 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 - 章別プロットは最初の山までで書きはじめ、続きは outline/chapter-NNN.md に1章ずつ足す
 - 伏線は回収の章を決めずに張ってよい（targetChapter を省く）
 - エピローグの伏線の記録は、本文のある最後の章として残る（連載でなくても同じ）
+
+## 二次創作のとき（config.json に sourceWork がある）
+
+- 工程の前に /novel-canon で原作の資料を整える（.novel/canon/ の overview.md・timeline.md・setting.md、原作の人物は canon/characters/{名前}.md）
+- 原作の事実は canon/ に、この作品だけの設定は元の場所に書く（変える世界の決まりは world-building.md、オリジナルの人物は characters/、固有名詞の表記は glossary.md）
+- 原作の事実を記憶で埋めない。確かめていない項目には「（要確認）」を付け、本文でも資料に無い原作の事実を断定しない
+- 原作の文章・台詞・歌詞を写さない。公開の前に、権利者の二次創作ガイドラインと投稿先の規約を確かめる
+- 点検は /novel-review <章番号> --focus=canon。詳しくは novel-fanfic skill
 `
 
 const PROMPTS_GUIDE = `# 📝 プロンプトの使い方

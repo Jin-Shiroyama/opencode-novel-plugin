@@ -60,6 +60,8 @@ export const LIMITS = {
   worldBuilding: 6000,
   /** 用語集（この章のプロット・シーンに出る用語を先に載せる） */
   glossary: 3000,
+  /** 原作の資料（二次創作。canon/ の扱い方・時系列・設定。扱い方と、この章のプロットに名前の出る項目に先に枠を配る） */
+  canon: 6000,
 } as const
 
 export type LimitKey = keyof typeof LIMITS

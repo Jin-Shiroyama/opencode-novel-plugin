@@ -408,15 +408,25 @@ export function hasSceneList(projectDir: string): boolean {
 
 /**
  * 一人ずつの人物設定ファイルを列挙する。
- * profiles.md（一覧）と state.json は除く。
+ * profiles.md（一覧）と state.json は除く。二次創作では canon/characters/ の原作の人物も含める（canon を立てる）。
  */
 export interface CharacterDoc extends DocPart {
   /** 文書中に書かれた呼称・別名 */
   aliases: string[]
+  /** 原作の人物（二次創作。canon/characters/ に置いたもの） */
+  canon?: boolean
 }
 
 export async function listCharacterDocs(projectDir: string): Promise<CharacterDoc[]> {
-  const dir = getNovelPath(projectDir, "characters")
+  // この作品の人物（characters/）を先に、原作の人物（canon/characters/。二次創作）をあとに並べる。
+  // 形は同じなので、人物の選び出し・ことばづかい・状態の照合をそのまま共有する
+  return [
+    ...(await readCharacterDir(getNovelPath(projectDir, "characters"), false)),
+    ...(await readCharacterDir(getNovelPath(projectDir, "canon", "characters"), true)),
+  ]
+}
+
+async function readCharacterDir(dir: string, canon: boolean): Promise<CharacterDoc[]> {
   if (!existsSync(dir)) return []
   let names: string[]
   try {
@@ -432,6 +442,7 @@ export async function listCharacterDocs(projectDir: string): Promise<CharacterDo
         label: name.replace(/\.md$/, ""),
         content,
         aliases: extractNameAliases(content),
+        ...(canon ? { canon: true } : {}),
       })
     }
   }
@@ -948,6 +959,11 @@ export interface NovelConfig {
    * 違いは novel-writing skill の表記規約に書いてある。機械の点検では地の文の算用数字の扱いだけが変わる
    */
   style?: "light" | "literary"
+  /**
+   * 二次創作の原作名。書いてあれば二次創作として扱い、.novel/canon/ の原作の資料を執筆用の資料に載せる（canon.ts）。
+   * クロスオーバーは「A × B」のように1つの文字列で書く
+   */
+  sourceWork?: string
   createdAt: string
   updatedAt: string
   currentPhase: Phase

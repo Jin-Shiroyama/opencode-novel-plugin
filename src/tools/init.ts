@@ -21,7 +21,11 @@ import {
   WUXIA_MARTIAL_ARTS_TEMPLATE,
   WUXIA_WEAPONS_TEMPLATE,
   REALITY_SOURCE_TEMPLATE,
+  CANON_OVERVIEW_TEMPLATE,
+  CANON_TIMELINE_TEMPLATE,
+  CANON_SETTING_TEMPLATE,
 } from "../templates.js"
+import { getNovelPath } from "../utils.js"
 import { DEFAULTS, SHORT_DEFAULTS } from "../constants.js"
 import type { ToolContext } from "../index.js"
 
@@ -39,6 +43,8 @@ interface InitArgs {
   serial?: boolean
   /** 文体。省くとライトノベル寄り。文芸寄りは "literary" */
   style?: "light" | "literary"
+  /** 二次創作の原作名。渡すと .novel/canon/ に原作の資料の雛形を作る */
+  sourceWork?: string
 }
 
 export async function novelInitExecute(
@@ -66,6 +72,7 @@ export async function novelInitExecute(
   // 「武士」「武装」などに誤爆しないよう isMartialArtsGenre を使う。
   const useMartialArts = args.martialArtsSetting ?? isMartialArtsGenre(genre)
 
+  const sourceWork = args.sourceWork?.trim() ?? ""
   const vars = { title, genre, targetWords, chapterCount, theme, narrativePerspective: perspective }
 
   const config = {
@@ -75,6 +82,7 @@ export async function novelInitExecute(
     ...(short ? { form: "short" } : {}),
     ...(args.serial ? { serial: true } : {}),
     ...(args.style === "literary" ? { style: "literary" } : {}),
+    ...(sourceWork ? { sourceWork } : {}),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     currentPhase: "concept",
@@ -102,6 +110,23 @@ export async function novelInitExecute(
     await safeWriteFile(getDocPath(dir, "martial-art"), fillTemplateVars(WUXIA_MARTIAL_ARTS_TEMPLATE, vars))
     await safeWriteFile(getDocPath(dir, "weapon"), fillTemplateVars(WUXIA_WEAPONS_TEMPLATE, vars))
   }
+
+  // 原作の資料（二次創作）。人物は canon/characters/{名前}.md に一人ずつ足していく
+  if (sourceWork) {
+    const canonVars = { ...vars, sourceWork }
+    await safeWriteFile(getNovelPath(dir, "canon", "overview.md"), fillTemplateVars(CANON_OVERVIEW_TEMPLATE, canonVars))
+    await safeWriteFile(getNovelPath(dir, "canon", "timeline.md"), fillTemplateVars(CANON_TIMELINE_TEMPLATE, canonVars))
+    await safeWriteFile(getNovelPath(dir, "canon", "setting.md"), fillTemplateVars(CANON_SETTING_TEMPLATE, canonVars))
+  }
+  const canonNote = sourceWork
+    ? `
+  📚 原作の資料（二次創作）:
+  canon/
+  ├── overview.md       (原作と扱い方 ← まずここから)
+  ├── timeline.md       (原作の時系列と分岐)
+  ├── setting.md        (原作の設定)
+  └── characters/       (原作の人物。一人ずつ {名前}.md を足します)`
+    : ""
 
   const martialNote = useMartialArts
     ? `
@@ -135,16 +160,16 @@ ${short ? "" : "  ├── world-building.md    (世界観)\n"}  ├── glos
   ├── summary.md           (これまでのあらすじ)
   ├── foreshadow.json      (伏線の管理)
   ├── reality-source.md    (取材メモ)
-  └── chapters/            (本文。執筆時に自動で作られます)${martialNote}
+  └── chapters/            (本文。執筆時に自動で作られます)${martialNote}${canonNote}
 
 📋 作品の基本情報:
-  ジャンル: ${genre}
+  ジャンル: ${genre}${sourceWork ? `\n  二次創作: 原作『${sourceWork}』` : ""}
   文体: ${args.style === "literary" ? "文芸寄り（地の文の数は漢数字、空行は場面転換だけ）" : "ライトノベル寄り（単位付きの数は算用数字でよい、間の1行あけも可）"}
   目標文字数: ${targetWords.toLocaleString("ja-JP")}文字
   ${chaptersLine}
   視点: ${perspective}
 
-📝 次にやること:
+📝 次にやること:${sourceWork ? "\n  0. /novel-canon で原作の資料（基準にする範囲・分岐点・変えること・原作の人物）を先に整えます" : ""}
   1. 書きたい話の種を聞かせてください（あらすじ、主人公、中心にある対立）
   2. concept プロンプトを使ってコンセプトを固めます
   3. .novel/concept.md に書き込みます
