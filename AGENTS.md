@@ -355,7 +355,10 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   形の崩れた伏線、分量の不足を「記録の点検」として示す
 - **表記の点検（`src/typography.ts`）は `novel-writing` skill の表記規約を写したもの**。規約を変えたら両方を直す。
   感嘆符・疑問符の重ねや組み合わせ（`！！` `！？` `？！`）は許し、続けたものを1つの約物として扱う。
-  会話行（「『で始まる行）は字下げしない。`novel_save_chapter` は保存したファイルをそのまま点検して
+  会話行（「『で始まる行）は字下げしない。ほかの開き括弧（【（＜ など）で始まる行は字下げしてもしなくてもよく、
+  字下げの無い行のうち行頭の記号（・■※◆ など）で始まる行と「項目：値」の行（`LABEL_LINE`。項目は12文字まで）は拾わない
+  （ステータス画面・心の声・掲示板回を地の文の字下げ忘れとして ❌ にすると、モデルが直して画面の体裁を崩すため）。
+  `novel_save_chapter` は保存したファイルをそのまま点検して
   件数を報告に添える（行番号が保存ファイルと一致するように）
 - **原稿用紙換算は、書式を指定したときだけ出す**（`config.json` の `manuscript: "20x20"`、または
   `novel_status` / `novel_export` の引数 `manuscript`。引数が優先）。指定が無ければどの出力も変えない。
@@ -465,7 +468,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、627件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、629件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

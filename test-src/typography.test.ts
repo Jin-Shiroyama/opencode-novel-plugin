@@ -89,6 +89,37 @@ describe("規約から外れた文を拾う", () => {
     )
   })
 
+  test("ステータス画面・心の声・掲示板回の行は、字下げが無くても拾わない", () => {
+    const text = [
+      "　ステータスを開く。",
+      "【ステータス】",
+      "名前：ユウト",
+      "HP：1200／1200",
+      "Lv: 5",
+      "・剣術Lv3",
+      "■スキル",
+      "※経験値は次の章で入る",
+      "（まずいな、これは）",
+      "＜スキル《鑑定》を取得しました＞",
+      "［システム］ログインしました",
+      "12：名無しの冒険者",
+      "◆ユウト視点",
+    ].join("\n")
+    assert.deepEqual(checkTypography(text), [])
+    // 開き括弧で始まる行は、字下げしてあってもよい
+    assert.deepEqual(checkTypography("　（まずいな、これは）\n　【鑑定】が反応した。"), [])
+  })
+
+  test("字下げの無い地の文は、コロンや記号を含んでいても拾う", () => {
+    // 項目にならない長さ・句読点を挟むもの
+    assert.ok(rules("彼は言った、つまりこうだ：逃げろ。").includes("indent"))
+    assert.ok(rules("これまでの経緯をまとめておくと次のとおり：逃げた。").includes("indent"))
+    // 会話行の字下げは、これまでどおり誤り
+    assert.ok(rules("　「行こう」").includes("indent"))
+    // 開き括弧で始まる行でも、2字以上の字下げは確認
+    assert.deepEqual(checkTypography("　　（まずいな）").map((i) => [i.rule, i.severity]), [["indent", "warning"]])
+  })
+
   test("ライトノベル寄り（既定）では、地の文の算用数字を拾わない", () => {
     const text = "　HP 1200のスライムが、3メートル先にいた。10分後、レベル5になった。"
     assert.ok(!checkTypography(text).some((i) => i.rule === "arabic-digit"))
