@@ -5,7 +5,7 @@
 OpenCode のサーバープラグインです。日本語の長編小説を書くために、
 8つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update` / `novel_check` / `novel_export`）、
 3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
-16のRTCOプロンプト、21の文書雛形、6つの skill、12のコマンド、
+16のRTCOプロンプト、21の文書雛形、7つの skill、12のコマンド、
 そしてファイルで持つ作品データの管理を提供します。
 
 本リポジトリは [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin) の fork で、
@@ -55,12 +55,13 @@ opencode-novel-plugin/
 ├── scripts/
 │   └── check-japanese.mjs    # 中国語の残存チェック
 ├── commands/                 # スラッシュコマンド（12本）
-├── skills/                   # 執筆用の skill（6本）
+├── skills/                   # 執筆用の skill（7本）
 │   ├── novel-workflow/       # 6工程の進め方（通し作例つき）
 │   ├── novel-writing/        # 本文の書き方【表記規約と反AI一覧の正本】
 │   ├── novel-editor/         # 原稿の点検
 │   ├── novel-wuxia/          # 時代小説・剣豪小説の設定と書き方
 │   ├── novel-reality/        # 現実から題材を取る（日本法の注意つき）
+│   ├── novel-webnovel/       # Web 小説・ライトノベル（序盤・お約束の型・引き・画面や掲示板回の書式）
 │   └── novel-fanfic/         # 二次創作（原作の資料・人物を崩さない書き方・権利と規約の注意）
 ├── package.json
 ├── tsconfig.json             # typecheck / test 用（src と test-src。出力は test-out/）
@@ -159,6 +160,7 @@ opencode-novel-plugin/
 | `novel-editor` | つじつま確認、六回に分けて見る手順、点検結果の雛形 | 原稿を見るとき |
 | `novel-wuxia` | 流派・武芸の設定、立ち合いの書き方、筋立ての型、刀剣、作法 | 時代小説・剣豪小説のとき |
 | `novel-reality` | 三つの手法、異化の技法、人物の型、**日本法の注意** | 現実から題材を取るとき |
+| `novel-webnovel` | 序盤3話の設計、お約束の型、連載の波、1話の組み立てと引き、一人称の語りの作例、ステータス画面・掲示板回・配信回の書式 | ライトノベル寄りの作品（`style` なし）のとき |
 | `novel-fanfic` | 原作の資料の作り方、作品の形、原作の人物を崩さない書き方、**権利と投稿先の規約の注意**、原作との照合 | 原作のある作品を書くとき |
 
 ## コマンド
@@ -453,6 +455,12 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   「文体の寄せ方」の表。ライトノベル寄りでは、単位付きの数やステータスは算用数字でよく、間の1行あけも可、語り手の軽口の比喩も可。
   機械の点検で変わるのは地の文の算用数字だけ（`checkTypography` の `style`。文芸寄りでだけ ⚠️）。
   比喩の回数の上限は置かない（型の直喩の連発を避ける）。視点は「同じ場面の中で入れ替えない。替えるなら区切りで場面を分ける」
+- **Web 小説・ライトノベルの作法は `novel-webnovel` skill**（文体がライトノベル寄り＝`style` が無い作品で読み込む。
+  `/write-chapter`・企画のコマンド・`novel_context` の「文体」の行が案内する）。表記規約と反AI一覧の正本は `novel-writing` のままで、
+  ライトノベル寄りで扱いの変わるもの（語りの文末「〜なのだ」、擬音）は正本の「文体の寄せ方」の表に書く。
+  **skill の ` ```text ` の作例は表記の点検を通ること**（`test-src/webnovel-skill.test.ts`。作例が規約から外れると、
+  モデルは作例どおりに書いて ❌ を受ける）。スキル名の括弧は〈〉か【】を案内する（《》は漢字の直後でルビになる）。
+  1話＝1章で、カクヨムの「章」は `parts`（部）に当たる
 - **工程の番号は0〜5の6工程**（0 コンセプト、1 世界観、2 人物、3 プロット＝段A 概要・段B 章別、4 シーン、5 本文）。
   手引き・プロンプトのコメント・README もこの数え方にそろえる
 - **`/write-chapter` は一括で書く**（候補出し・二通りの書き比べ・技法の注記を挟まず、本文だけを保存して報告する）。
@@ -495,7 +503,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、640件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、648件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

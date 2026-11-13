@@ -21,6 +21,8 @@ agent: novel-planner
 ### 一、skill を読み込む
 
 `novel-workflow` skill を読み込み、シーン設計の手順を確かめます。
+Web 小説・ライトノベル（`config.json` に `style` が無い作品）では `novel-webnovel` skill の「1話の組み立て」も読みます。
+1話のシーンは1つか2つにし、3つ以上になる話は2話に分けることを書き手に提案します。
 
 ### 二、前提を読む
 

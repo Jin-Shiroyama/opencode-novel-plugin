@@ -141,6 +141,13 @@ const WORKFLOW_GUIDE = `# 📖 小説の進め方
 - 伏線は回収の章を決めずに張ってよい（targetChapter を省く）
 - エピローグの伏線の記録は、本文のある最後の章として残る（連載でなくても同じ）
 
+## Web 小説・ライトノベルのとき（config.json に style が無い）
+
+- 1話＝1章。1話 2,000〜4,000文字、シーンは1つか2つ。カクヨムの「章」は config.json の parts（部）で表す
+- 最初の3話は「約束を見せる → 一度果たす → 話を広げる」。10〜15話で1つの山を作る
+- 毎話、進んだものを1つと、章末の引きを1つ置く。引きの型は話ごとに変える
+- ステータス画面・掲示板回・配信回・別視点の回の書式と、一人称の語りの作例は novel-webnovel skill
+
 ## 二次創作のとき（config.json に sourceWork がある）
 
 - 工程の前に /novel-canon で原作の資料を整える（.novel/canon/ の overview.md・timeline.md・setting.md、原作の人物は canon/characters/{名前}.md）

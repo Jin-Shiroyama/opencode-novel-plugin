@@ -384,7 +384,9 @@ export async function novelContextExecute(
       ? `- 分量: ${perChapter}文字 ±${tolerance}%\n`
       : `- 分量: プロットに従う（章の目安は ${perChapter}文字）\n`
     context += `- 視点: ${config.narrativePerspective ?? DEFAULTS.narrativePerspective}（同じ場面の中で視点人物を入れ替えない。替えるなら区切りを置いて場面を分ける）\n`
-    context += `- 文体: ${styleLabel(config)}（novel-writing skill の表記規約のうち、${styleLabel(config)}の項に従う）\n`
+    // ライトノベル寄りの作例と Web 連載の作法（序盤・引き・画面の書式）は novel-webnovel skill にある
+    const webnovel = config.style === "literary" ? "" : "。語りの作例、章末の引き、ステータス画面などの書式は novel-webnovel skill"
+    context += `- 文体: ${styleLabel(config)}（novel-writing skill の表記規約のうち、${styleLabel(config)}の項に従う${webnovel}）\n`
     context += `- 上のプロット（P0）から外れず、人物の設定と「ことばづかい」を保つ\n`
     if (sourceWork) {
       context += `- 二次創作（原作『${sourceWork}』）: 原作の人物の口調・呼び方・能力・出来事は「原作の資料」と人物設定どおりにする。資料に無い原作の事実を記憶で補って断定しない（要るなら書かずに済ませるか、報告で書き手に確かめる）。原作の文章・台詞・歌詞を写さない（novel-fanfic skill）\n`

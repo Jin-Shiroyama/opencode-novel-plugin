@@ -72,5 +72,10 @@ describe("文体の表示", () => {
     const out = await novelContextExecute({ chapterNumber: 1 } as any, ctx(makeProject({ "config.json": config() })))
     assert.match(out, /- 文体: ライトノベル寄り/)
     assert.match(out, /同じ場面の中で視点人物を入れ替えない/)
+    // ライトノベル寄りでだけ、Web 小説・ライトノベルの skill を案内する
+    assert.match(out, /- 文体: ライトノベル寄り（[^\n]*novel-webnovel skill）/)
+    const literary = await novelContextExecute({ chapterNumber: 1 } as any, ctx(dir))
+    assert.match(literary, /- 文体: 文芸寄り/)
+    assert.doesNotMatch(literary, /novel-webnovel/)
   })
 })

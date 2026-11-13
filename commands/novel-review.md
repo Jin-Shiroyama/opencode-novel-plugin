@@ -70,6 +70,8 @@ agent: novel-editor
 - 章の書き出しが読者を掴んでいるか
 - 章末に引きがあるか
 - 情報の詰まり具合
+- Web 小説・ライトノベル（`config.json` に `style` が無い作品）では、`novel-webnovel` skill の「点検」の表も見る
+  （第1話の3つの要素、この話で進んだもの、引きの型の重なり、ためと解消の間隔、語り手の声、画面の書式のそろい）
 
 #### typography（表記）
 まず `novel_check` を呼び、結果をもとに見ます。章なら `chapterNumber`、節なら `section`（幕間は `chapterNumber` に直前の章、

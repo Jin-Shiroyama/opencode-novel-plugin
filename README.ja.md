@@ -2,7 +2,7 @@
 
 OpenCode 向けの執筆支援プラグインです。日本語の長編小説を、作品コンセプトから完成原稿まで工程に分けて書き進めるための道具をまとめています。
 
-8つのツール、3つの agent、6つの skill、12のコマンド、16のRTCOプロンプト、21の文書雛形で構成されています。
+8つのツール、3つの agent、7つの skill、12のコマンド、16のRTCOプロンプト、21の文書雛形で構成されています。
 
 > **このリポジトリは fork です。**
 > 原作は [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin)（中国語・中国のWeb小説向け）です。
@@ -724,6 +724,7 @@ pending → planted → resolved
 | `novel-wuxia` | 時代小説・剣豪小説。段位（初伝→皆伝）、藩と道場、立ち合いの緩急、筋立ての型、刀剣、武家と市井の作法 | 時代小説・剣豪小説のとき |
 | `novel-reality` | 社会派／私小説的／寓話・象徴の三手法、異化の技法10、人物の型の取り出し、現実から虚構への移し替え、**日本法にもとづく注意** | 現実から題材を取るとき |
 
+| `novel-webnovel` | Web 小説（カクヨムなどの連載）とライトノベル。序盤3話の設計、お約束の型とずらし方、連載の波（10〜15話で1つの山、ためと解消）、1話の組み立てと章末の引きの型、一人称の語りの作例、ステータス画面・通知・掲示板回・配信回・別視点の回の書式、点検の表 | ライトノベル寄りの作品（`style` なし）を企画・執筆・点検するとき |
 | `novel-fanfic` | 二次創作。原作の資料（`.novel/canon/`）の作り方、作品の形（原作沿い・IF・オリジナル主人公・転生・クロスオーバー）、原作の人物を崩さない書き方、連鎖の追い方、**権利と投稿先の規約の注意**、原作との照合 | 原作のある作品を書くとき |
 
 skill はリポジトリ直下の `skills/` にあり、`config.skills.paths` で登録されます。YAML frontmatter 形式で、`load_skills` 引数で agent の文脈に読み込めます。
@@ -1126,7 +1127,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（640テスト。test-src/ にまとめてある）
+pnpm test        # node:test で実行（648テスト。test-src/ にまとめてある）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -1169,7 +1170,7 @@ src/
 ├── agents/           # 3つの agent
 └── tools/            # 8つのツールの実装
 commands/             # 12のコマンド
-skills/               # 6つの skill
+skills/               # 7つの skill
 scripts/
 └── check-japanese.mjs  # 中国語の残存チェック
 test-src/             # テスト（src/ と同じ並び）

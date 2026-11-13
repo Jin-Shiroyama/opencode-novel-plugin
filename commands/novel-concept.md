@@ -18,6 +18,8 @@ agent: novel-planner
 ### 一、skill を読み込む
 
 `novel-workflow` skill を読み込み、コンセプトの工程の手順を確かめます。
+Web 小説・ライトノベル（`config.json` に `style` が無い作品）では `novel-webnovel` skill も読み込み、
+「お約束の型と、ずらし方」から借りる型とずらす一点を決め、ログラインと「文体と手ざわり」に書きます。
 
 ### 二、対話で決める
 
