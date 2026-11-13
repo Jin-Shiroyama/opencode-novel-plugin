@@ -333,6 +333,27 @@ function checkAfterExclamation(
 }
 
 /**
+ * 地の文の行か（会話行・区切りの行・ステータス画面などの行でない）。
+ * 文章の点検（prose.ts）が、文末や文の長さを見る行を選ぶのに使う。字下げの判定と同じ見分け方を共有する
+ */
+export function isNarrationLine(chars: string[]): boolean {
+  const line = chars.join("")
+  if (line.trim().length === 0 || /^#/.test(line) || SEPARATOR_LINE.test(line)) return false
+  let n = 0
+  while (chars[n] === "　") n++
+  const first = chars[n]
+  if (first === undefined || first === "「" || first === "『") return false
+  if (BLOCK_OPENERS.has(first) || LINE_MARKERS.has(first)) return false
+  if (n === 0 && LABEL_LINE.test(line)) return false
+  return true
+}
+
+/** 区切りの記号だけの行か（場面の切れ目） */
+export function isSeparatorLine(line: string): boolean {
+  return SEPARATOR_LINE.test(line)
+}
+
+/**
  * 段落頭の字下げ。
  *
  *   - 地の文の段落は全角スペース1字下げ
@@ -374,7 +395,7 @@ function checkIndent(
   }
 }
 
-function excerptAt(chars: string[], column: number): string {
+export function excerptAt(chars: string[], column: number): string {
   const start = Math.max(0, column - 8)
   const end = Math.min(chars.length, column + 9)
   const head = start > 0 ? "…" : ""

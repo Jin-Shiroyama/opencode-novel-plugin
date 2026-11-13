@@ -25,6 +25,7 @@ opencode-novel-plugin/
 │   ├── records.ts            # 記録（人物の状態・伏線・あらすじ）の形の検証と、あらすじの節の扱い
 │   ├── character-state.ts    # 人物の状態（章・節ごとの差分と、その時点の状態の組み立て）
 │   ├── typography.ts         # 表記の点検（表記規約のうち機械で見られるもの）
+│   ├── prose.ts              # 文章の点検（反AI一覧のうち機械で数えられるもの）
 │   ├── ruby.ts               # ルビと傍点（読み取り・記法を外す・書き出し先の記法への変換）
 │   ├── manuscript.ts         # 原稿用紙の枚数換算（書式を指定したときだけ使う）
 │   ├── sections.ts           # 本文の節（プロローグ・幕間・エピローグ）と部
@@ -122,7 +123,7 @@ opencode-novel-plugin/
 | `novel_context` | 執筆用の資料 | section, chapterNumber, interludeIndex, sceneId, includePrompts |
 | `novel_guide` | 進め方の手引き | section |
 | `novel_update` | 記録の更新 | action, content, section, chapterNumber, interludeIndex |
-| `novel_check` | 表記の点検 | section, chapterNumber, interludeIndex, maxIssues |
+| `novel_check` | 表記と文章の点検 | section, chapterNumber, interludeIndex, maxIssues |
 | `novel_export` | 原稿の書き出し | format, numerals, ruby, unit, split, fromChapter, toChapter, outputPath |
 
 > コンセプト・世界観・登場人物・プロット・シーンなどの文書は、opencode 内蔵の Edit / Write ツールで編集します。
@@ -376,6 +377,18 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
   （ステータス画面・心の声・掲示板回を地の文の字下げ忘れとして ❌ にすると、モデルが直して画面の体裁を崩すため）。
   `novel_save_chapter` は保存したファイルをそのまま点検して
   件数を報告に添える（行番号が保存ファイルと一致するように）
+- **文章の点検（`src/prose.ts`）は `novel-writing` skill の「AI くさい言い回し」を写したもの**。一覧を変えたら両方を直す。
+  拾うのは、できあいの言い回し（`PHRASES`。回数の決まりがある語は `allowed` を超えた分だけ）、同じ文末の連続、長い文（80文字を超える）。
+  **すべて ⚠️ にとどめ、表記の点検とは別の節で出す**（`novel_check` は表記のあとに「✍️ 文章の点検」、`novel_save_chapter` は拾ったときだけ1行）。
+  ❌ にすると、モデルが語を別のできあいの語に言い換えるだけになる。報告には「言い換えずに、動作と細部で書き直す」を添え、
+  `/write-chapter` は保存し直しを2回までにする（0件にするために文章をいじり続けない）
+  - 見るのは地の文だけ。会話の中（行に挟まった台詞も）と、`isNarrationLine`（`typography.ts`。字下げの判定と同じ見分け方）が外す行は見ない
+  - **同じ文末の連続は4文から拾う**（`REPEATED_ENDING_RUN`）。skill の決まりは「3文以上」だが、3文は意図した畳みかけにも多く、
+    skill の ✅ の作例にもある。段落をまたいで数え（1文だけの段落が続く書き方を拾うため）、会話行・区切りの行で切る。空行では切らない
+  - 「つまり」「要するに」（語りの声）と「〜であった」（ふつうの過去形）は拾わない
+  - **skill の ✅ の作例と通し作例の本文から何も拾わず、❌ の作例から拾うこと**をテストで確かめる（`test-src/prose.test.ts`）。
+    作例を足すとき・語を足すときは、このテストで誤検出を見る
+  - `novel_export` の報告は表記の ❌ だけを数えるので影響しない
 - **原稿用紙換算は、書式を指定したときだけ出す**（`config.json` の `manuscript: "20x20"`、または
   `novel_status` / `novel_export` の引数 `manuscript`。引数が優先）。指定が無ければどの出力も変えない。
   目標・平均・分量の不足の判定は常に文字数で行い、枚数で置き換えない（Web 小説の文字数で書く使い方を邪魔しないため）。
@@ -523,7 +536,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、667件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、696件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

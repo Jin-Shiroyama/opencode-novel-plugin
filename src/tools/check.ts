@@ -7,6 +7,8 @@ import { listManuscriptFiles, describeExtraSections, sectionFromArgs, sectionLab
 import type { ManuscriptSection, SectionKind } from "../sections.js"
 import { readGlossaryCheck } from "../glossary.js"
 import type { GlossaryCheck } from "../typography.js"
+import { checkProse, summarizeProse, formatProseIssue, PROSE_RULE_LABELS } from "../prose.js"
+import type { ProseIssue } from "../prose.js"
 import type { ToolContext } from "../index.js"
 
 interface CheckArgs {
@@ -20,7 +22,10 @@ interface CheckArgs {
 export const DEFAULT_MAX_ISSUES = 30
 
 /**
- * 本文の表記を点検する。
+ * 本文の表記と文章を点検する。
+ *
+ * 表記（typography.ts。規約違反 ❌ と確認 ⚠️）のあとに、文章（prose.ts。できあいの言い回し・同じ文末の連続・長い文。
+ * すべて確認 ⚠️）を別の節で並べる。表記の ❌ は必ず直すもの、文章の ⚠️ は書き直すか判断するものなので、混ぜない。
  *
  * chapterNumber（または section）を渡せばその章・節だけ、省けば章と節のすべてを読む順番に見る。
  * 規則ごとの件数をすべて数えたうえで、具体的な箇所は章ごとに上限まで並べる。
@@ -47,13 +52,13 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
   const style = (await safeReadJson<NovelConfig>(getConfigPath(ctx.directory)))?.style
   // 用語集の「使わない表記」も拾う
   const glossary = await readGlossaryCheck(ctx.directory)
-  const results: Array<{ section: ManuscriptSection; issues: TypographyIssue[] }> = []
+  const results: Array<{ section: ManuscriptSection; issues: TypographyIssue[]; prose: ProseIssue[] }> = []
   // 読めなかった章は「問題なし」と区別して示す（空の本文として点検すると0件になってしまう）
   const unreadable: ManuscriptSection[] = []
   for (const f of files) {
     const text = await safeReadFile(f.path)
     if (text === null) unreadable.push(f.section)
-    else results.push({ section: f.section, issues: checkTypography(text, { style, glossary }) })
+    else results.push({ section: f.section, issues: checkTypography(text, { style, glossary }), prose: checkProse(text) })
   }
   const unreadableNote = unreadable.length > 0
     ? `⚠️ 読み込めず点検できなかった章: ${formatSections(unreadable)}（ファイルの権限や中身を確かめてください）\n`
@@ -64,10 +69,12 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
 
   const all = results.flatMap((r) => r.issues)
   const scope = target === null ? describeScope(results.map((r) => r.section)) : sectionLabel(target)
+  const proseReport = formatProseReport(results, scope, max)
   if (all.length === 0) {
-    return unreadable.length > 0
+    const head = unreadable.length > 0
       ? `⚠️ 表記の点検（${scope}）: 点検できた章には、規約から外れた箇所はありません。\n${unreadableNote}`
       : `✅ 表記の点検（${scope}）: 規約から外れた箇所はありません。`
+    return proseReport ? `${head.replace(/\n$/, "")}\n\n${proseReport}` : head
   }
 
   const errors = all.filter((i) => i.severity === "error").length
@@ -88,7 +95,44 @@ export async function novelCheckExecute(args: CheckArgs, ctx: ToolContext): Prom
       report += `…ほか${issues.length - max}件（maxIssues を上げるか、章を指定して見てください）\n`
     }
   }
+  return proseReport ? `${report}\n${proseReport}` : report
+}
+
+/** 文章の点検の節。拾ったものが無ければ空文字（表記の報告だけを返す） */
+function formatProseReport(
+  results: Array<{ section: ManuscriptSection; prose: ProseIssue[] }>, scope: string, max: number,
+): string {
+  const all = results.flatMap((r) => r.prose)
+  if (all.length === 0) return ""
+  let report = `✍️ 文章の点検（${scope}）: ⚠️ 確認 ${all.length}件\n`
+  report += `（novel-writing skill の「AI くさい言い回し」のうち機械で数えられるもの。地の文だけを見ます。意図したものは残してかまいません。\n`
+  report += ` 直すときは語を言い換えるのではなく、動作と細部で書き直します）\n\n`
+  report += `## 種類ごとの件数\n`
+  for (const { rule, count, detail } of summarizeProse(all)) {
+    report += `- ⚠️ ${PROSE_RULE_LABELS[rule]}: ${count}件${detail ? `（${detail}）` : ""}\n`
+  }
+  for (const { section, prose } of results) {
+    if (prose.length === 0) continue
+    report += `\n## ${sectionLabel(section)}（${prose.length}件）\n`
+    for (const issue of prose.slice(0, max)) report += `${formatProseIssue(issue)}\n`
+    if (prose.length > max) {
+      report += `…ほか${prose.length - max}件（maxIssues を上げるか、章を指定して見てください）\n`
+    }
+  }
   return report
+}
+
+/**
+ * 保存直後の報告に添える、文章の点検の1行。拾ったものが無ければ空文字。
+ * 件数と内訳だけを出す（箇所は novel_check で見る。保存の報告を埋めないため）
+ */
+export function summarizeProseForSave(text: string, section: ManuscriptSection): string {
+  const issues = checkProse(text)
+  if (issues.length === 0) return ""
+  const counts = summarizeProse(issues)
+    .map(({ rule, count, detail }) => `${PROSE_RULE_LABELS[rule]} ${count}${detail ? `：${detail}` : ""}`)
+    .join("／")
+  return `✍️ 文章: ⚠️ 確認 ${issues.length}件（${counts}）\n  → novel_check(${sectionCallArgs(section)}) で箇所を見られます。語を言い換えるのではなく、動作と細部で書き直します（意図したものは残してよい）\n`
 }
 
 /**

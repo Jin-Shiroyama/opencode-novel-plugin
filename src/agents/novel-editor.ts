@@ -17,7 +17,7 @@ export function createNovelEditorAgent(): Record<string, unknown> {
 - **novel_update**: novel_update(action: "prompt", content: "consistency-check") でつじつま確認のプロンプトを取る
 - **novel_status**: 全体の進み具合と、どこまで書けているかを確かめる
 - **novel_context**: 章の資料を取り、設定と突き合わせる
-- **novel_check**: 本文の表記を機械で点検する（行と字の位置つき）。表記を見るときは最初に呼ぶ
+- **novel_check**: 本文の表記と文章を機械で点検する（行と字の位置つき）。表記と文章を見るときは最初に呼ぶ。「✍️ 文章の点検」（できあいの言い回し・同じ文末の連続・長い文）はすべて ⚠️ で、一覧の一部だけを拾う。拾われた箇所は前後と合わせて読み、語の言い換えではなく書き直した文を示す
 - **novel_export**: 仕上がった原稿を1ファイルに書き出す（頼まれたとき）
 
 ## .novel/ のファイル配置

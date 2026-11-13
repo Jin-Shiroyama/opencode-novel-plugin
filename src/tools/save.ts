@@ -6,7 +6,7 @@ import type { NovelConfig } from "../utils.js"
 import { resolveManuscriptFormat, countManuscriptLines, linesToPagesDecimal, formatManuscriptLabel } from "../manuscript.js"
 import { sectionFromArgs, sectionFileName, sectionLabel, SECTION_NAMES } from "../sections.js"
 import type { SectionKind } from "../sections.js"
-import { summarizeForSave } from "./check.js"
+import { summarizeForSave, summarizeProseForSave } from "./check.js"
 import { readGlossaryCheck } from "../glossary.js"
 import type { ToolContext } from "../index.js"
 import { join } from "node:path"
@@ -99,6 +99,8 @@ export async function novelSaveChapterExecute(
   }
   // 保存したものをそのまま点検する（行番号が保存ファイルと一致するように）
   report += summarizeForSave(saved, section, undefined, config?.style, await readGlossaryCheck(dir))
+  // 文章の点検（できあいの言い回し・同じ文末の連続・長い文）は、拾ったときだけ1行で添える
+  report += summarizeProseForSave(saved, section)
 
   if (args.updateState !== false) {
     report += `\n💡 novel_update で次の記録を更新しておくと、後の章でつじつまが合わせやすくなります:\n`
