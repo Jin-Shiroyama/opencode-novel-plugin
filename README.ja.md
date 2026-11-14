@@ -2,7 +2,7 @@
 
 OpenCode 向けの執筆支援プラグインです。日本語の長編小説を、作品コンセプトから完成原稿まで工程に分けて書き進めるための道具をまとめています。
 
-8つのツール、3つの agent、7つの skill、13のコマンド、16のRTCOプロンプト、21の文書雛形で構成されています。
+8つのツール、3つの agent、7つの skill、14のコマンド、16のRTCOプロンプト、21の文書雛形で構成されています。
 
 > **このリポジトリは fork です。**
 > 原作は [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin)（中国語・中国のWeb小説向け）です。
@@ -205,6 +205,16 @@ Web 連載（カクヨムなど）のように、結末やエピローグを決�
 - **完結はエピローグで決まります**。`chapters/epilogue.md` があれば完結です。エピローグを置かずに閉じるなら `serial` を外せば、予定章数で判定します
 - **結末は「方向だけ」か「未定」でかまいません**。プロット概要は当面の山場（その巻・その部の山）までを三幕で組み、章別プロットは最初の山までで書きはじめ、続きを `outline/chapter-NNN.md` に1章ずつ足します。章別プロットの無い章で `novel_context` を呼ぶと ⚠️ で知らせます
 - 伏線は回収の章を決めずに張れます（`targetChapter` を省くと「回収の章は未定」）
+- **シーン設計を省けます**。章別プロットがあれば本文の段階に進みます（1話が短く、場面も1つか2つのため。細かく割りたい話だけ作ってもかまいません）
+
+**続けて書く** — `/write-chapters next 5`（または `5-9`）で、複数の話を続けて書きます。進行役が1話ごとに `task` ツールで書き手（`novel-writer`）を呼び、
+保存と記録が済んでから次の話へ進みます。1話ごとに別のセッションで書くので、資料と本文で会話が膨らみません。
+章別プロットの無い話は書かず、書けなかった・表記の ❌ が残った・プロットと大きく変えた、のどれかで止まります。一度に10話までです。
+
+**長い連載の記憶** — 章のあらすじは直前の話から資料の枠（`limits.summary`）に入るので、話数が増えると古い話は資料に載らなくなります。
+古い話の筋を先へ運ぶのは、あらすじの「全体の流れ」です。枠から落ちた話が全体の流れにも入っていないときは、
+`novel_context`（あらすじの中）と `novel_status`（記録の点検）が ⚠️ で知らせ、更新する呼び方を示します。
+100話を超える連載では `limits.summary` を 6,000〜8,000 に上げることをすすめます。
 
 連載でない作品でも、予定章数を超えて書くことはできます。エピローグの伏線の回収章は本文のある最後の章として残り、部の範囲も書いた最後の章まで示します。
 
@@ -709,7 +719,7 @@ pending → planted → resolved
 
 ## agent
 
-3つとも主 agent セレクタに出ます。
+3つとも主 agent セレクタに出ます。`novel-writer` は、ほかの agent から `task` ツールで呼ぶこともできます（`/write-chapters` が使います）。
 
 ### `novel-planner` — 企画を手伝うコーチ
 
@@ -752,7 +762,7 @@ pending → planted → resolved
 - よく書けているところを必ず具体的に挙げる
 - 表記のゆれを機械的に点検する
 
-> 各ファクトリは `mode: "subagent"` を返しますが、`src/index.ts` の `config` フックで `primary` に上書きしています。
+> 各ファクトリは `mode: "subagent"` を返しますが、`src/index.ts` の `config` フックで上書きしています（`novel-planner` と `novel-editor` は `primary`、`novel-writer` は `all`）。
 
 ---
 
@@ -790,6 +800,7 @@ skill はリポジトリ直下の `skills/` にあり、`config.skills.paths` �
 | `/novel-canon` | 二次創作の原作の資料を整える | なし |
 | `/novel-publish` | 投稿の準備をする（題・キャッチコピー・紹介文・タグを作り、1話ずつ書き出す） | なし |
 | `/write-chapter` | 1章の本文を書く | `<章番号 \| prologue \| interlude <章番号> [何番目] \| epilogue>`（章を分けない短編は省ける） |
+| `/write-chapters` | 複数の章（話）を続けて書く（1話ずつ別のセッションに書かせる。一度に10話まで） | `<開始-終了 \| next 話数 \| 話数>` |
 | `/novel-status` | 進行状況を見る | なし |
 | `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|canon\|full` |
 
@@ -1172,7 +1183,7 @@ skill には次を収めています。
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストを含む）
-pnpm test        # node:test で実行（696テスト。test-src/ にまとめてある）
+pnpm test        # node:test で実行（706テスト。test-src/ にまとめてある）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```
@@ -1216,7 +1227,7 @@ src/
 ├── agent-config.ts   # opencode.json の agent 設定とプラグインの既定の重ね方
 ├── agents/           # 3つの agent
 └── tools/            # 8つのツールの実装
-commands/             # 13のコマンド
+commands/             # 14のコマンド
 skills/               # 7つの skill
 scripts/
 └── check-japanese.mjs  # 中国語の残存チェック

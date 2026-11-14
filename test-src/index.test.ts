@@ -38,6 +38,7 @@ describe("コマンドの agent 指定", () => {
     "novel-canon": "novel-planner",
     "novel-publish": "novel-planner",
     "write-chapter": "novel-writer",
+    "write-chapters": "novel-writer",
     "novel-review": "novel-editor",
   }
 
@@ -63,8 +64,8 @@ describe("コマンドの agent 指定", () => {
 })
 
 describe("コマンドの登録", () => {
-  test("13 のコマンドが登録される", () => {
-    assert.equal(Object.keys(config.command).length, 13)
+  test("14 のコマンドが登録される", () => {
+    assert.equal(Object.keys(config.command).length, 14)
   })
 
   test("description と template が入っている", () => {
@@ -92,11 +93,24 @@ describe("コマンドの登録", () => {
 })
 
 describe("agent の登録", () => {
-  test("3 つの agent が primary で登録される", () => {
+  test("3 つの agent が登録され、主 agent セレクタに出る（planner と editor は primary、writer は all）", () => {
     for (const name of ["novel-planner", "novel-writer", "novel-editor"]) {
       assert.ok(config.agent[name], `${name} が登録されていない`)
-      assert.equal(config.agent[name].mode, "primary")
     }
+    assert.equal(config.agent["novel-planner"].mode, "primary")
+    assert.equal(config.agent["novel-editor"].mode, "primary")
+    // 書き手は task ツールの呼び先にもなる（/write-chapters が1話ずつ書かせる）
+    assert.equal(config.agent["novel-writer"].mode, "all")
+  })
+
+  test("/write-chapters は task で書き手を呼ぶ手順を持ち、呼び先の名前が登録された agent と一致する", () => {
+    const template = config.command["write-chapters"].template as string
+    assert.match(template, /`subagent_type`: `novel-writer`/)
+    assert.ok(config.agent["novel-writer"])
+    // 並べて呼ばない・プロットを作らない・上限、の3つの決まりが入っている
+    assert.match(template, /1話が終わってから次を呼びます/)
+    assert.match(template, /プロットをあなたが作って埋めてはいけません/)
+    assert.match(template, /一度に書くのは10話まで/)
   })
 })
 
@@ -112,7 +126,7 @@ describe("opencode.json 側の agent 設定の優先", () => {
     const c = await applyConfig({ agent: { "novel-writer": { model: "x" } } })
     assert.equal(c.agent["novel-writer"].temperature, 0.7)
     assert.ok(c.agent["novel-writer"].prompt?.length > 0, "プロンプトが失われている")
-    assert.equal(c.agent["novel-writer"].mode, "primary")
+    assert.equal(c.agent["novel-writer"].mode, "all")
   })
 
   test("指定していない agent には model を書かない（OpenCode で選んだモデルを使う）", async () => {

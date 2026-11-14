@@ -228,7 +228,9 @@ split: true にすると1話ずつ別のファイルに書き出す（投稿サ�
       // 3つの agent はいずれも主 agent セレクタに出す。
       // 各ファクトリは mode: "subagent" を返すのでここで上書きする。
       planner.mode = "primary"
-      writer.mode = "primary"
+      // 書き手は "all"。主 agent セレクタにも出て、ほかの agent から task ツールで呼ぶこともできる
+      // （/write-chapters が1話ずつ別のセッションで書かせるため。primary のままだと task の呼び先に出ない）
+      writer.mode = "all"
       editor.mode = "primary"
       // opencode.json 側で agent ごとの設定（model など）が書かれていれば、それを優先する。
       // permission などは中身ごと重ねる（OpenCode が利用者の設定に足す空の permission で

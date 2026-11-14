@@ -10,7 +10,7 @@ import {
 } from "../utils.js"
 import type { NovelConfig, DocType, Phase } from "../utils.js"
 import {
-  splitForeshadowEntries, summaryChapters, summarySections, formatChapterRanges,
+  splitForeshadowEntries, summaryChapters, summaryGap, summarySections, formatChapterRanges,
   readForeshadowRecord, readCharacterStateRecord, readTextRecord, describeBrokenRecord,
 } from "../records.js"
 import {
@@ -22,7 +22,7 @@ import {
 import type { ManuscriptSection } from "../sections.js"
 import { sourceWorkOf, hasCanonOverview } from "../canon.js"
 import { parsePublishInfo, describePublishInfo, publishIssues } from "../publish.js"
-import { getNovelPath } from "../utils.js"
+import { getNovelPath, resolveLimit } from "../utils.js"
 import type { ToolContext } from "../index.js"
 
 interface StatusArgs {
@@ -145,6 +145,7 @@ export async function novelStatusExecute(
     report += `  ${mark} ${stage.label}\n`
   }
   report += `  （✅ 記入済み / 📝 雛形あり・未記入 / ⬜ 未作成）\n`
+  if (serial && !hasSceneList(dir)) report += `  （連載ではシーン一覧を省けます。章別プロットを話ごとに足して書き進めます）\n`
   if (short) report += `  （短編では世界観と章別プロットの工程を省きます。プロットはプロット概要の序破急からシーンに割ります）\n`
 
   // シーンは統合ファイルと章ごとの分割の両方から集める。
@@ -294,6 +295,18 @@ export async function novelStatusExecute(
     issues.push(`${describeBrokenRecord(".novel/summary.md", summaryRecord)}。直すまであらすじの更新はできません`)
   }
   if (writtenChapters.length > 0) {
+    // 次に書く章の資料から抜ける章（枠に収まらず、全体の流れにも入っていない）。連載が長くなると起きる
+    if (summaryRecord.kind === "ok") {
+      const gap = summaryGap(summaryRecord.value, Math.max(...writtenChapters) + 1, resolveLimit(config, "summary"))
+      if (gap) {
+        const upTo = gap.chapters[gap.chapters.length - 1]
+        issues.push(
+          `あらすじの「全体の流れ」が古くなっています: ${formatChapterRanges(gap.chapters)}の出来事が、次の章の資料に載りません` +
+            `（${gap.coverage > 0 ? `全体の流れは第${gap.coverage}章まで` : "全体の流れがまだ無い"}）。` +
+            `novel_update(summary) に「## 全体の流れ」で始まる要約を渡し、第${upTo}章まで更新してください`,
+        )
+      }
+    }
     // あらすじが読めないときは、欠けている章を判断できないので数えない
     if (summaryRecord.kind !== "broken") {
       const recorded = new Set(summaryRecord.kind === "ok" ? summaryChapters(summaryRecord.value) : [])

@@ -5,7 +5,7 @@
 OpenCode のサーバープラグインです。日本語の長編小説を書くために、
 8つのツール（`novel_init` / `novel_status` / `novel_save_chapter` / `novel_context` / `novel_guide` / `novel_update` / `novel_check` / `novel_export`）、
 3つの agent（`novel-planner` / `novel-writer` / `novel-editor`）、
-16のRTCOプロンプト、21の文書雛形、7つの skill、13のコマンド、
+16のRTCOプロンプト、21の文書雛形、7つの skill、14のコマンド、
 そしてファイルで持つ作品データの管理を提供します。
 
 本リポジトリは [wmzy/opencode-novel-plugin](https://github.com/wmzy/opencode-novel-plugin) の fork で、
@@ -56,7 +56,7 @@ opencode-novel-plugin/
 │   └── prepare-test-out.mjs  # test-out/ に commands/ と skills/ を写す
 ├── scripts/
 │   └── check-japanese.mjs    # 中国語の残存チェック
-├── commands/                 # スラッシュコマンド（13本）
+├── commands/                 # スラッシュコマンド（14本）
 ├── skills/                   # 執筆用の skill（7本）
 │   ├── novel-workflow/       # 6工程の進め方（通し作例つき）
 │   ├── novel-writing/        # 本文の書き方【表記規約と反AI一覧の正本】
@@ -134,11 +134,13 @@ opencode-novel-plugin/
 | agent | 用途 | mode | temperature |
 |---|---|---|---|
 | `novel-planner` | 企画（コンセプト／世界観／人物／プロット／シーン）＋取材 | primary | 0.3 |
-| `novel-writer` | 本文の執筆 | primary | 0.7 |
+| `novel-writer` | 本文の執筆 | all | 0.7 |
 | `novel-editor` | 原稿の点検（つじつま／文章／緩急／表記） | primary | 0.1 |
 
 > 各ファクトリは `mode: "subagent"` を返しますが、`src/index.ts` の `config` フックで
-> `primary` に上書きしています。3つとも主 agent セレクタに出ます。
+> 上書きしています（planner と editor は `primary`、writer は `all`）。3つとも主 agent セレクタに出ます。
+> writer を `all` にするのは、`/write-chapters` が `task` ツールで1話ずつ書かせるためです
+> （`primary` のままだと task の呼び先に出ません。`opencode agent list` で `novel-writer (all)` と出ます）。
 >
 > プラグインは agent に `model` を書きません（既定のモデルを持たない）。書くと、その agent に
 > 切り替えた時点で OpenCode の画面で選んだモデルから書いたモデルへ切り替わるためです。
@@ -182,6 +184,7 @@ opencode-novel-plugin/
 | `/novel-canon` | 二次創作の原作の資料を整える | なし |
 | `/novel-publish` | 投稿の準備をする（題・キャッチコピー・紹介文・タグ、1話ずつの書き出し） | なし |
 | `/write-chapter` | 1章の本文を書く | `<章番号 \| prologue \| interlude <章番号> [何番目] \| epilogue>`（章を分けない短編は省ける） |
+| `/write-chapters` | 複数の章（話）を続けて書く（1話ずつ別のセッションに書かせる） | `<開始-終了 \| next 話数 \| 話数>` |
 | `/novel-status` | 進行状況を見る | なし |
 | `/novel-review` | 原稿を点検する | `<章番号\|all>` `--focus=consistency\|style\|pace\|typography\|canon\|full` |
 
@@ -475,6 +478,17 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 - **連載（結末未定）は `config.json` の `serial: true`**。`chapterCount` と `targetWords` は目安で、超えて書いても崩れない。
   完結はエピローグがあるかで判定し、`novel_status` は分量の不足を知らせず、次の章の章別プロットを足すよう案内する。
   `novel_context` は章別プロットの無い章で ⚠️ を出す（連載では章別プロットを章ごとに足していくため）
+- **連載ではシーン設計を省ける**（`determinePhase` は、連載なら章別プロットがあれば `writing`）。1話が短く場面も1つか2つで、
+  章別プロットを話ごとに足していくため。作ってあれば資料に載り、進捗も数える。連載でない作品はこれまでどおりシーン一覧を待つ
+- **枠から落ちた章が「全体の流れ」にも入っていなければ知らせる**（`records.ts` の `summaryGap`。`buildSummaryContext` と同じ計画を共有する）。
+  章のあらすじは直前の章から詰めるので、話数が増えると古い章が落ち、古い筋を先へ運ぶのは全体の流れだけになる。
+  全体の流れはモデルが更新しないかぎり古いままなので、`novel_context`（あらすじの中）と `novel_status`（次に書く章を基準に、記録の点検）で
+  ⚠️ を出し、何章まで更新するかと呼び方を示す。書く章より先まで含む全体の流れは載らないので、届いていないとみなす。
+  自動では要約しない（要約はモデルの仕事で、ツールは抜けを数えるだけ）
+- **`/write-chapters` は進行役で、本文を書かない**。1話ごとに `task` ツールで `novel-writer` を呼び、報告を受けて次へ進む
+  （資料と本文で会話が膨らむのを防ぐ）。並べて呼ばない（前の話の保存と記録が次の話の資料になる）。章別プロットの無い話は書かせず、
+  プロットを作って埋めない。止まる条件（書けなかった・保存されていない・記録が済んでいない・表記の ❌ が残った・プロットと大きく変えた）に
+  当たったら残りを書かせない。一度に10話まで。task で呼べないときは同じ会話で3話まで
 - **エピローグの伏線の記録の章番号は、本文のある最後の章**（`lastChapterForRecords`。1章も無ければ `chapterCount`）。
   人物の状態はエピローグそのものの節（`epilogue`）として記録するので、この章番号を使わない。
   予定章数を使うと、予定を超えて書いた作品でエピローグの回収章が張った章より前になり、伏線の期限も予定章数で切れる。
@@ -536,7 +550,7 @@ chapter-write, chapter-continue, consistency-check, character-state-update, summ
 ```bash
 pnpm install
 pnpm typecheck   # 型検査（テストも含む）
-pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、696件）
+pnpm test        # node:test で実行（test-src/ の *.test.ts と *.test.mjs、706件）
 pnpm build       # 配布用ビルド（dist/、テストを除く）
 pnpm check:ja    # 中国語の文字列が残っていないか調べる
 ```

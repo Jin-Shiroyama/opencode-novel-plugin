@@ -1206,7 +1206,8 @@ export function determinePhase(projectDir: string, config?: NovelConfig | null):
 
   // 章別プロットとシーン一覧は、統合ファイルでも章ごとの分割でもよい。
   if (!short && !hasOutlineDetailed(projectDir)) return "outline"
-  if (!hasSceneList(projectDir)) return "scenes"
+  // 連載ではシーン設計を省ける（1話が短く、章別プロットを話ごとに足していくため。作ってあれば資料に載る）
+  if (!isSerial(config) && !hasSceneList(projectDir)) return "scenes"
 
   if (isSerial(config)) {
     return existsSync(join(getChaptersDir(projectDir), "epilogue.md")) ? "completed" : "writing"

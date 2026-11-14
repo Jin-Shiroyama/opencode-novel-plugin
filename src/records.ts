@@ -785,6 +785,29 @@ export function buildSummaryContext(
   limit: number,
   lastChapter?: number,
 ): string {
+  return planSummaryContext(text, target, limit, lastChapter).text
+}
+
+/**
+ * 枠に収まらず、「全体の流れ」にも入っていない章（資料からまるごと抜ける章）。
+ *
+ * 章のあらすじは直前の章から枠に詰めるので、連載が長くなると古い章が落ちる。落ちた章の筋は「全体の流れ」が補うが、
+ * 全体の流れは書き手（モデル）が更新しないかぎり古いままになる。その隙間を、資料（novel_context）と
+ * 進行状況（novel_status）で知らせるために使う。coverage は全体の流れが何章までの要約か（載せていなければ 0）。
+ */
+export function summaryGap(
+  text: string, target: number | ManuscriptSection, limit: number,
+): { chapters: number[]; coverage: number } | null {
+  const plan = planSummaryContext(text, target, limit)
+  return plan.uncovered.length > 0 ? { chapters: plan.uncovered, coverage: plan.coverage } : null
+}
+
+function planSummaryContext(
+  text: string,
+  target: number | ManuscriptSection,
+  limit: number,
+  lastChapter?: number,
+): { text: string; uncovered: number[]; coverage: number } {
   const at: ManuscriptSection = typeof target === "number" ? { kind: "chapter", chapter: target } : target
   const parsed = parseSummary(text)
   const overview = parsed.sections.find(isOverview)
@@ -794,7 +817,7 @@ export function buildSummaryContext(
 
   if (!overview && !legacyBlock && chapterSections.length === 0) {
     // 章の節も「全体の流れ」も無い。旧形式（丸ごと書き換えていたころのもの）として扱う
-    return clipHead(unmarked, limit)
+    return { text: clipHead(unmarked, limit), uncovered: [], coverage: 0 }
   }
 
   const recordedChapters = chapterSections.flatMap((s) => (s.chapter !== null ? [s.chapter] : []))
@@ -803,9 +826,12 @@ export function buildSummaryContext(
   // 全体の流れと旧形式の記述。書く章より先を含むものは載せず、その旨を残す
   const notes: string[] = []
   const lead: string[] = []
+  // 載せた要約（全体の流れ・旧形式の記述）が何章までを含むか。枠から落ちた章がこれより後なら、資料から抜ける
+  let covered = 0
   if (overview && overview.body && !isPlaceholderOnly(overview.body)) {
     const coverage = overviewCoverage(overview) ?? lastRecorded
     if (coverageBefore(coverage, at)) {
+      covered = Math.max(covered, coverage)
       lead.push(`### ${OVERVIEW_HEADING}（第${coverage}章まで）\n${overview.body}`)
     } else {
       notes.push(`（${OVERVIEW_HEADING}は第${coverage}章までの要約で、この章より先を含むため載せていません）`)
@@ -821,6 +847,7 @@ export function buildSummaryContext(
   if (unmarked) legacyParts.push({ body: unmarked, coverage: lastRecorded })
   for (const part of legacyParts) {
     if (coverageBefore(part.coverage, at)) {
+      covered = Math.max(covered, part.coverage)
       const range = part.coverage > 0 ? `（第${part.coverage}章まで）` : ""
       lead.push(`### ${LEGACY_HEADING}${range}\n${part.body}`)
     } else {
@@ -871,6 +898,16 @@ export function buildSummaryContext(
           : `${sectionLabel(entrySection(first)!)}〜${sectionLabel(entrySection(last)!)}`
     out.push(`（${range}のあらすじは枠に収まらないため省略。全文は .novel/summary.md を参照）`)
   }
+  // 枠から落ちた章のうち、全体の流れにも入っていないもの
+  const uncovered = dropped.flatMap((s) => (s.chapter !== null && s.chapter > covered ? [s.chapter] : []))
+  if (uncovered.length > 0) {
+    const upTo = uncovered[uncovered.length - 1]
+    out.push(
+      `⚠️ ${formatChapterRanges(uncovered)}の出来事は、枠に収まらず「${OVERVIEW_HEADING}」にも入っていません` +
+        `（${covered > 0 ? `いまの${OVERVIEW_HEADING}は第${covered}章まで` : `${OVERVIEW_HEADING}がまだ無い`}）。` +
+        `この章を書き終えたら、.novel/summary.md を読んで、novel_update(action: "summary", chapterNumber: ${upTo}) に「## ${OVERVIEW_HEADING}」の行で始まる要約を渡し、第${upTo}章まで更新してください`,
+    )
+  }
   for (const s of picked) out.push(`${s.heading.replace(/^##/, "###")}\n${s.body}`)
 
   // 記録の無い章（この章・節より前の章だけを見る）
@@ -886,7 +923,7 @@ export function buildSummaryContext(
     out.push(`⚠️ あらすじの記録が無い章: ${missing.map((n) => `第${n}章`).join("、")}`)
   }
 
-  return out.join("\n\n")
+  return { text: out.join("\n\n"), uncovered, coverage: covered }
 }
 
 /** [1,2,3,5] → 「第1〜3章、第5章」 */

@@ -141,11 +141,16 @@ novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id"
 - 伏線の status は `pending` / `planted` / `resolved` / `abandoned` だけ。補強しただけなら status は変えず `notes` に書く
 - 新しい伏線は `title` と `content` を付けて渡す（id は省略できる）
 - 節のときは3つとも `section`（と幕間の `chapterNumber`）を渡す。あらすじは「## プロローグ」などの節として残る
+- **資料のあらすじに「全体の流れにも入っていません」の ⚠️ が出ていたら、全体の流れを更新する**。`.novel/summary.md` を読み、
+  案内された章までの要約を `novel_update(action: "summary", chapterNumber: {案内された章}, content: "## 全体の流れ（改行して要約）")` で渡す。
+  山（部）ごとに1段落で、決着と、いまも効いている結果、まだ果たしていない約束を残す（800〜1,200文字）。
+  話数が増えると古い章のあらすじは資料に載らなくなり、古い筋を先へ運ぶのは全体の流れだけになる
 
 ### 六の二、シーンの状態を直す
 
 シーン一覧（`.novel/scenes/chapter-{NNN}.md`、無ければ `.novel/scenes.md`）で、
 この章で**実際に書いた**シーンの状態を `[x]` に直します。
+連載でシーン一覧を作っていない作品（資料に「🎬 この章のシーン」が出ない）では、この手順は飛ばします。
 書かなかった・途中で終わったシーンは `[ ]` や `[-]` のまま残し、報告で触れます。
 
 ### 七、報告する
@@ -157,7 +162,7 @@ novel_update(action: "foreshadow", chapterNumber: {N}, content: '{"items":[{"id"
 🎯 伏線：張った {N} / 回収した {N}
 👤 状態を更新した人物：{N}人
 
-💡 次にやること：/write-chapter {N+1}（プロットで次に幕間やエピローグが来るならそちら。連載で次の章のプロットがまだなら /novel-outline）
+💡 次にやること：/write-chapter {N+1}（続けて何話か書くなら /write-chapters next 3）（プロットで次に幕間やエピローグが来るならそちら。連載で次の章のプロットがまだなら /novel-outline）
 ```
 
 </write-flow>
